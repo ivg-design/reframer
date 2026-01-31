@@ -1,30 +1,22 @@
-# VideoOverlay — Master Implementation Plan
+# Reframer — Master Implementation Plan
 
 **Date**: 2026-01-31
-**Status**: Verified Implementation Plan (Revision 6)
-**Current Deployment Target**: macOS 13.0 (Ventura) — **must update to 15.0 (Sequoia) as Phase 0**
+**Status**: Comprehensive Audit & Implementation Plan (Revision 7)
 **Target Platform**: macOS 26 (Tahoe) with macOS 15 (Sequoia) fallback
-**Current Sandbox Setting**: `ENABLE_APP_SANDBOX = YES` — must use sandbox-compatible entitlements
 **Input Paradigm**: Mouse + Scroll Wheel + Keyboard (Shift/Cmd modifiers only)
 
 ---
 
-## Issue Status
+## Plan Structure
 
-| # | Issue | Location | Status | Root Cause |
-|---|-------|----------|--------|------------|
-| 1 | Drag & drop API wrong | `DropZoneView.swift:71-84` | **CONFIRMED** | Uses `loadItem` with wrong type cast |
-| 2 | Entitlements incomplete | `VideoOverlay.entitlements` | **CONFIRMED** | Empty `<dict/>` with sandbox enabled |
-| 3 | Keyboard monitor not app-scoped | `ContentView.swift:342-352` | **SUSPECTED** | `installIfNeeded` installs once; may be window-scope issue |
-| 4 | Hit-testing swallows SwiftUI controls | `ContentView.swift:158-170` | **CONFIRMED** | Only checks for NSControl/NSTextView |
-| 5 | Input field modifiers not caught | `NumericInputField.swift:75-90` | **CONFIRMED** | Missing Shift/Cmd arrow selectors |
-| 6 | Global shortcuts permission | `AppDelegate.swift:114-125` | **CONFIRMED** | No permission check or user guidance |
-| 7 | Control window height 64pt | `AppDelegate.swift:19` | **CONFIRMED** | May clip controls |
+This plan follows a **verification-first approach**:
 
-**Note on Issue #3**: `VideoState` is a class (reference type), so captured references don't "go stale." The actual issue is likely:
-- Monitor installed from view lifecycle (may not cover child window)
-- `installIfNeeded` captures first handler and ignores subsequent calls
-- Requires instrumentation to confirm root cause
+1. **Phase 0**: Test Infrastructure — Set up testing framework and fixtures
+2. **Phase 1**: Feature Audit — Verify EVERY feature against spec, document status
+3. **Phase 2**: Regression Tests — Create unit/UI tests for working features
+4. **Phase 3+**: Implementation — Fix broken features with tests
+
+**NO FEATURE IS ASSUMED TO WORK. Every feature must be verified.**
 
 ---
 
@@ -32,657 +24,1107 @@
 
 | Decision | Value | Source |
 |----------|-------|--------|
-| Scroll up direction | Zoom OUT | User confirmed via AskUserQuestion (this conversation): "Scroll up = Zoom OUT" |
+| Scroll up direction | Zoom OUT | User confirmed |
 | Extra modifiers in inputs | None | FEATURES.md (Shift/Cmd only) |
-| Shift required for zoom scroll | Yes | FEATURES.md: "Shift+Scroll - Zoom in/out" |
+| Shift required for zoom scroll | Yes | FEATURES.md |
 | Cmd+Scroll alone | Does nothing | FEATURES.md specifies Cmd+**Shift**+Scroll only |
-| Pan at zoom == 100% | Disabled | Pan only allowed when zoomScale > 1.0 (per current code) |
+| Pan at zoom == 100% | Disabled | Pan only when zoomScale > 1.0 |
+| Icons | SF Symbols only | FEATURES.md (no emojis) |
+| Theme | Dark mode first | FEATURES.md |
 
 ---
 
-## Phase 0: Prerequisites
+## Phase 0: Test Infrastructure
 
-### 0.1 Update Deployment Target
+### 0.1 Create Test Targets
 
-**Location**: Xcode project settings (`project.pbxproj`)
+**Action**: Add XCTest and XCUITest targets to Xcode project
 
-**Current**: `MACOSX_DEPLOYMENT_TARGET = 13.0` (Ventura)
-**Required**: `MACOSX_DEPLOYMENT_TARGET = 15.0` (Sequoia)
+```
+Reframer/
+├── Reframer.xcodeproj
+├── Reframer/           (app source)
+├── ReframerTests/      (unit tests)
+└── ReframerUITests/    (UI tests)
+```
 
-This is required because:
-- Tahoe (26) features use `#available(macOS 26, *)` with Sequoia (15) fallback
-- Some SwiftUI APIs used may require 15+
-- Ensures consistent behavior across target platforms
+**Checklist**:
+- [ ] Add ReframerTests target (Unit Tests)
+- [ ] Add ReframerUITests target (UI Tests)
+- [ ] Configure test schemes
 
-**Action** — Update BOTH configurations:
-1. In Xcode: Project → Build Settings → Deployment → macOS Deployment Target
-2. Set to `15.0` for **both Debug AND Release** configurations
-3. Verify in `project.pbxproj` that BOTH lines show `MACOSX_DEPLOYMENT_TARGET = 15.0`:
-   - Line ~279 (Debug)
-   - Line ~338 (Release)
+### 0.2 Test Fixtures
 
----
+**Action**: Add bundled test videos
 
-## Phase 1: Event Routing (Critical)
+| Fixture | Specs | Purpose |
+|---------|-------|---------|
+| `test_30fps_2s.mp4` | 30fps, 2 seconds, 60 frames, 16:9 | Standard playback |
+| `test_60fps_5s.mp4` | 60fps, 5 seconds, 300 frames, 16:9 | High framerate |
+| `test_4x3_1s.mp4` | 30fps, 1 second, 4:3 aspect | Aspect ratio handling |
 
-### 1.1 Fix Hit-Testing for SwiftUI Controls
+**Checklist**:
+- [ ] Create/obtain test fixtures
+- [ ] Add to test bundle resources
+- [ ] Verify fixtures load in tests
 
-**Location**: `ContentView.swift:153-188` (WindowDragView and WindowDragNSView)
+### 0.3 Test Helpers
 
-**Problem**: Current hit-test only returns `hitView` if it's an `NSControl` or `NSTextView`. SwiftUI controls are NOT `NSControl` subclasses—they're hosted inside `NSHostingView`. The current code intercepts them for drag.
-
-**Why my previous fix was wrong**: `super.hitTest(point)` returns the **deepest** view containing the point. When NSHostingView hosts SwiftUI content, even "empty" areas hit internal SwiftUI views (not `self`), so checking `hitView === self` would NEVER allow drag.
-
-**Correct Fix** — Use a **layered architecture** instead of hit-test manipulation:
+**Action**: Create test infrastructure code
 
 ```swift
-// ARCHITECTURE CHANGE:
-// Instead of wrapping SwiftUI in a drag view that manipulates hit-testing,
-// place a transparent drag layer BEHIND the SwiftUI content.
+// ReframerTests/TestHelpers.swift
+import AVFoundation
+import XCTest
 
-// ControlWindowView.swift (or wherever the control bar is set up)
-struct ControlWindowView: View {
-    @EnvironmentObject var videoState: VideoState
-
-    var body: some View {
-        ZStack {
-            // LAYER 1: Drag background (behind everything)
-            // This receives hits only where SwiftUI content doesn't cover
-            WindowDragBackground(videoState: videoState)
-
-            // LAYER 2: SwiftUI controls (on top)
-            // These naturally receive their own hits
-            ControlBarView()
+class VideoTestHelper {
+    static func loadFixture(_ name: String) async throws -> (AVPlayer, duration: Double, fps: Double) {
+        let bundle = Bundle(for: Self.self)
+        guard let url = bundle.url(forResource: name, withExtension: "mp4") else {
+            throw TestError.fixtureNotFound(name)
         }
-    }
-}
-
-// Drag background that only handles mouse events for window movement
-struct WindowDragBackground: NSViewRepresentable {
-    let videoState: VideoState
-
-    func makeNSView(context: Context) -> DragBackgroundNSView {
-        let view = DragBackgroundNSView()
-        view.videoState = videoState
-        return view
-    }
-
-    func updateNSView(_ nsView: DragBackgroundNSView, context: Context) {
-        nsView.videoState = videoState
-    }
-}
-
-class DragBackgroundNSView: NSView {
-    weak var videoState: VideoState?
-    private var dragStart: NSPoint = .zero
-    private var windowStart: NSPoint = .zero
-
-    // This view naturally receives hits where SwiftUI doesn't cover
-    // No hit-test override needed!
-
-    override var mouseDownCanMoveWindow: Bool { false }
-
-    override func mouseDown(with event: NSEvent) {
-        guard videoState?.isLocked != true else {
-            super.mouseDown(with: event)
-            return
-        }
-        dragStart = NSEvent.mouseLocation
-        windowStart = (window?.parent ?? window)?.frame.origin ?? .zero
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        guard videoState?.isLocked != true else { return }
-        let current = NSEvent.mouseLocation
-        let dx = current.x - dragStart.x
-        let dy = current.y - dragStart.y
-        (window?.parent ?? window)?.setFrameOrigin(NSPoint(x: windowStart.x + dx, y: windowStart.y + dy))
+        let asset = AVAsset(url: url)
+        let duration = try await asset.load(.duration).seconds
+        let track = try await asset.loadTracks(withMediaType: .video).first!
+        let fps = try await Double(track.load(.nominalFrameRate))
+        let player = AVPlayer(url: url)
+        return (player, duration, fps)
     }
 }
 ```
 
-**Key insight**: ZStack layering means SwiftUI controls sit ON TOP of the drag background. SwiftUI's built-in hit-testing naturally routes clicks to the topmost view that wants them. Buttons/sliders/inputs receive their clicks; empty space falls through to the drag background.
+**Checklist**:
+- [ ] Create TestHelpers.swift
+- [ ] Create VideoTestHelper class
+- [ ] Add launch argument for deterministic test state
 
-**Critical: ControlBarView background must be non-hittable**
+### 0.4 Update Deployment Target
 
-**Location**: `VideoOverlay/VideoOverlay/Views/ControlBarView.swift`
+**Location**: `project.pbxproj`
 
-The current `ControlBarView` applies a background material (`.ultraThinMaterial`) to the entire HStack. This makes the ENTIRE bar hit-testable, blocking the drag layer underneath.
+**Required**: `MACOSX_DEPLOYMENT_TARGET = 15.0` for BOTH Debug AND Release
 
-**Fix** — Make the visual background non-hittable:
-
-```swift
-// ControlBarView.swift
-var body: some View {
-    HStack(spacing: 12) {
-        // ... controls ...
-    }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 8)
-    .background {
-        // Visual background - NOT hittable
-        RoundedRectangle(cornerRadius: 12)
-            .fill(.ultraThinMaterial)
-            .allowsHitTesting(false)  // CRITICAL: Let clicks pass through to drag layer
-    }
-    .clipShape(RoundedRectangle(cornerRadius: 12))
-    .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 4)
-}
-```
-
-**Why this works**: With `.allowsHitTesting(false)` on the background, only the actual controls (buttons, sliders, inputs) receive hits. Clicks between controls pass through the background to the drag layer.
-
-**What to remove**: Delete the existing `WindowDragView` and `WindowDragNSView` wrapper approach that manipulates hit-testing.
-
-**Handle behavior**: The existing `WindowDragHandle` (bottom-right corner) is a separate NSView-based component. It should remain unchanged and NOT be covered by the drag background layer. Ensure the ZStack order keeps the handle interactive:
-```swift
-ZStack {
-    WindowDragBackground(videoState: videoState)  // Bottom layer
-    ControlBarView()                               // Controls on top
-    // WindowDragHandle is in ContentView, not control bar - unaffected
-}
-```
-
-**Tests**:
-- `CB-001`: All buttons/sliders/inputs respond to clicks
-- `CB-002`: Drag on empty toolbar space (between controls) moves window
+**Checklist**:
+- [ ] Update Debug configuration to 15.0
+- [ ] Update Release configuration to 15.0
+- [ ] Verify build succeeds
 
 ---
 
-### 1.2 Move Keyboard Monitor to AppDelegate
+## Phase 1: Feature Audit
 
-**Location**: `ContentView.swift:261-352` → `AppDelegate.swift`
+**EVERY feature from FEATURES.md must be verified. No assumptions.**
 
-**Validation before fix** — Test keyboard events from control window:
-1. Run app, load a video
-2. Click on a control in the control bar (e.g., the timeline slider) to give it focus
-3. Press Space (play/pause) or arrow keys (frame step)
-4. **If shortcuts don't work when control window has focus**, the issue is window scope
-5. **If shortcuts work initially but fail after state changes**, the issue is the `installIfNeeded` pattern
-6. Add temporary `print()` in `handleKey()` to confirm whether events are received
+### Audit Process
 
-**Suspected issues** (Issue #3 is SUSPECTED, not confirmed):
-- Monitor installed from view lifecycle (may not cover child window)
-- `installIfNeeded` captures first handler and ignores subsequent calls
-- Note: `VideoState` is a reference type, so captured references don't "go stale"
-
-**Fix** — Install monitor in AppDelegate at app launch:
-
-```swift
-// AppDelegate.swift
-class AppDelegate: NSObject, NSApplicationDelegate {
-    var videoState = VideoState()
-    private var localMonitor: Any?
-    private var globalMonitor: Any?
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        createWindow()
-        FocusReturnManager.shared.startTracking()
-        setupKeyboardMonitoring()  // Install ONCE at app launch
-        ensureInstalledInApplications()
-        observeState()
-    }
-
-    private func setupKeyboardMonitoring() {
-        // Local monitor — handles events when app is active (both windows)
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
-            return self.handleLocalKey(event) ? nil : event
-        }
-
-        // Global monitor — handles events when app is inactive
-        // NOTE: Requires Input Monitoring permission (no API to check - see 1.3)
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleGlobalKey(event)
-        }
-    }
-
-    private func handleLocalKey(_ event: NSEvent) -> Bool {
-        // Check if text field has focus — let it handle events
-        let responder = event.window?.firstResponder ?? NSApp.keyWindow?.firstResponder
-        if responder is NSTextView {
-            // Only intercept Escape/Enter to defocus
-            if event.keyCode == 53 || event.keyCode == 36 {
-                NSApp.keyWindow?.makeFirstResponder(nil)
-                FocusReturnManager.shared.returnFocusToPreviousApp()
-                return true
-            }
-            return false
-        }
-
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let shift = flags.contains(.shift)
-
-        switch event.keyCode {
-        case 49 where videoState.isVideoLoaded && flags.isEmpty:  // Space
-            videoState.isPlaying.toggle()
-            return true
-        case 123 where videoState.isVideoLoaded:  // Left arrow
-            NotificationCenter.default.post(name: .frameStepBackward, object: shift ? 10 : 1)
-            return true
-        case 124 where videoState.isVideoLoaded:  // Right arrow
-            NotificationCenter.default.post(name: .frameStepForward, object: shift ? 10 : 1)
-            return true
-        case 126 where videoState.isVideoLoaded && !videoState.isLocked:  // Up arrow
-            videoState.adjustZoom(byPercent: shift ? 10 : 5)
-            return true
-        case 125 where videoState.isVideoLoaded && !videoState.isLocked:  // Down arrow
-            videoState.adjustZoom(byPercent: shift ? -10 : -5)
-            return true
-        case 24 where videoState.isVideoLoaded && !videoState.isLocked:  // + key
-            videoState.adjustZoom(byPercent: 5)
-            return true
-        case 27 where videoState.isVideoLoaded && !videoState.isLocked:  // - key
-            videoState.adjustZoom(byPercent: -5)
-            return true
-        case 29 where videoState.isVideoLoaded && !videoState.isLocked && flags.isEmpty:  // 0 key
-            videoState.zoomScale = 1.0
-            return true
-        case 15 where flags.isEmpty && !videoState.isLocked:  // R key
-            videoState.resetView()
-            return true
-        case 37 where flags.isEmpty:  // L key
-            videoState.isLocked.toggle()
-            return true
-        case 4 where flags.isEmpty:  // H key
-            videoState.showHelp.toggle()
-            return true
-        case 44 where shift:  // ? key (Shift+/)
-            videoState.showHelp.toggle()
-            return true
-        case 31 where flags == .command:  // Cmd+O
-            NotificationCenter.default.post(name: .openVideo, object: nil)
-            return true
-        case 53 where videoState.showHelp:  // Escape
-            videoState.showHelp = false
-            return true
-        default:
-            return false
-        }
-    }
-}
-```
-
-**Remove from ContentView.swift**:
-- Delete `KeyboardShortcutsModifier` struct (lines 261-334)
-- Delete `KeyboardShortcutMonitor` class (lines 342-352)
-- Remove `.handleKeyboardShortcuts()` modifier from ContentView
+For each feature:
+1. **Locate** — Find the code that implements it
+2. **Test** — Manually verify it works per spec
+3. **Status** — Mark as WORKING / BROKEN / PARTIAL / MISSING
+4. **Evidence** — Document what was tested and result
 
 ---
 
-### 1.3 Global Shortcut Permission Handling
+### 1.1 Core Window Behavior
 
-**Problem**: `NSEvent.addGlobalMonitorForEvents` requires **Input Monitoring** permission (Privacy & Security > Input Monitoring), NOT Accessibility permission.
+#### F-CW-001: Transparent, frameless window (no open/close/minimize buttons)
 
-**Important**: There is **no API** to programmatically check if Input Monitoring permission is granted. `AXIsProcessTrustedWithOptions` checks Accessibility permission, which is a DIFFERENT permission.
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `AppDelegate.swift` window setup |
+| **Verification** | Launch app, inspect window chrome |
+| **Expected** | No title bar, no traffic light buttons, transparent background |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `W-001` |
 
-**Do NOT use** `AXIsProcessTrustedWithOptions` — that's for Accessibility, not Input Monitoring.
+**Manual Test**:
+1. Launch app
+2. Verify no close/minimize/zoom buttons visible
+3. Verify window background is transparent (content behind visible)
 
-**Correct approach** — Two-part UX:
-
-**Part A: One-time alert on first launch** (more visible)
+**Unit Test** (if working):
 ```swift
-// AppDelegate.swift - in applicationDidFinishLaunching
-private func showGlobalShortcutPermissionAlert() {
-    // Only show once
-    guard !UserDefaults.standard.bool(forKey: "hasShownInputMonitoringAlert") else { return }
-    UserDefaults.standard.set(true, forKey: "hasShownInputMonitoringAlert")
-
-    let alert = NSAlert()
-    alert.messageText = "Enable Global Shortcuts"
-    alert.informativeText = "To use global shortcuts (Cmd+Shift+L to toggle lock) when other apps are focused, please enable Input Monitoring for VideoOverlay in System Settings."
-    alert.addButton(withTitle: "Open System Settings")
-    alert.addButton(withTitle: "Later")
-
-    if alert.runModal() == .alertFirstButtonReturn {
-        // Open Input Monitoring settings
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-}
-```
-
-**Part B: Help UI reference** (for users who skipped the alert)
-```swift
-// In HelpModalView:
-Text("Global shortcuts require Input Monitoring permission.")
-    .font(.caption)
-    .foregroundStyle(.secondary)
-
-Text("System Settings > Privacy & Security > Input Monitoring")
-    .font(.caption)
-    .foregroundStyle(.secondary)
-```
-
----
-
-## Phase 2: Input Field Modifier Handling
-
-### 2.1 Catch All Arrow Key Command Selectors
-
-**Location**: `NumericInputField.swift:75-90`
-
-**Fix** — Add Shift and Cmd arrow selectors:
-
-```swift
-func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-    switch commandSelector {
-    // UNMODIFIED arrows
-    case #selector(NSResponder.moveUp(_:)):
-        stepValue(direction: 1, modifiers: [])
-        return true
-    case #selector(NSResponder.moveDown(_:)):
-        stepValue(direction: -1, modifiers: [])
-        return true
-
-    // SHIFT+arrows
-    case #selector(NSResponder.moveUpAndModifySelection(_:)):
-        stepValue(direction: 1, modifiers: [.shift])
-        return true
-    case #selector(NSResponder.moveDownAndModifySelection(_:)):
-        stepValue(direction: -1, modifiers: [.shift])
-        return true
-
-    // CMD+arrows
-    case #selector(NSResponder.moveToBeginningOfDocument(_:)),
-         #selector(NSResponder.moveToBeginningOfParagraph(_:)):
-        stepValue(direction: 1, modifiers: [.command])
-        return true
-    case #selector(NSResponder.moveToEndOfDocument(_:)),
-         #selector(NSResponder.moveToEndOfParagraph(_:)):
-        stepValue(direction: -1, modifiers: [.command])
-        return true
-
-    // ENTER/ESC — defocus
-    case #selector(NSResponder.insertNewline(_:)),
-         #selector(NSResponder.cancelOperation(_:)):
-        control.window?.makeFirstResponder(nil)
-        FocusReturnManager.shared.returnFocusToPreviousApp()
-        return true
-
-    default:
-        return false
-    }
-}
-
-private func stepValue(direction: Int, modifiers: NSEvent.ModifierFlags) {
-    let step: Double
-    if modifiers.contains(.command) {
-        step = parent.cmdStep ?? parent.step
-    } else if modifiers.contains(.shift) {
-        step = parent.shiftStep
-    } else {
-        step = parent.step
-    }
-
-    let current = Double(parent.text) ?? parent.min
-    let newValue = clamp(current + (step * Double(direction)))
-    let formatted = formatValue(newValue)
-    parent.text = formatted
-    textField?.stringValue = formatted
-    applyValue(from: formatted)
+func testWindowIsFrameless() {
+    let window = NSApp.windows.first!
+    XCTAssertEqual(window.styleMask, [.borderless, .resizable])
+    XCTAssertFalse(window.titlebarAppearsTransparent)
+    XCTAssertTrue(window.isOpaque == false)
+    XCTAssertEqual(window.backgroundColor, .clear)
 }
 ```
 
 ---
 
-## Phase 3: Drag & Drop Fix
+#### F-CW-002: Always-on-top by default (with toggle)
 
-### 3.1 Use Correct NSItemProvider API
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `AppDelegate.swift`, `VideoState.swift` |
+| **Verification** | Check window level on launch, toggle pin button |
+| **Expected** | Default level = `.floating`, toggle changes to `.normal` |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `W-002` |
 
-**Location**: `DropZoneView.swift:66-88`
+**Manual Test**:
+1. Launch app
+2. Open another app window
+3. Verify Reframer stays on top
+4. Click pin/float toggle
+5. Verify other windows can now cover Reframer
 
-**Validation before fix**: Test current drag & drop behavior:
-1. Run app, drag a video file from Finder onto the drop zone
-2. Check Console.app for "Drop error" messages
-3. If drop silently fails (no video loads, no error), the `loadItem` API issue is confirmed
-
-**Current code problem**:
-- `item as? URL` fails because Finder provides `NSURL`, not Swift `URL`
-- `URL(dataRepresentation:relativeTo:)` expects bookmark data, not path bytes
-
+**Unit Test**:
 ```swift
-private func handleDrop(providers: [NSItemProvider]) -> Bool {
-    guard let provider = providers.first else { return false }
+func testAlwaysOnTopDefault() {
+    let window = NSApp.windows.first!
+    XCTAssertEqual(window.level, .floating)
+}
 
-    if provider.canLoadObject(ofClass: URL.self) {
-        _ = provider.loadObject(ofClass: URL.self) { [weak self] url, error in
-            guard let url = url, error == nil else {
-                print("Drop error: \(error?.localizedDescription ?? "unknown")")
-                return
-            }
-            guard VideoFormats.supportedTypes.contains(where: {
-                UTType(filenameExtension: url.pathExtension)?.conforms(to: $0) == true
-            }) else { return }
-
-            DispatchQueue.main.async {
-                self?.videoState.videoURL = url
-                self?.videoState.isVideoLoaded = true
-            }
-        }
-        return true
-    }
-    return false
+func testAlwaysOnTopToggle() {
+    videoState.isPinned = false
+    XCTAssertEqual(window.level, .normal)
+    videoState.isPinned = true
+    XCTAssertEqual(window.level, .floating)
 }
 ```
 
 ---
 
-## Phase 4: Entitlements
+#### F-CW-003: Resizable window via native drag handles
 
-### 4.1 Populate Entitlements for Sandboxed App
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Window style mask |
+| **Verification** | Drag window edges/corners |
+| **Expected** | Window resizes, minimum size enforced |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `W-003` |
 
-**Location**: `VideoOverlay/Resources/VideoOverlay.entitlements`
-
-**Current build setting**: `ENABLE_APP_SANDBOX = YES`
-
-**Required entitlements** (sandbox-compatible):
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>com.apple.security.app-sandbox</key>
-    <true/>
-    <key>com.apple.security.files.user-selected.read-only</key>
-    <true/>
-    <key>com.apple.security.files.downloads.read-only</key>
-    <true/>
-</dict>
-</plist>
-```
-
-**Note**: This keeps sandbox ENABLED (matching the build setting). User-selected files (via Open dialog or drag-drop) will be accessible. If you need to disable sandbox, you must ALSO change `ENABLE_APP_SANDBOX = NO` in build settings.
+**Manual Test**:
+1. Hover over window edge — cursor should change to resize cursor
+2. Drag edge — window should resize
+3. Try to resize below minimum — should be prevented
 
 ---
 
-## Phase 5: Scroll Wheel Semantics
+#### F-CW-004: Draggable via control bar OR bottom-right handle
 
-### 5.1 Scroll Behavior per FEATURES.md
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `ControlBarView.swift`, `ContentView.swift` (drag handle) |
+| **Verification** | Drag on control bar empty space, drag on corner handle |
+| **Expected** | Window moves when dragging empty space or handle |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `W-004`, `W-005` |
 
-**Requirements**:
-- Scroll alone (no modifiers) = Frame step
-- **Shift+Scroll** = Zoom 5% increments
-- **Cmd+Shift+Scroll** = Zoom 0.1% increments
-- **Cmd+Scroll alone** = Does nothing (not in spec)
-- Scroll UP = Zoom OUT (user confirmed)
-
-```swift
-override func scrollWheel(with event: NSEvent) {
-    guard !videoState.isLocked else { return }
-
-    let delta = event.scrollingDeltaY
-    guard delta != 0 else { return }
-
-    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-    let hasShift = flags.contains(.shift)
-    let hasCmd = flags.contains(.command)
-
-    // ZOOM: Requires Shift (with or without Cmd)
-    if hasShift {
-        // Cmd+Shift = 0.1%, Shift alone = 5%
-        let zoomIncrement: Double = hasCmd ? 0.001 : 0.05
-
-        // Scroll UP (positive delta) = zoom OUT (user confirmed)
-        let direction = delta > 0 ? -1.0 : 1.0
-        videoState.zoomScale += direction * zoomIncrement
-        videoState.zoomScale = max(0.1, min(10.0, videoState.zoomScale))
-
-    // FRAME STEP: No modifiers only
-    } else if flags.isEmpty {
-        let isDiscreteWheel = !event.hasPreciseScrollingDeltas
-
-        if isDiscreteWheel {
-            if delta > 0 {
-                NotificationCenter.default.post(name: .frameStepBackward, object: 1)
-            } else {
-                NotificationCenter.default.post(name: .frameStepForward, object: 1)
-            }
-        } else {
-            if delta > 0.5 {
-                NotificationCenter.default.post(name: .frameStepBackward, object: 1)
-            } else if delta < -0.5 {
-                NotificationCenter.default.post(name: .frameStepForward, object: 1)
-            }
-        }
-    }
-    // Cmd alone (without Shift): explicitly does nothing
-}
-```
+**Manual Test**:
+1. Drag on empty space between controls — window should move
+2. Drag on a button — button should respond, NOT move window
+3. Drag on bottom-right handle — window should move
+4. Handle should show visual feedback on hover
 
 ---
 
-## Phase 6: Scrubbing Performance
+#### F-CW-005: Rounded corners (macOS native)
 
-### 6.1 Fast Seek During Drag, Accurate on Release
-
-```swift
-func scrubFast(to time: Double) {
-    let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-    player?.currentItem?.cancelPendingSeeks()
-    player?.seek(to: cmTime)  // Default tolerance = fast
-}
-
-func scrubFinalize(to time: Double) {
-    let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-    player?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
-}
-```
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Window/view corner radius |
+| **Verification** | Visual inspection |
+| **Expected** | Corners are rounded |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `W-006` |
 
 ---
 
-## Phase 7: Window & UI
+#### F-CW-006: Install to /Applications prompt
 
-### 7.1 Increase Control Window Height
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `AppDelegate.swift` `ensureInstalledInApplications()` |
+| **Verification** | Run from Downloads folder |
+| **Expected** | Alert prompts to move to /Applications |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `W-007` |
 
-**Location**: `AppDelegate.swift:19`
+---
 
+### 1.2 Video Playback
+
+#### F-VP-001: Load video files (mp4, webm, mov, avi, mkv, m4v, prores, hevc, av1)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoFormats.swift`, `DropZoneView.swift` |
+| **Verification** | Check `supportedTypes`, test actual file loading |
+| **Expected** | All listed formats supported |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `V-001` |
+
+**Unit Test**:
 ```swift
-private let controlWindowHeight: CGFloat = 80  // Was 64
-```
-
-### 7.2 Liquid Glass with Fallback
-
-```swift
-.background {
-    if #available(macOS 26, *) {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(.regularMaterial)
-            .glassEffect(.regular)
-    } else {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(.ultraThinMaterial)
+func testSupportedFormats() {
+    let expected = ["mp4", "webm", "mov", "avi", "mkv", "m4v"]
+    for ext in expected {
+        XCTAssertTrue(VideoFormats.isSupported(ext), "\(ext) should be supported")
     }
 }
 ```
 
-### 7.3 Dark Mode Enforcement
+---
+
+#### F-VP-002: Play/pause toggle
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoState.swift`, `VideoPlayerView.swift` |
+| **Verification** | Load video, click play, click pause |
+| **Expected** | Playback starts/stops, button state updates |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `V-002` |
+
+---
+
+#### F-VP-003: Timeline scrubber (no lag, high performance)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `ControlBarView.swift` slider, `VideoPlayerView.swift` seek |
+| **Verification** | Drag slider, observe frame updates |
+| **Expected** | Frame updates continuously during drag, not just on release |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `V-003` |
+
+**Critical**: Must use fast seek during drag, frame-accurate on release.
+
+---
+
+#### F-VP-004: Frame-accurate playback (frame-by-frame stepping)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoPlayerView.swift` step methods |
+| **Verification** | Step forward/back, verify time delta = 1/fps |
+| **Expected** | Each step moves exactly one frame |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `V-004` |
+
+**Unit Test**:
+```swift
+func testFrameStep() async throws {
+    let (player, _, fps) = try await VideoTestHelper.loadFixture("test_30fps_2s")
+    let frameDuration = 1.0 / fps
+    let startTime = player.currentTime().seconds
+
+    videoState.stepFrame(forward: true)
+
+    let endTime = player.currentTime().seconds
+    XCTAssertEqual(endTime - startTime, frameDuration, accuracy: 0.001)
+}
+```
+
+---
+
+#### F-VP-005: Frame number overlay (upper-left corner)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `OverlayViews.swift` |
+| **Verification** | Load video, check overlay position and content |
+| **Expected** | Shows "Frame X / Y" in upper-left, updates on seek/play |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `V-005` |
+
+---
+
+#### F-VP-006: Frame number input with arrow stepping
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `ControlBarView.swift`, `NumericInputField.swift` |
+| **Verification** | Focus input, press arrows with/without Shift |
+| **Expected** | Arrow = ±1 frame, Shift+Arrow = ±10 frames |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `V-006` |
+
+---
+
+#### F-VP-007: Auto-apply increments (Enter/Esc defocuses and returns focus to previous app)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `NumericInputField.swift`, `FocusReturnManager.swift` |
+| **Verification** | Focus input, change value, press Enter or Esc |
+| **Expected** | Value applies immediately, Enter/Esc defocuses, previous app regains focus |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `V-007` |
+
+---
+
+#### F-VP-008: Muted by default, volume control minimized
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoState.swift`, `ControlBarView.swift` |
+| **Verification** | Load video, check volume state |
+| **Expected** | Volume = 0 or muted by default, volume control exists |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `V-008` |
+
+---
+
+### 1.3 Zoom & Pan
+
+#### F-ZP-001: Zoom via Shift+Scroll (5%) and Cmd+Shift+Scroll (0.1%)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoPlayerView.swift` scrollWheel handler |
+| **Verification** | Shift+scroll, Cmd+Shift+scroll |
+| **Expected** | Shift = 5% steps, Cmd+Shift = 0.1% steps, Scroll UP = zoom OUT |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `Z-001`, `Z-002`, `M-002`, `M-003` |
+
+---
+
+#### F-ZP-002: Pan when zoomed (click+drag)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoPlayerView.swift` mouse handlers |
+| **Verification** | Zoom > 100%, drag video |
+| **Expected** | Video pans. At 100% zoom, drag does nothing |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `Z-004`, `M-004` |
+
+---
+
+#### F-ZP-003: Zoom scales from video top-left corner
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Zoom transform anchor |
+| **Verification** | Zoom in, observe which corner stays fixed |
+| **Expected** | Video top-left stays anchored, other edges expand |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `Z-003` |
+
+---
+
+#### F-ZP-004: Zoom percentage overlay
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `OverlayViews.swift` |
+| **Verification** | Zoom in/out, check overlay |
+| **Expected** | Shows zoom percentage, updates in real-time |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `Z-005` |
+
+---
+
+#### F-ZP-005: Zoom input with arrow stepping (1%, Shift=10%, Cmd=0.1%)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `ControlBarView.swift`, `NumericInputField.swift` |
+| **Verification** | Focus zoom input, press arrows with modifiers |
+| **Expected** | Arrow = ±1%, Shift = ±10%, Cmd = ±0.1% |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `Z-006` |
+
+---
+
+#### F-ZP-006: Reset view button
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `ControlBarView.swift`, `VideoState.swift` |
+| **Verification** | Zoom and pan, click reset |
+| **Expected** | Zoom = 100%, pan = 0 |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `Z-007` |
+
+---
+
+### 1.4 Opacity
+
+#### F-OP-001: Opacity slider with input (arrow = 1%, Shift = 10%)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `ControlBarView.swift`, `NumericInputField.swift` |
+| **Verification** | Adjust slider, use input arrows |
+| **Expected** | Video opacity changes, arrow = ±1%, Shift = ±10% |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `O-001` |
+
+---
+
+#### F-OP-002: Opacity range 2% to 100%
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoState.swift`, `NumericInputField.swift` |
+| **Verification** | Try to set opacity below 2% |
+| **Expected** | Clamped to 2% minimum |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `O-002` |
+
+**Unit Test**:
+```swift
+func testOpacityMinimum() {
+    videoState.opacity = 0.0
+    XCTAssertEqual(videoState.opacity, 0.02) // 2%
+}
+```
+
+---
+
+### 1.5 Lock/Ghost Mode
+
+#### F-LK-001: Lock toggle makes video click-through
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoState.swift`, main window setup |
+| **Verification** | Toggle lock, try to click/drag/scroll on video |
+| **Expected** | Video area ignores all mouse events, clicks pass through to apps below |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `L-001` |
+
+---
+
+#### F-LK-002: Controls remain interactive when locked
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Control window setup |
+| **Verification** | Lock mode on, click controls |
+| **Expected** | All controls still respond (play, zoom, lock toggle, etc.) |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `L-002` |
+
+---
+
+#### F-LK-003: Window move/resize disabled when locked
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Drag handlers, resize handlers |
+| **Verification** | Lock mode on, try to drag/resize |
+| **Expected** | Window cannot move or resize |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `L-003` |
+
+---
+
+#### F-LK-004: Visual lock indicator (SF Symbols icon)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `ControlBarView.swift` lock button |
+| **Verification** | Toggle lock, check icon |
+| **Expected** | Icon changes between locked/unlocked states, uses SF Symbols |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `L-004` |
+
+---
+
+### 1.6 Keyboard Shortcuts (Local)
+
+#### F-KL-001: Left/Right Arrow = Frame step (Shift = 10 frames)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Keyboard handler |
+| **Verification** | Press arrows with/without Shift |
+| **Expected** | Arrow = 1 frame, Shift+Arrow = 10 frames |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `K-001` |
+
+---
+
+#### F-KL-002: Up/Down Arrow = Zoom (5%, Shift = 10%)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Keyboard handler |
+| **Verification** | Press arrows with/without Shift |
+| **Expected** | Arrow = 5%, Shift+Arrow = 10% |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `K-002` |
+
+---
+
+#### F-KL-003: +/- = Zoom in/out
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Keyboard handler |
+| **Verification** | Press + and - |
+| **Expected** | Zoom increases/decreases |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `K-002` |
+
+---
+
+#### F-KL-004: 0 = Reset zoom to 100%
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Keyboard handler |
+| **Verification** | Zoom to 200%, press 0 |
+| **Expected** | Zoom = 100% |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `K-003` |
+
+---
+
+#### F-KL-005: R = Reset view (zoom + pan)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Keyboard handler |
+| **Verification** | Zoom and pan, press R |
+| **Expected** | Zoom = 100%, pan = 0 |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `K-003` |
+
+---
+
+#### F-KL-006: L = Toggle lock
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Keyboard handler |
+| **Verification** | Press L |
+| **Expected** | Lock toggles |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `K-004` |
+
+---
+
+#### F-KL-007: H or ? = Toggle help
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Keyboard handler |
+| **Verification** | Press H or Shift+/ |
+| **Expected** | Help modal appears/disappears |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `K-004` |
+
+---
+
+#### F-KL-008: Cmd+O = Open file dialog
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Keyboard handler |
+| **Verification** | Press Cmd+O |
+| **Expected** | File open dialog appears |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `K-005` |
+
+---
+
+#### F-KL-009: Esc/Enter in inputs = Defocus and return focus
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `NumericInputField.swift`, `FocusReturnManager.swift` |
+| **Verification** | Focus input, press Esc or Enter |
+| **Expected** | Input loses focus, previous app regains focus |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `K-006` |
+
+---
+
+### 1.7 Keyboard Shortcuts (Global)
+
+#### F-KG-001: Cmd+Shift+L = Toggle lock (works when app not focused)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Global keyboard monitor |
+| **Verification** | Focus another app, press Cmd+Shift+L |
+| **Expected** | Lock toggles in Reframer |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `KG-001` |
+
+**Note**: Requires Input Monitoring permission.
+
+---
+
+#### F-KG-002: Cmd+PageUp/PageDown = Frame step (Shift = 10 frames)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Global keyboard monitor |
+| **Verification** | Focus another app, press Cmd+PageUp/PageDown |
+| **Expected** | Frame steps in Reframer |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `KG-002` |
+
+---
+
+### 1.8 Mouse/Scroll Controls
+
+#### F-MS-001: Scroll wheel = Frame step (disabled when locked)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoPlayerView.swift` scrollWheel |
+| **Verification** | Scroll without modifiers |
+| **Expected** | Frame steps forward/back. Does nothing when locked. |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `M-001` |
+
+---
+
+#### F-MS-002: Shift+Scroll = Zoom 5% (disabled when locked)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoPlayerView.swift` scrollWheel |
+| **Verification** | Shift+scroll |
+| **Expected** | Zoom changes 5%. Scroll UP = zoom OUT. Does nothing when locked. |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `M-002` |
+
+---
+
+#### F-MS-003: Cmd+Shift+Scroll = Zoom 0.1% (disabled when locked)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoPlayerView.swift` scrollWheel |
+| **Verification** | Cmd+Shift+scroll |
+| **Expected** | Zoom changes 0.1%. Does nothing when locked. |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `M-003` |
+
+---
+
+#### F-MS-004: Click+drag on video = Pan (disabled when locked)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `VideoPlayerView.swift` mouse handlers |
+| **Verification** | Zoom > 100%, drag video |
+| **Expected** | Video pans. Does nothing when locked or at 100% zoom. |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `M-004` |
+
+---
+
+#### F-MS-005: Click+drag on control bar = Move window (disabled when locked)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Control bar drag handling |
+| **Verification** | Drag on empty control bar space |
+| **Expected** | Window moves. Does nothing when locked. |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `M-005` |
+
+---
+
+#### F-MS-006: Click+drag on edges/corners = Resize (disabled when locked)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Window resize handling |
+| **Verification** | Drag window edges |
+| **Expected** | Window resizes. Does nothing when locked. |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `M-006` |
+
+---
+
+### 1.9 UI Elements
+
+#### F-UI-001: Drop zone on launch (click or Cmd+O to open)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `DropZoneView.swift` |
+| **Verification** | Launch app without file |
+| **Expected** | Drop zone visible, clickable, accepts drag & drop |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `UI-001` |
+
+---
+
+#### F-UI-002: Liquid glass design (Tahoe style, dark mode)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `ControlBarView.swift`, materials |
+| **Verification** | Visual inspection |
+| **Expected** | Tahoe: glassEffect. Sequoia: ultraThinMaterial. Dark mode. |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `UI-002` |
+
+---
+
+#### F-UI-003: Control bar with all playback controls
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `ControlBarView.swift` |
+| **Verification** | Visual inspection |
+| **Expected** | Contains: play/pause, timeline, frame input, zoom input, opacity, lock, help |
+| **Status** | ⬜ PENDING |
+| **Test ID** | (implicit) |
+
+---
+
+#### F-UI-004: Help modal with all shortcuts listed
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `HelpModalView.swift` |
+| **Verification** | Open help, check content |
+| **Expected** | All shortcuts from FEATURES.md are listed |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `UI-003` |
+
+---
+
+#### F-UI-005: Minimal overlays (frame/zoom)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `OverlayViews.swift` |
+| **Verification** | Visual inspection |
+| **Expected** | Small, non-intrusive, positioned in corners |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `UI-004` |
+
+---
+
+#### F-UI-006: SF Symbols for all icons (no emojis)
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | All button/icon usage |
+| **Verification** | Code inspection, visual inspection |
+| **Expected** | All icons use `Image(systemName:)`, no emoji characters |
+| **Status** | ⬜ PENDING |
+| **Test ID** | (new) |
+
+---
+
+### 1.10 File Handling
+
+#### F-FH-001: Open file dialog with video filter
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | File open panel setup |
+| **Verification** | Cmd+O, check allowed types |
+| **Expected** | Only video formats selectable |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `F-101` |
+
+---
+
+#### F-FH-002: Drag & drop video files
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `DropZoneView.swift` |
+| **Verification** | Drag video from Finder onto window |
+| **Expected** | Video loads and plays |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `F-102` |
+
+---
+
+#### F-FH-003: Reject unsupported files
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | `DropZoneView.swift`, file validation |
+| **Verification** | Drop non-video file |
+| **Expected** | File rejected, app stays in drop state |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `F-103` |
+
+---
+
+### 1.11 Transparency
+
+#### F-TR-001: Video area 100% transparent background
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Main window, video view |
+| **Verification** | Load video, check background |
+| **Expected** | Only video pixels visible, background is fully transparent |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `T-001` |
+
+---
+
+#### F-TR-002: Opacity affects only video pixels
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Opacity application |
+| **Verification** | Set opacity to 50%, check background |
+| **Expected** | Video pixels at 50%, background still transparent |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `T-002` |
+
+---
+
+### 1.12 App Icon
+
+#### F-IC-001: Custom application icon
+
+| Attribute | Value |
+|-----------|-------|
+| **Location** | Assets.xcassets/AppIcon |
+| **Verification** | Check Dock icon |
+| **Expected** | Custom icon (not default SwiftUI icon) |
+| **Status** | ⬜ PENDING |
+| **Test ID** | `I-001` |
+
+---
+
+## Phase 1 Summary: Audit Checklist
+
+| Category | Features | Tests |
+|----------|----------|-------|
+| Core Window | 6 | W-001 to W-007 |
+| Video Playback | 8 | V-001 to V-008 |
+| Zoom & Pan | 6 | Z-001 to Z-007 |
+| Opacity | 2 | O-001, O-002 |
+| Lock Mode | 4 | L-001 to L-004 |
+| Keyboard Local | 9 | K-001 to K-006 |
+| Keyboard Global | 2 | KG-001, KG-002 |
+| Mouse/Scroll | 6 | M-001 to M-006 |
+| UI Elements | 6 | UI-001 to UI-004 |
+| File Handling | 3 | F-101 to F-103 |
+| Transparency | 2 | T-001, T-002 |
+| App Icon | 1 | I-001 |
+| **TOTAL** | **55** | |
+
+---
+
+## Phase 2: Regression Test Suite
+
+After Phase 1 audit, create automated tests for all WORKING features.
+
+### 2.1 Unit Tests (ReframerTests)
+
+For each feature marked WORKING in Phase 1:
 
 ```swift
-// AppDelegate.applicationDidFinishLaunching
-NSApp.appearance = NSAppearance(named: .darkAqua)
+// ReframerTests/VideoStateTests.swift
+import XCTest
+@testable import Reframer
+
+final class VideoStateTests: XCTestCase {
+    var videoState: VideoState!
+
+    override func setUp() {
+        videoState = VideoState()
+    }
+
+    // F-OP-002: Opacity minimum
+    func testOpacityClampedToMinimum() {
+        videoState.opacity = 0.0
+        XCTAssertGreaterThanOrEqual(videoState.opacity, 0.02)
+    }
+
+    // F-ZP-006: Reset view
+    func testResetView() {
+        videoState.zoomScale = 2.0
+        videoState.panOffset = CGPoint(x: 100, y: 100)
+        videoState.resetView()
+        XCTAssertEqual(videoState.zoomScale, 1.0)
+        XCTAssertEqual(videoState.panOffset, .zero)
+    }
+
+    // F-LK-001: Lock state
+    func testLockToggle() {
+        XCTAssertFalse(videoState.isLocked)
+        videoState.isLocked.toggle()
+        XCTAssertTrue(videoState.isLocked)
+    }
+}
 ```
+
+### 2.2 UI Tests (ReframerUITests)
+
+```swift
+// ReframerUITests/ControlsUITests.swift
+import XCTest
+
+final class ControlsUITests: XCTestCase {
+    let app = XCUIApplication()
+
+    override func setUp() {
+        continueAfterFailure = false
+        app.launchArguments = ["--uitesting", "--fixture=test_30fps_2s"]
+        app.launch()
+    }
+
+    // F-VP-002: Play/pause
+    func testPlayPauseToggle() {
+        let playButton = app.buttons["playPauseButton"]
+        XCTAssertTrue(playButton.exists)
+        playButton.tap()
+        // Verify state changed
+    }
+
+    // F-UI-001: Drop zone
+    func testDropZoneVisible() {
+        // Launch without fixture
+        let freshApp = XCUIApplication()
+        freshApp.launchArguments = ["--uitesting"]
+        freshApp.launch()
+
+        let dropZone = freshApp.otherElements["dropZone"]
+        XCTAssertTrue(dropZone.exists)
+    }
+}
+```
+
+### 2.3 Lock Mode + Scroll Tests (Gap Coverage)
+
+```swift
+// Tests for lock mode disabling scroll controls (identified gap)
+func testScrollDisabledWhenLocked() {
+    videoState.isLocked = true
+    let initialFrame = videoState.currentFrame
+
+    // Simulate scroll event
+    // ...
+
+    XCTAssertEqual(videoState.currentFrame, initialFrame, "Scroll should be disabled when locked")
+}
+
+func testZoomScrollDisabledWhenLocked() {
+    videoState.isLocked = true
+    let initialZoom = videoState.zoomScale
+
+    // Simulate Shift+scroll
+    // ...
+
+    XCTAssertEqual(videoState.zoomScale, initialZoom, "Zoom scroll should be disabled when locked")
+}
+```
+
+### 2.4 CI Integration
+
+```yaml
+# .github/workflows/test.yml
+name: Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and Test
+        run: |
+          xcodebuild test \
+            -project Reframer/Reframer.xcodeproj \
+            -scheme Reframer \
+            -destination 'platform=macOS'
+```
+
+---
+
+## Phase 3+: Implementation Fixes
+
+After Phase 1 identifies all BROKEN/PARTIAL/MISSING features, implement fixes.
+
+### Known Issues (From Previous Analysis)
+
+These are **suspected** issues from prior code review. Phase 1 audit will confirm/deny each:
+
+| # | Issue | Status | Phase 1 Verification |
+|---|-------|--------|---------------------|
+| 1 | Drag & drop API wrong | SUSPECTED | Test F-FH-002 |
+| 2 | Entitlements incomplete | SUSPECTED | Test F-FH-002 |
+| 3 | Keyboard monitor window-scoped | SUSPECTED | Test F-KL-* from control window |
+| 4 | Hit-testing swallows controls | SUSPECTED | Test F-CW-004, F-MS-005 |
+| 5 | Input field modifiers missing | SUSPECTED | Test F-VP-006, F-ZP-005 |
+| 6 | Global shortcut permission UX | SUSPECTED | Test F-KG-* |
+| 7 | Control window height clips | SUSPECTED | Visual inspection |
+
+### Implementation Order
+
+After Phase 1 audit completes:
+
+1. **Critical** — Features that block basic functionality
+2. **High** — Features that significantly impact UX
+3. **Medium** — Features that are inconvenient but have workarounds
+4. **Low** — Polish and edge cases
+
+Each fix must:
+1. Have a failing test FIRST (from Phase 2)
+2. Implement the fix
+3. Pass the test
+4. Not break any other regression tests
 
 ---
 
 ## Implementation Checklist
 
-### Phase 0: Prerequisites
-- [ ] 0.1 Update MACOSX_DEPLOYMENT_TARGET to 15.0 in Xcode (BOTH Debug AND Release)
+### Phase 0: Test Infrastructure
+- [ ] 0.1 Create ReframerTests target
+- [ ] 0.2 Create ReframerUITests target
+- [ ] 0.3 Add test fixture videos
+- [ ] 0.4 Create TestHelpers.swift
+- [ ] 0.5 Update deployment target to 15.0 (Debug + Release)
 
-### Phase 1: Event Routing
-- [ ] 1.1 Replace WindowDragView wrapper with ZStack layered architecture
-- [ ] 1.1b Create DragBackgroundNSView (no hit-test override)
-- [ ] 1.1c Add `.allowsHitTesting(false)` to ControlBarView background material
-- [ ] 1.2 Validate keyboard monitor issue (test from control window, add debug print)
-- [ ] 1.2a Move keyboard monitor to AppDelegate.applicationDidFinishLaunching
-- [ ] 1.2b Remove KeyboardShortcutsModifier from ContentView
-- [ ] 1.2c Remove KeyboardShortcutMonitor class from ContentView
-- [ ] 1.2d Verify fix resolves the validated issue
-- [ ] 1.3a Add one-time Input Monitoring permission alert on first launch
-- [ ] 1.3b Add Input Monitoring guidance to Help UI
+### Phase 1: Feature Audit
+- [ ] 1.1 Audit Core Window (6 features)
+- [ ] 1.2 Audit Video Playback (8 features)
+- [ ] 1.3 Audit Zoom & Pan (6 features)
+- [ ] 1.4 Audit Opacity (2 features)
+- [ ] 1.5 Audit Lock Mode (4 features)
+- [ ] 1.6 Audit Keyboard Local (9 features)
+- [ ] 1.7 Audit Keyboard Global (2 features)
+- [ ] 1.8 Audit Mouse/Scroll (6 features)
+- [ ] 1.9 Audit UI Elements (6 features)
+- [ ] 1.10 Audit File Handling (3 features)
+- [ ] 1.11 Audit Transparency (2 features)
+- [ ] 1.12 Audit App Icon (1 feature)
+- [ ] 1.13 Document all statuses in this plan
 
-### Phase 2: Input Fields
-- [ ] 2.1 Add Shift/Cmd arrow selectors to NumericInputField
+### Phase 2: Regression Tests
+- [ ] 2.1 Unit tests for all WORKING features
+- [ ] 2.2 UI tests for all WORKING features
+- [ ] 2.3 Lock mode + scroll interaction tests (gap)
+- [ ] 2.4 CI integration
 
-### Phase 3: Drag & Drop
-- [ ] 3.0 Validate current drag & drop failure (test with Finder drag)
-- [ ] 3.1 Use `loadObject(ofClass: URL.self)` API
-
-### Phase 4: Entitlements
-- [ ] 4.1 Add sandbox entitlements: `files.user-selected.read-only`, `files.downloads.read-only`
-
-### Phase 5: Scroll Semantics
-- [ ] 5.1 Gate zoom on `hasShift` (Cmd alone does nothing)
-- [ ] 5.2 Scroll up = zoom OUT
-
-### Phase 6: Scrubbing
-- [ ] 6.1 Fast seek during drag, accurate on release
-
-### Phase 7: Window & UI
-- [ ] 7.1 Increase control window height to 80pt
-- [ ] 7.2 Add Liquid Glass fallback
-- [ ] 7.3 Enforce dark mode
-- [ ] 7.4 Update MACOSX_DEPLOYMENT_TARGET in Xcode if targeting macOS 15+ features
+### Phase 3+: Implementation
+- [ ] Fix all BROKEN features (TBD after Phase 1)
+- [ ] Implement all MISSING features (TBD after Phase 1)
+- [ ] Complete all PARTIAL features (TBD after Phase 1)
 
 ---
 
-## Test Coverage
+## Audit Status Summary
 
-| ID | Test | Pass Criteria |
-|----|------|---------------|
-| CB-001 | Controls clickable with drag enabled | Buttons/sliders/inputs respond |
-| CB-002 | Drag on empty toolbar space | Window moves |
-| K-007 | Shortcuts after state changes | Shortcuts work reliably |
-| IM-001 | Frame input Shift+Arrow | Steps 10 frames |
-| IM-002 | Zoom input Cmd+Arrow | Steps 0.1% |
-| IM-003 | Zoom input Shift+Arrow | Steps 10% |
-| IM-004 | Opacity input Shift+Arrow | Steps 10% |
-| SC-001 | Shift+scroll up | Zoom decreases (OUT) |
-| SC-002 | Shift+scroll down | Zoom increases (IN) |
-| SC-003 | Cmd+scroll alone | Nothing happens |
-| SC-004 | Scroll without modifiers | Frame steps |
-| F-102 | Drag from Finder | Video loads |
-| V-003 | Scrub during drag | Frame updates in real-time |
+**To be filled in during Phase 1 execution:**
+
+| Status | Count | Features |
+|--------|-------|----------|
+| ✅ WORKING | 0 | |
+| ❌ BROKEN | 0 | |
+| ⚠️ PARTIAL | 0 | |
+| 🚫 MISSING | 0 | |
+| ⬜ PENDING | 55 | All |
 
 ---
 
-## Summary
-
-**7 issues** addressed across **7 files**:
-
-| File | Changes |
-|------|---------|
-| `project.pbxproj` | Update MACOSX_DEPLOYMENT_TARGET to 15.0 (Debug + Release) |
-| `ContentView.swift` | Replace WindowDragView with layered ZStack; remove keyboard code |
-| `ControlBarView.swift` | Add `.allowsHitTesting(false)` to background material |
-| `AppDelegate.swift` | Add keyboard monitoring; permission alert; increase control height |
-| `NumericInputField.swift` | Add Shift/Cmd command selectors |
-| `DropZoneView.swift` | Use correct `loadObject` API |
-| `VideoOverlay.entitlements` | Add sandbox file entitlements |
-| `VideoPlayerView.swift` | Enforce Shift for zoom; scroll up = zoom out; fast scrub |
-
----
-
-*Master Implementation Plan — Revision 6 — January 31, 2026*
+*Master Implementation Plan — Revision 7 — January 31, 2026*
+*Verification-First Approach with Regression Testing*
