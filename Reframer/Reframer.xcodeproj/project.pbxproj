@@ -77,6 +77,7 @@
 		DDD10001 /* test_30fps_2s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_30fps_2s.mp4; sourceTree = "<group>"; };
 		DDD10002 /* test_60fps_5s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_60fps_5s.mp4; sourceTree = "<group>"; };
 		DDD10003 /* test_4x3_1s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_4x3_1s.mp4; sourceTree = "<group>"; };
+		EEE10001 /* Reframer.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = Reframer.docc; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -128,6 +129,7 @@
 				AAA40006 /* Models */,
 				AAA40007 /* Utilities */,
 				AAA40008 /* Resources */,
+				EEE10001 /* Reframer.docc */,
 			);
 			path = Reframer;
 			sourceTree = "<group>";
