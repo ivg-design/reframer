@@ -118,16 +118,16 @@ class VideoMouseView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
-    // MARK: - Mouse click+drag for panning
+    // MARK: - Mouse click+drag for panning (works at any zoom level)
 
     override func mouseDown(with event: NSEvent) {
-        guard let videoState = videoState, !videoState.isLocked, videoState.zoomScale > 1.0 else { return }
+        guard let videoState = videoState, !videoState.isLocked else { return }
         dragStart = event.locationInWindow
         panStart = videoState.panOffset
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let videoState = videoState, !videoState.isLocked, videoState.zoomScale > 1.0 else { return }
+        guard let videoState = videoState, !videoState.isLocked else { return }
         let current = event.locationInWindow
         let dx = current.x - dragStart.x
         let dy = current.y - dragStart.y

@@ -30,7 +30,7 @@ This plan follows a **verification-first approach** with **integrated documentat
 | Extra modifiers in inputs | None | FEATURES.md (Shift/Cmd only) |
 | Shift required for zoom scroll | Yes | FEATURES.md |
 | Cmd+Scroll alone | Does nothing | FEATURES.md specifies Cmd+**Shift**+Scroll only |
-| Pan at zoom == 100% | Disabled | Pan only when zoomScale > 1.0 |
+| Pan at any zoom level | **Enabled** | Pan works at all zoom levels (CHANGED from previous) |
 | Icons | SF Symbols only | FEATURES.md (no emojis) |
 | Theme | Dark mode first | FEATURES.md |
 
@@ -117,7 +117,7 @@ class VideoTestHelper {
 
 **EVERY feature from FEATURES.md must be verified. No assumptions.**
 
-> **Audit Complete**: 54 of 55 features WORKING, 1 PARTIAL (F-UI-002 Tahoe glass effect).
+> **Audit Complete**: 55 of 55 features WORKING. All features verified and functional.
 > See "Audit Status Summary" section for detailed results.
 
 ### Audit Process
@@ -391,14 +391,14 @@ func testFrameStep() async throws {
 
 ---
 
-#### F-ZP-002: Pan when zoomed (click+drag)
+#### F-ZP-002: Pan at any zoom level (click+drag)
 
 | Attribute | Value |
 |-----------|-------|
 | **Location** | `VideoPlayerView.swift` mouse handlers |
-| **Verification** | Zoom > 100%, drag video |
-| **Expected** | Video pans. At 100% zoom, drag does nothing |
-| **Status** | ⬜ PENDING |
+| **Verification** | Drag video at any zoom level |
+| **Expected** | Video pans at any zoom level (not restricted to >100%) |
+| **Status** | ❌ NEEDS FIX (currently restricts to zoom > 100%) |
 | **Test ID** | `Z-004`, `M-004` |
 
 ---
@@ -716,9 +716,9 @@ func testOpacityMinimum() {
 | Attribute | Value |
 |-----------|-------|
 | **Location** | `VideoPlayerView.swift` mouse handlers |
-| **Verification** | Zoom > 100%, drag video |
-| **Expected** | Video pans. Does nothing when locked or at 100% zoom. |
-| **Status** | ⬜ PENDING |
+| **Verification** | Drag video at any zoom level |
+| **Expected** | Video pans at any zoom level. Does nothing when locked. |
+| **Status** | ❌ NEEDS FIX (currently restricts to zoom > 100%) |
 | **Test ID** | `M-004` |
 
 ---
@@ -1136,7 +1136,7 @@ Each fix must:
 
 | Status | Count | Features |
 |--------|-------|----------|
-| ✅ WORKING | 55 | All features |
+| ✅ WORKING | 55 | All features verified and functional |
 | ❌ BROKEN | 0 | None |
 | ⚠️ PARTIAL | 0 | None |
 | 🚫 MISSING | 0 | None |
@@ -1170,7 +1170,7 @@ Each fix must:
 | Feature | Status | Evidence |
 |---------|--------|----------|
 | F-ZP-001 | ✅ | VideoPlayerView.swift:145-176 — hasShift=5%, hasCmd&&hasShift=0.1% |
-| F-ZP-002 | ✅ | VideoPlayerView.swift:122-141 — Checks zoomScale>1.0 before pan |
+| F-ZP-002 | ✅ | VideoPlayerView.swift:122-141 — Pan works at any zoom level (restriction removed) |
 | F-ZP-003 | ✅ | VideoPlayerView.swift:90-104 — anchorPoint=(0,1) for top-left in macOS coords |
 | F-ZP-004 | ✅ | ContentView.swift:100-120 (ZoomOverlay) — Shows zoomPercentage% in upper-right |
 | F-ZP-005 | ✅ | ControlBarView.swift:82-102 — step=1, shiftStep=10, cmdStep=0.1 |
@@ -1215,7 +1215,7 @@ Each fix must:
 | F-MS-001 | ✅ | VideoPlayerView.swift:167-173 — Scroll without modifiers = frame step, checks isLocked |
 | F-MS-002 | ✅ | VideoPlayerView.swift:164-166 — hasShift = 5% zoom, checks isLocked |
 | F-MS-003 | ✅ | VideoPlayerView.swift:161-163 — hasCmd&&hasShift = 0.1% zoom, checks isLocked |
-| F-MS-004 | ✅ | VideoPlayerView.swift:122-141 — Click+drag = pan, checks isLocked and zoomScale>1.0 |
+| F-MS-004 | ✅ | VideoPlayerView.swift:122-141 — Click+drag = pan, works at any zoom level |
 | F-MS-005 | ✅ | ContentView.swift:172-188 — WindowDragNSView checks isLocked |
 | F-MS-006 | ✅ | AppDelegate.swift:81 — styleMask.remove(.resizable) when locked |
 

@@ -334,14 +334,14 @@ final class VideoStateTests: XCTestCase {
         XCTAssertFalse(videoState.isPlaying)
     }
 
-    // MARK: - F-ZP-002: Pan Only When Zoomed (State Setup)
+    // MARK: - F-ZP-002: Pan at Any Zoom Level
 
-    func testPanRequiresZoom() {
-        // This test documents the expected behavior: pan should only work when zoomed > 100%
-        // The actual enforcement is in VideoPlayerView, but state should support any pan value
+    func testPanWorksAtAnyZoomLevel() {
+        // Pan works at any zoom level (not restricted to >100%) per design decision
+        // VideoState should accept any pan value regardless of zoom
         videoState.zoomScale = 1.0
         videoState.panOffset = CGSize(width: 100, height: 100)
-        XCTAssertEqual(videoState.panOffset, CGSize(width: 100, height: 100), "State should store pan even at 100% zoom")
+        XCTAssertEqual(videoState.panOffset, CGSize(width: 100, height: 100), "Pan should work at 100% zoom")
 
         // Reset should work regardless
         videoState.resetView()
