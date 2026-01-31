@@ -3,7 +3,7 @@ import XCTest
 final class ReframerUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
-        true
+        false  // Don't run for each configuration - just once
     }
 
     override func setUpWithError() throws {
