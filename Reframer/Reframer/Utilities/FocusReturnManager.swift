@@ -27,6 +27,6 @@ final class FocusReturnManager {
 
     func returnFocusToPreviousApp() {
         guard let app = lastNonOverlayApp else { return }
-        app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        app.activate()
     }
 }

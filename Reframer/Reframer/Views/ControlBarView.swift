@@ -168,12 +168,12 @@ struct ControlBarView: View {
             opacityText = "\(videoState.opacityPercentage)"
             scrubValue = videoState.currentTime
         }
-        .onChange(of: videoState.currentFrame) { frameText = "\($0)" }
-        .onChange(of: videoState.zoomPercentageValue) { zoomText = formatZoomText($0) }
-        .onChange(of: videoState.opacityPercentage) { opacityText = "\($0)" }
-        .onChange(of: videoState.currentTime) { value in
+        .onChange(of: videoState.currentFrame) { _, newValue in frameText = "\(newValue)" }
+        .onChange(of: videoState.zoomPercentageValue) { _, newValue in zoomText = formatZoomText(newValue) }
+        .onChange(of: videoState.opacityPercentage) { _, newValue in opacityText = "\(newValue)" }
+        .onChange(of: videoState.currentTime) { _, newValue in
             if !isScrubbing {
-                scrubValue = value
+                scrubValue = newValue
             }
         }
     }

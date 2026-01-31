@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Supported video formats and loading methods.">
+    <title>Loading Videos - Reframer Help</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+    <h1>Loading Videos</h1>
+    <p class="subtitle">Supported formats and loading methods</p>
+
+    <h2>Supported Formats</h2>
+    <table>
+        <tr><th>Format</th><th>Extension</th><th>Notes</th></tr>
+        <tr><td>MPEG-4</td><td><code>.mp4</code></td><td>Most common, highly recommended</td></tr>
+        <tr><td>QuickTime</td><td><code>.mov</code></td><td>Native macOS format</td></tr>
+        <tr><td>AVI</td><td><code>.avi</code></td><td>Windows format</td></tr>
+        <tr><td>Matroska</td><td><code>.mkv</code></td><td>Open container format</td></tr>
+        <tr><td>WebM</td><td><code>.webm</code></td><td>Web-optimized format</td></tr>
+        <tr><td>M4V</td><td><code>.m4v</code></td><td>Apple TV format</td></tr>
+    </table>
+
+    <h3>Supported Codecs</h3>
+    <ul>
+        <li><strong>H.264</strong> &mdash; Universal compatibility</li>
+        <li><strong>H.265/HEVC</strong> &mdash; High efficiency, smaller files</li>
+        <li><strong>ProRes</strong> &mdash; Professional quality</li>
+        <li><strong>AV1</strong> &mdash; Next-gen codec (macOS 13+)</li>
+    </ul>
+
+    <h2>Loading Methods</h2>
+
+    <h3>Drag and Drop</h3>
+    <ol>
+        <li>Find your video file in Finder</li>
+        <li>Drag it onto the Reframer window</li>
+        <li>The video loads immediately</li>
+    </ol>
+
+    <h3>File Picker</h3>
+    <ol>
+        <li>Click anywhere on the drop zone, or press <kbd>⌘O</kbd></li>
+        <li>Navigate to your video file</li>
+        <li>Click <strong>Open</strong></li>
+    </ol>
+
+    <h2>After Loading</h2>
+    <p>When a video loads successfully:</p>
+    <ul>
+        <li>The drop zone disappears</li>
+        <li>Video displays at its native aspect ratio</li>
+        <li>Playback controls become active</li>
+        <li>Frame counter shows total frames</li>
+        <li>Video starts paused at frame 0</li>
+    </ul>
+
+    <h2>Troubleshooting</h2>
+    <h3>Video Won't Load</h3>
+    <ul>
+        <li>Check the file format is supported</li>
+        <li>Ensure the file isn't corrupted</li>
+        <li>Try converting to MP4 with H.264</li>
+    </ul>
+
+    <div class="nav-links">
+        <p><strong>Next:</strong> <a href="playback.html">Playback Controls</a></p>
+        <p><a href="index.html">← Back to Reframer Help</a></p>
+    </div>
+</body>
+</html>

@@ -29,6 +29,7 @@
 		DDD00001 /* test_30fps_2s.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10001 /* test_30fps_2s.mp4 */; };
 		DDD00002 /* test_60fps_5s.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10002 /* test_60fps_5s.mp4 */; };
 		DDD00003 /* test_4x3_1s.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10003 /* test_4x3_1s.mp4 */; };
+		FFF00001 /* Reframer.help in Resources */ = {isa = PBXBuildFile; fileRef = FFF10001 /* Reframer.help */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -78,6 +79,7 @@
 		DDD10002 /* test_60fps_5s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_60fps_5s.mp4; sourceTree = "<group>"; };
 		DDD10003 /* test_4x3_1s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_4x3_1s.mp4; sourceTree = "<group>"; };
 		EEE10001 /* Reframer.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = Reframer.docc; sourceTree = "<group>"; };
+		FFF10001 /* Reframer.help */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Reframer.help; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -130,6 +132,7 @@
 				AAA40007 /* Utilities */,
 				AAA40008 /* Resources */,
 				EEE10001 /* Reframer.docc */,
+				FFF10001 /* Reframer.help */,
 			);
 			path = Reframer;
 			sourceTree = "<group>";
@@ -334,6 +337,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AAA00011 /* Assets.xcassets in Resources */,
+				FFF00001 /* Reframer.help in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

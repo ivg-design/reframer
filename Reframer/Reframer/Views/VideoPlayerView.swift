@@ -19,15 +19,15 @@ struct VideoPlayerView: View {
                 playerManager.loadVideo(url: url, videoState: videoState)
             }
         }
-        .onChange(of: videoState.videoURL) { newURL in
+        .onChange(of: videoState.videoURL) { _, newURL in
             if let url = newURL {
                 playerManager.loadVideo(url: url, videoState: videoState)
             }
         }
-        .onChange(of: videoState.isPlaying) { isPlaying in
+        .onChange(of: videoState.isPlaying) { _, isPlaying in
             if isPlaying { playerManager.play() } else { playerManager.pause() }
         }
-        .onChange(of: videoState.volume) { volume in
+        .onChange(of: videoState.volume) { _, volume in
             playerManager.setVolume(volume)
         }
         .onReceive(NotificationCenter.default.publisher(for: .frameStepForward)) { n in
@@ -191,7 +191,7 @@ class VideoPlayerManager: ObservableObject {
         self.videoState = videoState
         cleanup()
 
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         playerItem = AVPlayerItem(asset: asset)
         player = AVPlayer(playerItem: playerItem)
         player?.volume = videoState.volume
@@ -208,8 +208,9 @@ class VideoPlayerManager: ObservableObject {
 
                 if let track = tracks.first(where: { $0.mediaType == .video }) {
                     let fps = try? await track.load(.nominalFrameRate)
-                    let naturalSize = track.naturalSize.applying(track.preferredTransform)
-                    let resolvedSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
+                    let (naturalSize, preferredTransform) = try await track.load(.naturalSize, .preferredTransform)
+                    let transformedSize = naturalSize.applying(preferredTransform)
+                    let resolvedSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
 
                     await MainActor.run {
                         if let fps = fps {
