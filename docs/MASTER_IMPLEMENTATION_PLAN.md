@@ -1404,16 +1404,16 @@ jobs:
 
 ### Documentation Checklist
 
-- [ ] Create `Reframer.docc/` documentation catalog
-- [ ] Write landing page (`Reframer.md`)
-- [ ] Write Getting Started guide
-- [ ] Add articles for each feature category
+- [x] Create `Reframer.docc/` documentation catalog
+- [x] Write landing page (`Reframer.md`)
+- [x] Write Getting Started guide
+- [x] Add articles for each feature category (6 articles)
 - [ ] Add screenshots for key UI elements
 - [ ] Configure CI to build/deploy docs on release
 - [ ] Add .gitignore entry for `docs/docc-export/`
 
 ---
 
-*Master Implementation Plan — Revision 11 — January 31, 2026*
+*Master Implementation Plan — Revision 12 — January 31, 2026*
 *Verification-First Approach with Regression Testing + DocC Documentation*
-*Phase 0-2 Complete: 55/55 features WORKING (100%), 96 tests passing (100%)*
+*Phase 0-2 Complete + DocC Setup: 55/55 features WORKING (100%), 96 tests passing (100%)*
