@@ -30,20 +30,21 @@ struct HelpModalView: View {
 
                     ShortcutSection(title: "Playback") {
                         ShortcutRow(keys: "Space", description: "Play / Pause")
-                        ShortcutRow(keys: "← →", description: "Step frame back/forward")
-                        ShortcutRow(keys: "⇧← ⇧→", description: "Step 10 frames")
                         ShortcutRow(keys: "Scroll", description: "Step frames (unlocked)")
                         ShortcutRow(keys: "⌘ PgUp/Dn", description: "Step frame (global, ⇧ for 10)")
                     }
 
-                    ShortcutSection(title: "View") {
-                        ShortcutRow(keys: "↑ ↓", description: "Zoom in/out (5%)")
-                        ShortcutRow(keys: "⇧↑ ⇧↓", description: "Zoom faster (10%)")
-                        ShortcutRow(keys: "+ / -", description: "Zoom in/out")
+                    ShortcutSection(title: "Pan (Arrows)") {
+                        ShortcutRow(keys: "← → ↑ ↓", description: "Pan 1px (unlocked)")
+                        ShortcutRow(keys: "⇧ Arrows", description: "Pan 10px")
+                        ShortcutRow(keys: "⇧⌘ Arrows", description: "Pan 100px")
+                    }
+
+                    ShortcutSection(title: "Zoom") {
+                        ShortcutRow(keys: "⇧ Scroll", description: "Zoom 5% (unlocked)")
+                        ShortcutRow(keys: "⌘⇧ Scroll", description: "Fine zoom 0.1%")
                         ShortcutRow(keys: "0", description: "Reset zoom to 100%")
                         ShortcutRow(keys: "R", description: "Reset zoom and pan")
-                        ShortcutRow(keys: "⇧ Scroll", description: "Zoom (5%, unlocked)")
-                        ShortcutRow(keys: "⌘⇧ Scroll", description: "Fine zoom (0.1%, unlocked)")
                     }
 
                     ShortcutSection(title: "Window & Lock") {
@@ -54,7 +55,7 @@ struct HelpModalView: View {
                     }
 
                     ShortcutSection(title: "Mouse") {
-                        ShortcutRow(keys: "Drag video", description: "Pan when zoomed (unlocked)")
+                        ShortcutRow(keys: "Drag video", description: "Pan (unlocked)")
                         ShortcutRow(keys: "Drag bar", description: "Move window (unlocked)")
                         ShortcutRow(keys: "Drag handle", description: "Move window (unlocked)")
                         ShortcutRow(keys: "Drag edges", description: "Resize window (unlocked)")

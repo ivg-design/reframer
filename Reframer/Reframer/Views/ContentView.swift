@@ -277,6 +277,7 @@ struct KeyboardShortcutsModifier: ViewModifier {
 
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let shift = flags.contains(.shift)
+        let cmd = flags.contains(.command)
 
         switch event.keyCode {
         case 31 where flags == .command:
@@ -285,23 +286,22 @@ struct KeyboardShortcutsModifier: ViewModifier {
         case 49 where videoState.isVideoLoaded && flags.isEmpty:
             videoState.isPlaying.toggle()
             return true
-        case 123 where videoState.isVideoLoaded:
-            NotificationCenter.default.post(name: .frameStepBackward, object: shift ? 10 : 1)
+        // Arrow keys = Pan (when unlocked): 1px / ⇧10px / ⇧⌘100px
+        case 123 where videoState.isVideoLoaded && !videoState.isLocked:
+            let amount = cmd && shift ? 100.0 : (shift ? 10.0 : 1.0)
+            videoState.panOffset.width -= amount
             return true
-        case 124 where videoState.isVideoLoaded:
-            NotificationCenter.default.post(name: .frameStepForward, object: shift ? 10 : 1)
+        case 124 where videoState.isVideoLoaded && !videoState.isLocked:
+            let amount = cmd && shift ? 100.0 : (shift ? 10.0 : 1.0)
+            videoState.panOffset.width += amount
             return true
         case 126 where videoState.isVideoLoaded && !videoState.isLocked:
-            videoState.adjustZoom(byPercent: shift ? 10 : 5)
+            let amount = cmd && shift ? 100.0 : (shift ? 10.0 : 1.0)
+            videoState.panOffset.height -= amount
             return true
         case 125 where videoState.isVideoLoaded && !videoState.isLocked:
-            videoState.adjustZoom(byPercent: shift ? -10 : -5)
-            return true
-        case 24 where videoState.isVideoLoaded && !videoState.isLocked:
-            videoState.adjustZoom(byPercent: 5)
-            return true
-        case 27 where videoState.isVideoLoaded && !videoState.isLocked:
-            videoState.adjustZoom(byPercent: -5)
+            let amount = cmd && shift ? 100.0 : (shift ? 10.0 : 1.0)
+            videoState.panOffset.height += amount
             return true
         case 29 where videoState.isVideoLoaded && !videoState.isLocked && flags.isEmpty:
             videoState.zoomScale = 1.0

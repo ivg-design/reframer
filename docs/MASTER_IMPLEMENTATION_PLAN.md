@@ -33,6 +33,11 @@ This plan follows a **verification-first approach** with **integrated documentat
 | Pan at any zoom level | **Enabled** | Pan works at all zoom levels (CHANGED from previous) |
 | Icons | SF Symbols only | FEATURES.md (no emojis) |
 | Theme | Dark mode first | FEATURES.md |
+| Arrow keys (unlocked) | **Pan video** | 1px / 10px (⇧) / 100px (⇧⌘) — NOT frame/zoom |
+| Zoom anchor point | **Video top-left** | Zoom from video corner, not window corner |
+| Input field arrows | **Only when focused** | Zoom/scrub/opacity arrows work only in focused input |
+| Frame stepping (outside input) | **⌘ Page Up/Down only** | No arrow keys for scrub outside input fields |
+| Zoom (outside input) | **⇧+Scroll / ⌘⇧+Scroll only** | No arrow keys for zoom outside input fields |
 
 ---
 
@@ -1190,18 +1195,18 @@ Each fix must:
 | F-LK-003 | ✅ | AppDelegate.swift:81-82 — styleMask.remove(.resizable), drag handlers check isLocked |
 | F-LK-004 | ✅ | ControlBarView.swift:150, OverlayViews.swift:1-28 — SF Symbol lock button + LockIndicator |
 
-#### 1.6 Keyboard Local (9/9 WORKING)
+#### 1.6 Keyboard Local (9/9 — NEEDS UPDATE)
 | Feature | Status | Evidence |
 |---------|--------|----------|
-| F-KL-001 | ✅ | ContentView.swift:294-298 — keyCode 123/124, shift=10 frames |
-| F-KL-002 | ✅ | ContentView.swift:300-304 — keyCode 126/125, 5%/10% |
-| F-KL-003 | ✅ | ContentView.swift:306-310 — keyCode 24/27 (+/-) = 5% zoom |
-| F-KL-004 | ✅ | ContentView.swift:312-314 — keyCode 29 (0) = zoomScale=1.0 |
-| F-KL-005 | ✅ | ContentView.swift:315-317 — keyCode 15 (R) = resetView() |
-| F-KL-006 | ✅ | ContentView.swift:318-320 — keyCode 37 (L) = toggle isLocked |
-| F-KL-007 | ✅ | ContentView.swift:321-326 — keyCode 4 (H) / 44+shift (?) = toggle showHelp |
-| F-KL-008 | ✅ | ContentView.swift:288-290 — keyCode 31+cmd (O) = post .openVideo |
-| F-KL-009 | ✅ | ContentView.swift:276-282 — keyCode 53/36 = defocus + returnFocusToPreviousApp() |
+| F-KL-001 | 🔄 CHANGE | Arrow keys (unlocked) = Pan: 1px / ⇧10px / ⇧⌘100px |
+| F-KL-002 | 🔄 CHANGE | Arrow keys NO LONGER zoom — zoom only via input field or scroll |
+| F-KL-003 | ❌ REMOVE | +/- keys removed — zoom only via input field or scroll |
+| F-KL-004 | ✅ | ContentView.swift — keyCode 29 (0) = zoomScale=1.0 |
+| F-KL-005 | ✅ | ContentView.swift — keyCode 15 (R) = resetView() |
+| F-KL-006 | ✅ | ContentView.swift — keyCode 37 (L) = toggle isLocked |
+| F-KL-007 | ✅ | ContentView.swift — keyCode 4 (H) / 44+shift (?) = toggle showHelp |
+| F-KL-008 | ✅ | ContentView.swift — keyCode 31+cmd (O) = post .openVideo |
+| F-KL-009 | ✅ | ContentView.swift — keyCode 53/36 = defocus + returnFocusToPreviousApp() |
 
 #### 1.7 Keyboard Global (2/2 WORKING)
 | Feature | Status | Evidence |

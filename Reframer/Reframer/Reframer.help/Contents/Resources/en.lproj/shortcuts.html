@@ -21,22 +21,25 @@
     <table>
         <tr><th>Action</th><th>Shortcut</th></tr>
         <tr><td>Play / Pause</td><td><kbd>Space</kbd></td></tr>
-        <tr><td>Previous frame</td><td><kbd>←</kbd></td></tr>
-        <tr><td>Next frame</td><td><kbd>→</kbd></td></tr>
-        <tr><td>Back 10 frames</td><td><kbd>⇧←</kbd></td></tr>
-        <tr><td>Forward 10 frames</td><td><kbd>⇧→</kbd></td></tr>
     </table>
+    <p>Frame stepping is available via global shortcuts or scroll wheel (see below).</p>
 
-    <h2>Zoom</h2>
+    <h2>Pan (Arrow Keys)</h2>
+    <p>When unlocked, arrow keys pan the video:</p>
     <table>
         <tr><th>Action</th><th>Shortcut</th></tr>
-        <tr><td>Zoom in (5%)</td><td><kbd>↑</kbd> or <kbd>+</kbd></td></tr>
-        <tr><td>Zoom out (5%)</td><td><kbd>↓</kbd> or <kbd>-</kbd></td></tr>
-        <tr><td>Zoom in (10%)</td><td><kbd>⇧↑</kbd></td></tr>
-        <tr><td>Zoom out (10%)</td><td><kbd>⇧↓</kbd></td></tr>
+        <tr><td>Pan 1 pixel</td><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td></tr>
+        <tr><td>Pan 10 pixels</td><td><kbd>⇧←</kbd> <kbd>⇧→</kbd> <kbd>⇧↑</kbd> <kbd>⇧↓</kbd></td></tr>
+        <tr><td>Pan 100 pixels</td><td><kbd>⇧⌘←</kbd> <kbd>⇧⌘→</kbd> <kbd>⇧⌘↑</kbd> <kbd>⇧⌘↓</kbd></td></tr>
+    </table>
+
+    <h2>View</h2>
+    <table>
+        <tr><th>Action</th><th>Shortcut</th></tr>
         <tr><td>Reset to 100%</td><td><kbd>0</kbd></td></tr>
         <tr><td>Reset zoom and pan</td><td><kbd>R</kbd></td></tr>
     </table>
+    <p>Zoom is controlled via scroll wheel or input field (see below).</p>
 
     <h2>Window</h2>
     <table>
@@ -47,7 +50,7 @@
     </table>
 
     <h2>Input Fields</h2>
-    <p>When a numeric field (frame, zoom, opacity) is focused:</p>
+    <p>When a numeric field (frame, zoom, opacity) is <strong>focused</strong>:</p>
     <table>
         <tr><th>Action</th><th>Shortcut</th></tr>
         <tr><td>Increment by 1</td><td><kbd>↑</kbd></td></tr>
@@ -57,6 +60,10 @@
         <tr><td>Fine increment (zoom)</td><td><kbd>⌘↑</kbd></td></tr>
         <tr><td>Apply and defocus</td><td><kbd>Enter</kbd> or <kbd>Esc</kbd></td></tr>
     </table>
+    <div class="tip">
+        <strong>Note</strong>
+        Arrow keys only adjust values when an input field is focused. Outside input fields, arrow keys pan the video.
+    </div>
 
     <h2>Global Shortcuts</h2>
     <p>These work even when Reframer is not the active app:</p>
