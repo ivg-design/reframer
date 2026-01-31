@@ -1,0 +1,435 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AAA00001 /* ReframerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10001 /* ReframerApp.swift */; };
+		AAA00002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10002 /* AppDelegate.swift */; };
+		AAA00003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10003 /* ContentView.swift */; };
+		AAA00004 /* DropZoneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10004 /* DropZoneView.swift */; };
+		AAA00005 /* VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10005 /* VideoPlayerView.swift */; };
+		AAA00006 /* ControlBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10006 /* ControlBarView.swift */; };
+		AAA00007 /* HelpModalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10007 /* HelpModalView.swift */; };
+		AAA00008 /* VideoState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10008 /* VideoState.swift */; };
+		AAA00009 /* VideoFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10009 /* VideoFormats.swift */; };
+		AAA00010 /* OverlayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10010 /* OverlayViews.swift */; };
+		AAA00011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AAA10011 /* Assets.xcassets */; };
+		AAA00012 /* FocusReturnManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10014 /* FocusReturnManager.swift */; };
+		AAA00013 /* NumericInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10015 /* NumericInputField.swift */; };
+		AAA00014 /* ControlWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10016 /* ControlWindowView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AAA10001 /* ReframerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerApp.swift; sourceTree = "<group>"; };
+		AAA10002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		AAA10003 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		AAA10004 /* DropZoneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropZoneView.swift; sourceTree = "<group>"; };
+		AAA10005 /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
+		AAA10006 /* ControlBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlBarView.swift; sourceTree = "<group>"; };
+		AAA10007 /* HelpModalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpModalView.swift; sourceTree = "<group>"; };
+		AAA10008 /* VideoState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoState.swift; sourceTree = "<group>"; };
+		AAA10009 /* VideoFormats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFormats.swift; sourceTree = "<group>"; };
+		AAA10010 /* OverlayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayViews.swift; sourceTree = "<group>"; };
+		AAA10011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AAA10012 /* Reframer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Reframer.entitlements; sourceTree = "<group>"; };
+		AAA10013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AAA10014 /* FocusReturnManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusReturnManager.swift; sourceTree = "<group>"; };
+		AAA10015 /* NumericInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericInputField.swift; sourceTree = "<group>"; };
+		AAA10016 /* ControlWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlWindowView.swift; sourceTree = "<group>"; };
+		AAA20001 /* Reframer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Reframer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AAA30001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AAA40001 = {
+			isa = PBXGroup;
+			children = (
+				AAA40002 /* Reframer */,
+				AAA40003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AAA40002 /* Reframer */ = {
+			isa = PBXGroup;
+			children = (
+				AAA40004 /* App */,
+				AAA40005 /* Views */,
+				AAA40006 /* Models */,
+				AAA40007 /* Utilities */,
+				AAA40008 /* Resources */,
+			);
+			path = Reframer;
+			sourceTree = "<group>";
+		};
+		AAA40003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AAA20001 /* Reframer.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AAA40004 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				AAA10001 /* ReframerApp.swift */,
+				AAA10002 /* AppDelegate.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		AAA40005 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AAA10003 /* ContentView.swift */,
+				AAA10004 /* DropZoneView.swift */,
+				AAA10005 /* VideoPlayerView.swift */,
+				AAA10006 /* ControlBarView.swift */,
+				AAA10016 /* ControlWindowView.swift */,
+				AAA10007 /* HelpModalView.swift */,
+				AAA10010 /* OverlayViews.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		AAA40006 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				AAA10008 /* VideoState.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		AAA40007 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				AAA10009 /* VideoFormats.swift */,
+				AAA10014 /* FocusReturnManager.swift */,
+				AAA10015 /* NumericInputField.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		AAA40008 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				AAA10011 /* Assets.xcassets */,
+				AAA10012 /* Reframer.entitlements */,
+				AAA10013 /* Info.plist */,
+			);
+			name = Resources;
+			path = Reframer/Resources;
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AAA50001 /* Reframer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AAA60003 /* Build configuration list for PBXNativeTarget "Reframer" */;
+			buildPhases = (
+				AAA50002 /* Sources */,
+				AAA30001 /* Frameworks */,
+				AAA50003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Reframer;
+			productName = Reframer;
+			productReference = AAA20001 /* Reframer.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AAA50004 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					AAA50001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = AAA60001 /* Build configuration list for PBXProject "Reframer" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AAA40001;
+			productRefGroup = AAA40003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AAA50001 /* Reframer */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AAA50003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AAA00011 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AAA50002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AAA00001 /* ReframerApp.swift in Sources */,
+				AAA00002 /* AppDelegate.swift in Sources */,
+				AAA00003 /* ContentView.swift in Sources */,
+				AAA00004 /* DropZoneView.swift in Sources */,
+				AAA00005 /* VideoPlayerView.swift in Sources */,
+				AAA00006 /* ControlBarView.swift in Sources */,
+				AAA00007 /* HelpModalView.swift in Sources */,
+				AAA00008 /* VideoState.swift in Sources */,
+				AAA00009 /* VideoFormats.swift in Sources */,
+				AAA00010 /* OverlayViews.swift in Sources */,
+				AAA00012 /* FocusReturnManager.swift in Sources */,
+				AAA00013 /* NumericInputField.swift in Sources */,
+				AAA00014 /* ControlWindowView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AAA60002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		AAA60004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		AAA60005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Reframer/Resources/Reframer.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_ASSET_PATHS = "\"Reframer/Preview Content\"";
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Reframer/Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Reframer;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AAA60006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Reframer/Resources/Reframer.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_ASSET_PATHS = "\"Reframer/Preview Content\"";
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Reframer/Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Reframer;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AAA60001 /* Build configuration list for PBXProject "Reframer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AAA60002 /* Debug */,
+				AAA60004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AAA60003 /* Build configuration list for PBXNativeTarget "Reframer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AAA60005 /* Debug */,
+				AAA60006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AAA50004 /* Project object */;
+}
