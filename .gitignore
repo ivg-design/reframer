@@ -42,3 +42,6 @@ Carthage/Checkouts/
 *.app
 *.ipa
 Reframer/Reframer.xcodeproj/xcuserdata/
+
+# Documentation exports
+docs/docc-export/

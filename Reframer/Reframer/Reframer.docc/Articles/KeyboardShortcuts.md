@@ -4,7 +4,7 @@ Complete reference for all keyboard controls.
 
 ## Overview
 
-Reframer is designed for keyboard-driven workflows. Most actions have keyboard shortcuts, and some work globally even when another app is active.
+Reframer is designed for keyboard-driven workflows. Arrow keys pan the video when unlocked, while frame stepping and zoom use scroll wheel or input fields.
 
 ## File
 
@@ -17,21 +17,27 @@ Reframer is designed for keyboard-driven workflows. Most actions have keyboard s
 | Action | Shortcut |
 |--------|----------|
 | Play / Pause | **Space** |
-| Previous frame | **←** |
-| Next frame | **→** |
-| Back 10 frames | **Shift ←** |
-| Forward 10 frames | **Shift →** |
 
-## Zoom
+Frame stepping is available via global shortcuts or scroll wheel.
+
+## Pan (Arrow Keys)
+
+When unlocked, arrow keys pan the video:
 
 | Action | Shortcut |
 |--------|----------|
-| Zoom in (5%) | **↑** or **+** |
-| Zoom out (5%) | **↓** or **-** |
-| Zoom in (10%) | **Shift ↑** |
-| Zoom out (10%) | **Shift ↓** |
+| Pan 1 pixel | **← → ↑ ↓** |
+| Pan 10 pixels | **⇧ + arrows** |
+| Pan 100 pixels | **⇧⌘ + arrows** |
+
+## View
+
+| Action | Shortcut |
+|--------|----------|
 | Reset to 100% | **0** |
 | Reset zoom and pan | **R** |
+
+Zoom is controlled via scroll wheel or input field arrows when focused.
 
 ## Window
 
@@ -43,7 +49,7 @@ Reframer is designed for keyboard-driven workflows. Most actions have keyboard s
 
 ## Input Fields
 
-When a numeric field (frame, zoom, opacity) is focused:
+When a numeric field (frame, zoom, opacity) is **focused**:
 
 | Action | Shortcut |
 |--------|----------|
@@ -52,8 +58,9 @@ When a numeric field (frame, zoom, opacity) is focused:
 | Increment by 10 | **Shift ↑** |
 | Decrement by 10 | **Shift ↓** |
 | Fine increment (zoom only) | **⌘ ↑** |
-| Fine decrement (zoom only) | **⌘ ↓** |
 | Apply and defocus | **Enter** or **Esc** |
+
+> Note: Arrow keys only adjust values when an input field is focused. Outside input fields, arrow keys pan the video.
 
 ## Global Shortcuts
 
@@ -79,7 +86,3 @@ When the window is unlocked:
 | Fine zoom (0.1%) | **⌘ Shift + Scroll** |
 | Move window | **Drag** control bar or handle |
 | Resize window | **Drag** window edges |
-
-## Focus Return
-
-When you press **Enter** or **Esc** in an input field, focus returns to the app you were using before Reframer. This lets you quickly adjust a value and continue working without manual app switching.

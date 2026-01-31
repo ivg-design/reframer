@@ -4,19 +4,9 @@ Inspect video details at any magnification.
 
 ## Overview
 
-Zoom in to examine fine details, zoom out to see the full picture, and pan around to focus on specific areas. All transforms anchor from the top-left corner for consistent positioning.
+Zoom in to examine fine details, zoom out to see the full picture, and pan around to focus on specific areas. Zoom always anchors from the top-left corner of the video for consistent positioning.
 
 ## Zooming
-
-### Keyboard
-
-| Action | Shortcut |
-|--------|----------|
-| Zoom in (5%) | **↑** or **+** |
-| Zoom out (5%) | **↓** or **-** |
-| Zoom in (10%) | **Shift + ↑** |
-| Zoom out (10%) | **Shift + ↓** |
-| Reset to 100% | **0** |
 
 ### Scroll Wheel
 
@@ -25,7 +15,7 @@ When the window is unlocked:
 | Action | Gesture |
 |--------|---------|
 | Zoom (5% steps) | **Shift + Scroll** |
-| Fine zoom (0.1% steps) | **⌘ + Shift + Scroll** |
+| Fine zoom (0.1% steps) | **⌘ Shift + Scroll** |
 
 ### Zoom Input
 
@@ -38,10 +28,22 @@ For precise control, type the exact zoom percentage:
 Arrow keys while focused:
 
 - **↑ / ↓** — Step by 1%
-- **Shift + ↑ / ↓** — Step by 10%
-- **⌘ + ↑ / ↓** — Step by 0.1%
+- **Shift ↑ / ↓** — Step by 10%
+- **⌘ ↑ / ↓** — Step by 0.1%
 
 ## Panning
+
+### Arrow Keys
+
+When unlocked, arrow keys pan the video:
+
+| Action | Shortcut |
+|--------|----------|
+| Pan 1 pixel | **← → ↑ ↓** |
+| Pan 10 pixels | **Shift + arrows** |
+| Pan 100 pixels | **Shift ⌘ + arrows** |
+
+### Mouse Drag
 
 Click and drag anywhere on the video to pan. This works at any zoom level.
 
@@ -65,6 +67,6 @@ This appears when zoomed above or below 100%.
 ## Tips
 
 - **Zoom for detail work** — Zoom in to trace fine lines or check alignment
-- **Pan to reposition** — Move the view without changing zoom level
+- **Pan to reposition** — Use arrow keys for precise pixel-level positioning
 - **Reset quickly** — Press **R** to snap back to the default view
 - **Use fine zoom** — ⌘+Shift+Scroll gives 0.1% precision for exact matching

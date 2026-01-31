@@ -17,19 +17,23 @@ Reframer provides precise control over video playback, letting you step through 
 
 Move through video one frame at a time for precise positioning.
 
-| Action | Keyboard | Control Bar |
-|--------|----------|-------------|
-| Previous frame | **←** | Click **⏪** |
-| Next frame | **→** | Click **⏩** |
-| Back 10 frames | **Shift + ←** | — |
-| Forward 10 frames | **Shift + →** | — |
-
 ### Scroll Wheel
 
 When the window is unlocked, scroll the mouse wheel on the video:
 
 - **Scroll up** — Previous frame
 - **Scroll down** — Next frame
+
+### Global Shortcuts
+
+These work even when another app is active:
+
+| Action | Shortcut |
+|--------|----------|
+| Previous frame | **⌘ Page Up** |
+| Next frame | **⌘ Page Down** |
+| Back 10 frames | **⌘ Shift Page Up** |
+| Forward 10 frames | **⌘ Shift Page Down** |
 
 ## Timeline Scrubbing
 
@@ -46,7 +50,7 @@ For precise navigation, type the exact frame number:
 Use arrow keys while the field is focused:
 
 - **↑ / ↓** — Step by 1 frame
-- **Shift + ↑ / ↓** — Step by 10 frames
+- **Shift ↑ / ↓** — Step by 10 frames
 
 ## Frame Display
 
@@ -57,17 +61,6 @@ Frame 142 / 720
 ```
 
 This tells you the current frame and total frames in the video.
-
-## Global Shortcuts
-
-These work even when Reframer isn't the active app:
-
-| Action | Shortcut |
-|--------|----------|
-| Previous frame | **⌘ Page Up** |
-| Next frame | **⌘ Page Down** |
-| Back 10 frames | **⌘ Shift Page Up** |
-| Forward 10 frames | **⌘ Shift Page Down** |
 
 ## Audio
 

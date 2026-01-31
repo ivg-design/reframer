@@ -1195,18 +1195,18 @@ Each fix must:
 | F-LK-003 | ✅ | AppDelegate.swift:81-82 — styleMask.remove(.resizable), drag handlers check isLocked |
 | F-LK-004 | ✅ | ControlBarView.swift:150, OverlayViews.swift:1-28 — SF Symbol lock button + LockIndicator |
 
-#### 1.6 Keyboard Local (9/9 — NEEDS UPDATE)
+#### 1.6 Keyboard Local (7/7 WORKING — Revised)
 | Feature | Status | Evidence |
 |---------|--------|----------|
-| F-KL-001 | 🔄 CHANGE | Arrow keys (unlocked) = Pan: 1px / ⇧10px / ⇧⌘100px |
-| F-KL-002 | 🔄 CHANGE | Arrow keys NO LONGER zoom — zoom only via input field or scroll |
-| F-KL-003 | ❌ REMOVE | +/- keys removed — zoom only via input field or scroll |
-| F-KL-004 | ✅ | ContentView.swift — keyCode 29 (0) = zoomScale=1.0 |
-| F-KL-005 | ✅ | ContentView.swift — keyCode 15 (R) = resetView() |
-| F-KL-006 | ✅ | ContentView.swift — keyCode 37 (L) = toggle isLocked |
-| F-KL-007 | ✅ | ContentView.swift — keyCode 4 (H) / 44+shift (?) = toggle showHelp |
-| F-KL-008 | ✅ | ContentView.swift — keyCode 31+cmd (O) = post .openVideo |
-| F-KL-009 | ✅ | ContentView.swift — keyCode 53/36 = defocus + returnFocusToPreviousApp() |
+| F-KL-001 | ✅ | Arrow keys = Pan: 1px / ⇧10px / ⇧⌘100px (ContentView.swift:288-301) |
+| F-KL-002 | ✅ | keyCode 29 (0) = zoomScale=1.0 |
+| F-KL-003 | ✅ | keyCode 15 (R) = resetView() |
+| F-KL-004 | ✅ | keyCode 37 (L) = toggle isLocked |
+| F-KL-005 | ✅ | keyCode 4 (H) / 44+shift (?) = toggle showHelp |
+| F-KL-006 | ✅ | keyCode 31+cmd (O) = post .openVideo |
+| F-KL-007 | ✅ | keyCode 53/36 = defocus + returnFocusToPreviousApp() |
+
+*Note: Arrow frame stepping and +/- zoom removed — use scroll wheel or input fields instead.*
 
 #### 1.7 Keyboard Global (2/2 WORKING)
 | Feature | Status | Evidence |
@@ -1414,11 +1414,35 @@ jobs:
 - [x] Write Getting Started guide
 - [x] Add articles for each feature category (6 articles)
 - [ ] Add screenshots for key UI elements
-- [ ] Configure CI to build/deploy docs on release
-- [ ] Add .gitignore entry for `docs/docc-export/`
+- [x] Configure CI to build/deploy docs on release (.github/workflows/ci.yml)
+- [x] Add .gitignore entry for `docs/docc-export/`
 
 ---
 
-*Master Implementation Plan — Revision 12 — January 31, 2026*
-*Verification-First Approach with Regression Testing + DocC Documentation*
-*Phase 0-2 Complete + DocC Setup: 55/55 features WORKING (100%), 96 tests passing (100%)*
+## Future Expansions
+
+### YouTube Video Streaming (Planned)
+
+**Feature**: Stream YouTube videos directly into Reframer without downloading.
+
+| Component | Description |
+|-----------|-------------|
+| **UI** | "Open URL" button in control bar or ⌘U shortcut |
+| **Dialog** | Text field to paste YouTube URL, "Load" button |
+| **Backend** | Extract video stream URL using yt-dlp or similar |
+| **Playback** | Feed stream to AVPlayer, all existing controls work |
+| **Formats** | Support youtube.com, youtu.be links |
+
+**Implementation Notes**:
+- May require bundling yt-dlp binary or using a Swift wrapper
+- Consider caching extracted URLs for session
+- Handle age-restricted / private videos gracefully
+- Respect YouTube ToS (personal use only)
+
+**Priority**: Medium — Useful for reference video workflows
+
+---
+
+*Master Implementation Plan — Revision 14 — January 31, 2026*
+*Verification-First Approach with Regression Testing + Apple Help Book + CI*
+*Phase 0-2 Complete: 55/55 features WORKING (100%), 96 tests passing (100%)*
