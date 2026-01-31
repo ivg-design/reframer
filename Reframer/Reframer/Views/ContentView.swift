@@ -90,10 +90,7 @@ struct FrameOverlay: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.2), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 2)
+        .modifier(GlassBackgroundModifier(cornerRadius: 6))
     }
 }
 
@@ -112,10 +109,7 @@ struct ZoomOverlay: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.2), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 2)
+        .modifier(GlassBackgroundModifier(cornerRadius: 6))
     }
 }
 
@@ -212,7 +206,7 @@ struct WindowDragHandle: View {
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.white)
                         .frame(width: 18, height: 18)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(.ultraThinMaterial))
+                        .modifier(GlassBackgroundModifier(cornerRadius: 4))
                 }
             }
     }

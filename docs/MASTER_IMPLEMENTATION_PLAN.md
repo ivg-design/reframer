@@ -1,7 +1,7 @@
 # Reframer — Master Implementation Plan
 
 **Date**: 2026-01-31
-**Status**: Comprehensive Audit & Implementation Plan (Revision 10)
+**Status**: Comprehensive Audit & Implementation Plan (Revision 11)
 **Target Platform**: macOS 26 (Tahoe) with macOS 15 (Sequoia) fallback
 **Input Paradigm**: Mouse + Scroll Wheel + Keyboard (Shift/Cmd modifiers only)
 
@@ -12,7 +12,7 @@
 This plan follows a **verification-first approach** with **integrated documentation**:
 
 1. **Phase 0**: Test Infrastructure — Set up testing framework and fixtures ✅ COMPLETE
-2. **Phase 1**: Feature Audit — Verify EVERY feature against spec, document status ✅ COMPLETE (54/55 WORKING)
+2. **Phase 1**: Feature Audit — Verify EVERY feature against spec, document status ✅ COMPLETE (55/55 WORKING)
 3. **Phase 2**: Regression Tests — Create unit/UI tests for working features ✅ COMPLETE (96 tests, 100% pass)
 4. **Phase 3+**: Implementation — Fix broken features with tests
 5. **Ongoing**: Documentation — Maintain DocC user guides for every feature
@@ -1106,7 +1106,7 @@ Each fix must:
 - [x] 1.6 Audit Keyboard Local (9 features) — 9/9 WORKING
 - [x] 1.7 Audit Keyboard Global (2 features) — 2/2 WORKING
 - [x] 1.8 Audit Mouse/Scroll (6 features) — 6/6 WORKING
-- [x] 1.9 Audit UI Elements (6 features) — 5/6 WORKING, 1 PARTIAL (F-UI-002 Tahoe glass)
+- [x] 1.9 Audit UI Elements (6 features) — 6/6 WORKING (Tahoe glass implemented)
 - [x] 1.10 Audit File Handling (3 features) — 3/3 WORKING
 - [x] 1.11 Audit Transparency (2 features) — 2/2 WORKING
 - [x] 1.12 Audit App Icon (1 feature) — 1/1 WORKING
@@ -1136,9 +1136,9 @@ Each fix must:
 
 | Status | Count | Features |
 |--------|-------|----------|
-| ✅ WORKING | 54 | All except F-UI-002 |
+| ✅ WORKING | 55 | All features |
 | ❌ BROKEN | 0 | None |
-| ⚠️ PARTIAL | 1 | F-UI-002 (Tahoe glass effect — uses Sequoia ultraThinMaterial, macOS 26 glassEffect not yet implemented) |
+| ⚠️ PARTIAL | 0 | None |
 | 🚫 MISSING | 0 | None |
 | ⬜ PENDING | 0 | All audited |
 
@@ -1219,11 +1219,11 @@ Each fix must:
 | F-MS-005 | ✅ | ContentView.swift:172-188 — WindowDragNSView checks isLocked |
 | F-MS-006 | ✅ | AppDelegate.swift:81 — styleMask.remove(.resizable) when locked |
 
-#### 1.9 UI Elements (5/6 WORKING, 1 PARTIAL)
+#### 1.9 UI Elements (6/6 WORKING)
 | Feature | Status | Evidence |
 |---------|--------|----------|
 | F-UI-001 | ✅ | DropZoneView.swift — Shows when !isVideoLoaded, onDrop + onTapGesture |
-| F-UI-002 | ⚠️ PARTIAL | ControlBarView.swift:160 — Uses .ultraThinMaterial (Sequoia), no macOS 26 glassEffect yet |
+| F-UI-002 | ✅ | GlassBackgroundModifier — Uses .glassEffect on macOS 26, .ultraThinMaterial fallback on 15 |
 | F-UI-003 | ✅ | ControlBarView.swift — Contains all controls: play, timeline, frame, zoom, opacity, lock, help |
 | F-UI-004 | ✅ | HelpModalView.swift — All shortcut sections present |
 | F-UI-005 | ✅ | ContentView.swift:78-120 — FrameOverlay upper-left, ZoomOverlay upper-right, minimal design |
@@ -1414,6 +1414,6 @@ jobs:
 
 ---
 
-*Master Implementation Plan — Revision 10 — January 31, 2026*
+*Master Implementation Plan — Revision 11 — January 31, 2026*
 *Verification-First Approach with Regression Testing + DocC Documentation*
-*Phase 0-2 Complete: 54/55 features WORKING, 96 tests passing (100%)*
+*Phase 0-2 Complete: 55/55 features WORKING (100%), 96 tests passing (100%)*

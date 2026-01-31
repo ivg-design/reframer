@@ -157,16 +157,7 @@ struct ControlBarView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(
-                    LinearGradient(colors: [.white.opacity(0.3), .white.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                    lineWidth: 0.5
-                )
-        )
-        .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
+        .modifier(GlassBackgroundModifier(cornerRadius: 10))
         .padding(8)
         .opacity(isHovering || !videoState.isVideoLoaded || videoState.isLocked ? 1 : 0.4)
         .animation(.easeInOut(duration: 0.2), value: isHovering)
@@ -212,5 +203,67 @@ struct ControlButton: View {
         }
         .buttonStyle(.plain)
         .background(RoundedRectangle(cornerRadius: 4).fill(isActive ? Color.accentColor.opacity(0.2) : .clear))
+    }
+}
+
+// MARK: - Glass Background Modifier (Tahoe + Sequoia fallback)
+
+struct GlassBackgroundModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius))
+        } else {
+            content
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.3), .white.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
+        }
+    }
+}
+
+// MARK: - Glass Background Shape (for standalone use)
+
+struct GlassBackgroundShape: View {
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(.clear)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius))
+        } else {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.3),
+                                    Color.white.opacity(0.1),
+                                    Color.clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 10)
+        }
     }
 }

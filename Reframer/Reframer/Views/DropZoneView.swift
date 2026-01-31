@@ -8,24 +8,7 @@ struct DropZoneView: View {
     var body: some View {
         ZStack {
             // macOS glass background
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.3),
-                                    Color.white.opacity(0.1),
-                                    Color.clear
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
-                )
-                .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 10)
+            GlassBackgroundShape(cornerRadius: 12)
 
             // Drop target highlight
             if isTargeted {

@@ -84,13 +84,7 @@ struct HelpModalView: View {
             .padding(.vertical, 8)
         }
         .frame(width: 340, height: 480)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+        .modifier(GlassBackgroundModifier(cornerRadius: 12))
     }
 }
 
