@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -21,7 +21,32 @@
 		AAA00012 /* FocusReturnManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10014 /* FocusReturnManager.swift */; };
 		AAA00013 /* NumericInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10015 /* NumericInputField.swift */; };
 		AAA00014 /* ControlWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA10016 /* ControlWindowView.swift */; };
+		BBB00001 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10001 /* TestHelpers.swift */; };
+		BBB00002 /* VideoStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10002 /* VideoStateTests.swift */; };
+		BBB00003 /* VideoFormatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10003 /* VideoFormatsTests.swift */; };
+		CCC00001 /* ReframerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC10001 /* ReframerUITests.swift */; };
+		CCC00002 /* ReframerUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC10002 /* ReframerUITestsLaunchTests.swift */; };
+		DDD00001 /* test_30fps_2s.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10001 /* test_30fps_2s.mp4 */; };
+		DDD00002 /* test_60fps_5s.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10002 /* test_60fps_5s.mp4 */; };
+		DDD00003 /* test_4x3_1s.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10003 /* test_4x3_1s.mp4 */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		BBB20001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AAA50004 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AAA50001;
+			remoteInfo = Reframer;
+		};
+		CCC20001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AAA50004 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AAA50001;
+			remoteInfo = Reframer;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		AAA10001 /* ReframerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerApp.swift; sourceTree = "<group>"; };
@@ -41,10 +66,39 @@
 		AAA10015 /* NumericInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericInputField.swift; sourceTree = "<group>"; };
 		AAA10016 /* ControlWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlWindowView.swift; sourceTree = "<group>"; };
 		AAA20001 /* Reframer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Reframer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B214C6692F2E459B0048F524 /* Reframer.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = file; path = Reframer.xctestplan; sourceTree = "<group>"; };
+		BBB10001 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
+		BBB10002 /* VideoStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStateTests.swift; sourceTree = "<group>"; };
+		BBB10003 /* VideoFormatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFormatsTests.swift; sourceTree = "<group>"; };
+		BBB20002 /* ReframerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ReframerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CCC10001 /* ReframerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerUITests.swift; sourceTree = "<group>"; };
+		CCC10002 /* ReframerUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		CCC20002 /* ReframerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ReframerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDD10001 /* test_30fps_2s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_30fps_2s.mp4; sourceTree = "<group>"; };
+		DDD10002 /* test_60fps_5s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_60fps_5s.mp4; sourceTree = "<group>"; };
+		DDD10003 /* test_4x3_1s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_4x3_1s.mp4; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		B214C6102F2E40FA0048F524 /* docs */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); name = docs; path = ../docs; sourceTree = SOURCE_ROOT; };
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		AAA30001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BBB30001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CCC30001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -57,7 +111,11 @@
 		AAA40001 = {
 			isa = PBXGroup;
 			children = (
+				B214C6692F2E459B0048F524 /* Reframer.xctestplan */,
+				B214C6102F2E40FA0048F524 /* docs */,
 				AAA40002 /* Reframer */,
+				BBB40001 /* ReframerTests */,
+				CCC40001 /* ReframerUITests */,
 				AAA40003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -78,6 +136,8 @@
 			isa = PBXGroup;
 			children = (
 				AAA20001 /* Reframer.app */,
+				BBB20002 /* ReframerTests.xctest */,
+				CCC20002 /* ReframerUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -134,6 +194,36 @@
 			path = Reframer/Resources;
 			sourceTree = SOURCE_ROOT;
 		};
+		BBB40001 /* ReframerTests */ = {
+			isa = PBXGroup;
+			children = (
+				BBB10001 /* TestHelpers.swift */,
+				BBB10002 /* VideoStateTests.swift */,
+				BBB10003 /* VideoFormatsTests.swift */,
+				DDD40001 /* TestFixtures */,
+			);
+			path = ReframerTests;
+			sourceTree = "<group>";
+		};
+		CCC40001 /* ReframerUITests */ = {
+			isa = PBXGroup;
+			children = (
+				CCC10001 /* ReframerUITests.swift */,
+				CCC10002 /* ReframerUITestsLaunchTests.swift */,
+			);
+			path = ReframerUITests;
+			sourceTree = "<group>";
+		};
+		DDD40001 /* TestFixtures */ = {
+			isa = PBXGroup;
+			children = (
+				DDD10001 /* test_30fps_2s.mp4 */,
+				DDD10002 /* test_60fps_5s.mp4 */,
+				DDD10003 /* test_4x3_1s.mp4 */,
+			);
+			path = TestFixtures;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -149,10 +239,49 @@
 			);
 			dependencies = (
 			);
+			fileSystemSynchronizedGroups = (
+				B214C6102F2E40FA0048F524 /* docs */,
+			);
 			name = Reframer;
 			productName = Reframer;
 			productReference = AAA20001 /* Reframer.app */;
 			productType = "com.apple.product-type.application";
+		};
+		BBB50001 /* ReframerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BBB60001 /* Build configuration list for PBXNativeTarget "ReframerTests" */;
+			buildPhases = (
+				BBB50002 /* Sources */,
+				BBB30001 /* Frameworks */,
+				BBB50003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BBB50004 /* PBXTargetDependency */,
+			);
+			name = ReframerTests;
+			productName = ReframerTests;
+			productReference = BBB20002 /* ReframerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		CCC50001 /* ReframerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CCC60001 /* Build configuration list for PBXNativeTarget "ReframerUITests" */;
+			buildPhases = (
+				CCC50002 /* Sources */,
+				CCC30001 /* Frameworks */,
+				CCC50003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CCC50004 /* PBXTargetDependency */,
+			);
+			name = ReframerUITests;
+			productName = ReframerUITests;
+			productReference = CCC20002 /* ReframerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -166,6 +295,14 @@
 				TargetAttributes = {
 					AAA50001 = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					BBB50001 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = AAA50001;
+					};
+					CCC50001 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = AAA50001;
 					};
 				};
 			};
@@ -183,6 +320,8 @@
 			projectRoot = "";
 			targets = (
 				AAA50001 /* Reframer */,
+				BBB50001 /* ReframerTests */,
+				CCC50001 /* ReframerUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -193,6 +332,23 @@
 			buildActionMask = 2147483647;
 			files = (
 				AAA00011 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BBB50003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DDD00001 /* test_30fps_2s.mp4 in Resources */,
+				DDD00002 /* test_60fps_5s.mp4 in Resources */,
+				DDD00003 /* test_4x3_1s.mp4 in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CCC50003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -219,7 +375,39 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BBB50002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BBB00001 /* TestHelpers.swift in Sources */,
+				BBB00002 /* VideoStateTests.swift in Sources */,
+				BBB00003 /* VideoFormatsTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CCC50002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CCC00001 /* ReframerUITests.swift in Sources */,
+				CCC00002 /* ReframerUITestsLaunchTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BBB50004 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AAA50001 /* Reframer */;
+			targetProxy = BBB20001 /* PBXContainerItemProxy */;
+		};
+		CCC50004 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AAA50001 /* Reframer */;
+			targetProxy = CCC20001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AAA60002 /* Debug */ = {
@@ -408,6 +596,76 @@
 			};
 			name = Release;
 		};
+		BBB60002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Reframer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Reframer";
+			};
+			name = Debug;
+		};
+		BBB60003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Reframer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Reframer";
+			};
+			name = Release;
+		};
+		CCC60002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Reframer;
+			};
+			name = Debug;
+		};
+		CCC60003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Reframer;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -425,6 +683,24 @@
 			buildConfigurations = (
 				AAA60005 /* Debug */,
 				AAA60006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BBB60001 /* Build configuration list for PBXNativeTarget "ReframerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BBB60002 /* Debug */,
+				BBB60003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CCC60001 /* Build configuration list for PBXNativeTarget "ReframerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CCC60002 /* Debug */,
+				CCC60003 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -1,7 +1,7 @@
 # Reframer — Master Implementation Plan
 
 **Date**: 2026-01-31
-**Status**: Comprehensive Audit & Implementation Plan (Revision 7)
+**Status**: Comprehensive Audit & Implementation Plan (Revision 8)
 **Target Platform**: macOS 26 (Tahoe) with macOS 15 (Sequoia) fallback
 **Input Paradigm**: Mouse + Scroll Wheel + Keyboard (Shift/Cmd modifiers only)
 
@@ -9,14 +9,16 @@
 
 ## Plan Structure
 
-This plan follows a **verification-first approach**:
+This plan follows a **verification-first approach** with **integrated documentation**:
 
-1. **Phase 0**: Test Infrastructure — Set up testing framework and fixtures
+1. **Phase 0**: Test Infrastructure — Set up testing framework and fixtures ✅ COMPLETE
 2. **Phase 1**: Feature Audit — Verify EVERY feature against spec, document status
 3. **Phase 2**: Regression Tests — Create unit/UI tests for working features
 4. **Phase 3+**: Implementation — Fix broken features with tests
+5. **Ongoing**: Documentation — Maintain DocC user guides for every feature
 
 **NO FEATURE IS ASSUMED TO WORK. Every feature must be verified.**
+**FEATURES ARE NOT DONE UNTIL DOCUMENTED.**
 
 ---
 
@@ -1077,12 +1079,17 @@ Each fix must:
 
 ## Implementation Checklist
 
-### Phase 0: Test Infrastructure
-- [ ] 0.1 Create ReframerTests target
-- [ ] 0.2 Create ReframerUITests target
-- [ ] 0.3 Add test fixture videos
-- [ ] 0.4 Create TestHelpers.swift
-- [ ] 0.5 Update deployment target to 15.0 (Debug + Release)
+### Phase 0: Test Infrastructure ✅ COMPLETE
+- [x] 0.1 Create ReframerTests target
+- [x] 0.2 Create ReframerUITests target
+- [x] 0.3 Add test fixture videos (test_30fps_2s.mp4, test_60fps_5s.mp4, test_4x3_1s.mp4)
+- [x] 0.4 Create TestHelpers.swift
+- [x] 0.5 Update deployment target to 15.0 (Debug + Release) — Already configured
+
+**Phase 0 Results:**
+- 38 unit tests passing (VideoStateTests: 22, VideoFormatsTests: 16)
+- Test fixtures bundled in ReframerTests target
+- All test targets configured and building
 
 ### Phase 1: Feature Audit
 - [ ] 1.1 Audit Core Window (6 features)
@@ -1126,5 +1133,158 @@ Each fix must:
 
 ---
 
-*Master Implementation Plan — Revision 7 — January 31, 2026*
-*Verification-First Approach with Regression Testing*
+## Documentation Workflow (DocC)
+
+### Overview
+
+User-facing documentation is maintained alongside code using **Apple DocC** (Articles + Tutorials, not API docs). Every feature implementation includes corresponding documentation updates.
+
+### Documentation Structure
+
+```
+Reframer/
+├── Reframer.docc/               # DocC Documentation Catalog
+│   ├── Reframer.md              # Landing page / overview
+│   ├── GettingStarted.md        # Installation & first launch
+│   ├── Articles/                # How-to guides
+│   │   ├── LoadingVideos.md
+│   │   ├── PlaybackControls.md
+│   │   ├── ZoomAndPan.md
+│   │   ├── OpacityControl.md
+│   │   ├── LockMode.md
+│   │   ├── KeyboardShortcuts.md
+│   │   └── Troubleshooting.md
+│   ├── Tutorials/               # Step-by-step walkthroughs (optional)
+│   │   └── TableOfContents.tutorial
+│   └── Resources/               # Images, screenshots
+│       └── *.png
+└── docs/
+    └── docc-export/             # Generated HTML output (git-ignored)
+```
+
+### Naming Conventions
+
+| Type | Convention | Example |
+|------|-----------|---------|
+| Article files | PascalCase.md | `ZoomAndPan.md` |
+| Tutorial files | PascalCase.tutorial | `QuickStart.tutorial` |
+| Image assets | feature-description@2x.png | `zoom-controls-overview@2x.png` |
+| Section headers | Sentence case | "How to load a video" |
+
+### Article Template
+
+Each feature article should include:
+
+```markdown
+# Feature Name
+
+Brief description of what this feature does.
+
+## How to Use
+
+Step-by-step instructions with numbered lists.
+
+## Expected Behavior
+
+What the user should see/experience.
+
+## Edge Cases
+
+Special conditions, limits, or unusual scenarios.
+
+## Troubleshooting
+
+Common issues and their solutions.
+
+## Related
+
+Links to related features/articles.
+```
+
+### Definition of Done (DoD)
+
+A feature is **DONE** when:
+- [ ] Code implemented and tested
+- [ ] Unit/UI tests passing
+- [ ] DocC article created or updated
+- [ ] Screenshots added (if UI change)
+- [ ] Article reviewed for accuracy
+
+### CI/Build Integration
+
+#### Local DocC Build
+
+```bash
+# Build documentation
+xcodebuild docbuild \
+  -scheme Reframer \
+  -destination 'platform=macOS' \
+  -derivedDataPath .build
+
+# Export to static HTML
+$(xcrun --find docc) process-archive transform-for-static-hosting \
+  .build/Build/Products/Debug/Reframer.doccarchive \
+  --output-path docs/docc-export \
+  --hosting-base-path /reframer
+```
+
+#### GitHub Actions (CI)
+
+```yaml
+# .github/workflows/docs.yml
+name: Build Documentation
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-docs:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build DocC
+        run: |
+          xcodebuild docbuild \
+            -scheme Reframer \
+            -destination 'platform=macOS' \
+            -derivedDataPath .build
+
+      - name: Export Static HTML
+        run: |
+          $(xcrun --find docc) process-archive transform-for-static-hosting \
+            .build/Build/Products/Debug/Reframer.doccarchive \
+            --output-path docs/docc-export \
+            --hosting-base-path /reframer
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/docc-export
+```
+
+### Documentation Locations
+
+| Location | Purpose |
+|----------|---------|
+| `Reframer.docc/` | Source files (versioned in repo) |
+| `docs/docc-export/` | Generated HTML (git-ignored, built at release) |
+| GitHub Pages | Public website (auto-deployed) |
+| In-app Help | Future: Bundle .doccarchive in app for offline access |
+
+### Documentation Checklist
+
+- [ ] Create `Reframer.docc/` documentation catalog
+- [ ] Write landing page (`Reframer.md`)
+- [ ] Write Getting Started guide
+- [ ] Add articles for each feature category
+- [ ] Add screenshots for key UI elements
+- [ ] Configure CI to build/deploy docs on release
+- [ ] Add .gitignore entry for `docs/docc-export/`
+
+---
+
+*Master Implementation Plan — Revision 8 — January 31, 2026*
+*Verification-First Approach with Regression Testing + DocC Documentation*

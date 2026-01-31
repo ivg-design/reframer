@@ -41,3 +41,4 @@ Carthage/Checkouts/
 # App bundles
 *.app
 *.ipa
+Reframer/Reframer.xcodeproj/xcuserdata/
