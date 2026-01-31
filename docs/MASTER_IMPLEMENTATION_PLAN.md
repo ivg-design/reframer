@@ -56,9 +56,9 @@ Reframer/
 ```
 
 **Checklist**:
-- [ ] Add ReframerTests target (Unit Tests)
-- [ ] Add ReframerUITests target (UI Tests)
-- [ ] Configure test schemes
+- [x] Add ReframerTests target (Unit Tests)
+- [x] Add ReframerUITests target (UI Tests)
+- [x] Configure test schemes
 
 ### 0.2 Test Fixtures
 
@@ -71,39 +71,18 @@ Reframer/
 | `test_4x3_1s.mp4` | 30fps, 1 second, 4:3 aspect | Aspect ratio handling |
 
 **Checklist**:
-- [ ] Create/obtain test fixtures
-- [ ] Add to test bundle resources
-- [ ] Verify fixtures load in tests
+- [x] Create/obtain test fixtures
+- [x] Add to test bundle resources
+- [x] Verify fixtures load in tests
 
 ### 0.3 Test Helpers
 
-**Action**: Create test infrastructure code
-
-```swift
-// ReframerTests/TestHelpers.swift
-import AVFoundation
-import XCTest
-
-class VideoTestHelper {
-    static func loadFixture(_ name: String) async throws -> (AVPlayer, duration: Double, fps: Double) {
-        let bundle = Bundle(for: Self.self)
-        guard let url = bundle.url(forResource: name, withExtension: "mp4") else {
-            throw TestError.fixtureNotFound(name)
-        }
-        let asset = AVAsset(url: url)
-        let duration = try await asset.load(.duration).seconds
-        let track = try await asset.loadTracks(withMediaType: .video).first!
-        let fps = try await Double(track.load(.nominalFrameRate))
-        let player = AVPlayer(url: url)
-        return (player, duration, fps)
-    }
-}
-```
+**Action**: Create test infrastructure code — ✅ IMPLEMENTED
 
 **Checklist**:
-- [ ] Create TestHelpers.swift
-- [ ] Create VideoTestHelper class
-- [ ] Add launch argument for deterministic test state
+- [x] Create TestHelpers.swift
+- [x] Create VideoTestHelper class
+- [x] Add launch argument for deterministic test state
 
 ### 0.4 Update Deployment Target
 
@@ -112,9 +91,9 @@ class VideoTestHelper {
 **Required**: `MACOSX_DEPLOYMENT_TARGET = 15.0` for BOTH Debug AND Release
 
 **Checklist**:
-- [ ] Update Debug configuration to 15.0
-- [ ] Update Release configuration to 15.0
-- [ ] Verify build succeeds
+- [x] Update Debug configuration to 15.0
+- [x] Update Release configuration to 15.0
+- [x] Verify build succeeds
 
 ---
 
@@ -1121,7 +1100,7 @@ Each fix must:
 - [x] 2.1 Unit tests for all WORKING features — 69 tests (VideoStateTests: 53, VideoFormatsTests: 16)
 - [x] 2.2 UI tests for all WORKING features — 27 tests (keyboard shortcuts, window behavior)
 - [x] 2.3 Lock mode + scroll interaction tests — Covered in VideoStateTests
-- [ ] 2.4 CI integration — Pending (GitHub Actions workflow ready in plan)
+- [x] 2.4 CI integration — .github/workflows/ci.yml (build, test, docbuild)
 
 **Phase 2 Results:**
 - **96 total tests, 100% passing**
@@ -1129,9 +1108,9 @@ Each fix must:
 - UI tests cover: All keyboard shortcuts (F-KL-*), window stability, stress testing
 
 ### Phase 3+: Implementation
-- [ ] Fix all BROKEN features (TBD after Phase 1)
-- [ ] Implement all MISSING features (TBD after Phase 1)
-- [ ] Complete all PARTIAL features (TBD after Phase 1)
+- [x] Fix all BROKEN features — None found (0 BROKEN)
+- [x] Implement all MISSING features — None found (0 MISSING)
+- [x] Complete all PARTIAL features — None found (0 PARTIAL)
 
 ---
 
@@ -1443,6 +1422,6 @@ jobs:
 
 ---
 
-*Master Implementation Plan — Revision 14 — January 31, 2026*
+*Master Implementation Plan — Revision 15 — January 31, 2026*
 *Verification-First Approach with Regression Testing + Apple Help Book + CI*
-*Phase 0-2 Complete: 55/55 features WORKING (100%), 96 tests passing (100%)*
+*ALL PHASES COMPLETE: 55/55 features WORKING (100%), 96 tests passing (100%), CI active*
