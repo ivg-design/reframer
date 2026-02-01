@@ -44,8 +44,8 @@ class ControlBar: NSView {
     private var isHovering = false
     private var isScrubbing = false
     private var firstResponderObserver: Any?
-    private var openPressRecognizer: NSPressGestureRecognizer?
-    private var didHandleOpenLongPress = false
+    private var openMouseDownAt: TimeInterval?
+    private let openLongPressDuration: TimeInterval = 0.35
 
     enum StepCommand {
         case up
@@ -230,12 +230,8 @@ class ControlBar: NSView {
     private func setupActions() {
         openButton?.target = self
         openButton?.action = #selector(openClicked)
-        if let openButton = openButton {
-            let press = NSPressGestureRecognizer(target: self, action: #selector(openLongPress(_:)))
-            press.minimumPressDuration = 0.35
-            openButton.addGestureRecognizer(press)
-            openPressRecognizer = press
-        }
+        // Track mouse down/up so we can detect long-press reliably in UI tests
+        openButton?.sendAction(on: [.leftMouseDown, .leftMouseUp])
 
         stepBackButton?.target = self
         stepBackButton?.action = #selector(stepBackClicked)
@@ -311,17 +307,26 @@ class ControlBar: NSView {
     // MARK: - IBActions
 
     @objc private func openClicked(_ sender: Any?) {
-        if didHandleOpenLongPress {
-            didHandleOpenLongPress = false
+        guard let event = NSApp.currentEvent else {
+            NotificationCenter.default.post(name: .openVideo, object: nil)
             return
         }
-        NotificationCenter.default.post(name: .openVideo, object: nil)
-    }
 
-    @objc private func openLongPress(_ sender: NSPressGestureRecognizer) {
-        guard sender.state == .began else { return }
-        didHandleOpenLongPress = true
-        NotificationCenter.default.post(name: .openYouTube, object: nil)
+        switch event.type {
+        case .leftMouseDown:
+            openMouseDownAt = event.timestamp
+            return
+        case .leftMouseUp:
+            let start = openMouseDownAt ?? event.timestamp
+            openMouseDownAt = nil
+            if event.timestamp - start >= openLongPressDuration {
+                NotificationCenter.default.post(name: .openYouTube, object: nil)
+                return
+            }
+            NotificationCenter.default.post(name: .openVideo, object: nil)
+        default:
+            NotificationCenter.default.post(name: .openVideo, object: nil)
+        }
     }
 
     @objc private func stepBackClicked(_ sender: Any?) {
@@ -547,11 +552,15 @@ class ControlBar: NSView {
             if filter.isQuickFilterAdjustable {
                 opacitySlider?.isEnabled = state.isVideoLoaded
                 opacityField?.isEnabled = state.isVideoLoaded
+                opacityField?.isEditable = state.isVideoLoaded
+                opacityField?.isSelectable = state.isVideoLoaded
                 opacitySlider?.doubleValue = state.quickFilterValue
                 opacityField?.stringValue = formatFilterValue(filter: filter, normalizedValue: state.quickFilterValue)
             } else {
                 opacitySlider?.isEnabled = false
-                opacityField?.isEnabled = false
+                opacityField?.isEnabled = state.isVideoLoaded
+                opacityField?.isEditable = false
+                opacityField?.isSelectable = false
                 opacitySlider?.doubleValue = 1.0
                 opacityField?.stringValue = "On"
             }
@@ -563,6 +572,8 @@ class ControlBar: NSView {
             opacityField?.stringValue = "\(Int(state.opacity * 100))"
             opacitySlider?.isEnabled = state.isVideoLoaded
             opacityField?.isEnabled = state.isVideoLoaded
+            opacityField?.isEditable = state.isVideoLoaded
+            opacityField?.isSelectable = state.isVideoLoaded
         }
     }
 
