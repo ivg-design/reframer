@@ -155,6 +155,7 @@ class MainViewController: NSViewController {
         case .avFoundation:
             switchToAVPlayer()
         case .auto:
+            // First check by extension (fast path for known VLC-only formats)
             if manager.requiresVLCKit(url: url) {
                 if manager.isReady {
                     switchToVLCPlayer(url: url)
@@ -164,7 +165,23 @@ class MainViewController: NSViewController {
                     showInstallVLCKitPrompt(url: url)
                 }
             } else {
-                switchToAVPlayer()
+                // Proactive codec detection: check if AVFoundation can actually decode
+                Task {
+                    let canPlay = await VideoFormats.canAVFoundationPlay(url)
+                    await MainActor.run {
+                        if canPlay {
+                            self.switchToAVPlayer()
+                        } else if manager.isReady {
+                            // AVFoundation can't play this (e.g., VP9 in MP4)
+                            self.switchToVLCPlayer(url: url)
+                        } else if manager.isInstalled && !manager.isEnabled {
+                            self.showEnableVLCKitPrompt(url: url)
+                        } else {
+                            // No VLC available, try AVFoundation anyway (will show error if it fails)
+                            self.switchToAVPlayer()
+                        }
+                    }
+                }
             }
         }
     }

@@ -987,16 +987,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if fileManager.fileExists(atPath: destinationURL.path) {
                 try fileManager.removeItem(at: destinationURL)
             }
-            try fileManager.copyItem(at: bundleURL, to: destinationURL)
+            // Move instead of copy to avoid duplicate app bundles
+            try fileManager.moveItem(at: bundleURL, to: destinationURL)
 
             NSWorkspace.shared.openApplication(at: destinationURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
                 NSApp.terminate(nil)
             }
         } catch {
-            let errorAlert = NSAlert(error: error)
-            errorAlert.messageText = "Could not move app"
-            errorAlert.informativeText = "Please drag Video Overlay into /Applications manually."
-            errorAlert.runModal()
+            // If move fails (e.g., cross-volume), try copy + delete original
+            do {
+                try fileManager.copyItem(at: bundleURL, to: destinationURL)
+                try? fileManager.removeItem(at: bundleURL) // Best effort delete original
+                NSWorkspace.shared.openApplication(at: destinationURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
+                    NSApp.terminate(nil)
+                }
+            } catch {
+                let errorAlert = NSAlert(error: error)
+                errorAlert.messageText = "Could not move app"
+                errorAlert.informativeText = "Please drag Reframer into /Applications manually."
+                errorAlert.runModal()
+            }
         }
     }
 }

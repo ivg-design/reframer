@@ -29,6 +29,22 @@
 - `CHANGELOG.md` (root and `Reframer/CHANGELOG.md`).
 - DocC + Help Book shortcut listings.
 
+## Audit Findings Status (from `/Users/ivg/github/video-overlay/docs/reframer-audit-report.md`)
+
+1. CIFilter reused across frames (thread safety) — **Done** (filters now created per frame).
+2. Async metadata/filter tasks can apply stale state — **Done** (load token checks added for metadata + composition).
+3. AVFoundation vs VLC selection uses extension only — **Done** (proactive codec detection via `VideoFormats.canAVFoundationPlay()` checks track format descriptions for VP8/VP9).
+4. UI marks video loaded before playback is verified — **Done** (observe `AVPlayerItem.status` + failure notifications; set `isVideoLoaded` on ready only).
+5. VLC FPS/size metadata missing — **Done** (extract fps/size from VLC track info).
+6. VLCKit install assumes fixed DMG mount point — **Done** (hdiutil attach -plist + mount-point parsing).
+7. Fractional FPS truncated — **Done** (composition `frameDuration` uses `CMTimeMakeWithSeconds`).
+8. VLC scrubbing uses position (not accurate) — **Done** (accurate seek via `setTime:`).
+9. VLC media parsing sync on main thread — **Done** (parsing now dispatched to background queue).
+10. VLCKit/VLC version mismatch — **Partial** (VLC updated to 3.0.23; VLCKit still 3.7.2).
+11. Mute toggle resets volume to 0.5 — **Done** (restore last non‑zero volume).
+12. Quick filter slider active for parameterless filters — **Done** (disabled for Invert/Noir).
+13. Move‑to‑Applications copies instead of moves — **Done** (now uses `moveItem`, falls back to copy+delete).
+
 ## Blockers
 
 ### UITest runner “damaged” error
@@ -51,7 +67,13 @@
    - Unit tests
    - UI tests (including Cmd+A select-all and lock-mode global stepping)
 
-3. **Verify global lock-mode shortcuts** in actual running app once automation works.
+3. **Address remaining audit items**:
+   - ~~Move VLC media parsing off the main thread.~~ **Done**
+   - ~~Add proactive codec capability detection for AVFoundation vs VLC selection.~~ **Done**
+   - Align VLCKit and VLC versions fully (remove mismatch). **Partial - VLC 3.0.23, VLCKit 3.7.2**
+   - ~~Change Move-to-Applications to move (or delete original after copy).~~ **Done**
+
+4. **Verify global lock-mode shortcuts** in actual running app once automation works.
 
 ## Files Touched (high-level)
 - App logic: `Reframer/Reframer/App/AppDelegate.swift`, `.../Views/ControlBar.swift`, `.../Views/VideoView.swift`, `.../Views/VLCVideoView.swift`, `.../Models/VideoState.swift`, `.../Utilities/KeyCodes.swift`

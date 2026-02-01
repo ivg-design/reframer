@@ -103,4 +103,53 @@ struct VideoFormats {
 
     /// Get display string for supported formats
     static let displayString = "MP4 • MOV • ProRes • H.264 • H.265 • AV1 • WebM • MKV • AVI"
+
+    /// Check if AVFoundation can play this URL by probing asset tracks
+    /// Returns true if playable by AVFoundation, false if VLC should be used
+    static func canAVFoundationPlay(_ url: URL) async -> Bool {
+        let asset = AVURLAsset(url: url)
+
+        // Check if asset is playable at all
+        do {
+            let isPlayable = try await asset.load(.isPlayable)
+            if !isPlayable {
+                return false
+            }
+        } catch {
+            return false
+        }
+
+        // Check video tracks for decodable formats
+        do {
+            let videoTracks = try await asset.loadTracks(withMediaType: .video)
+            guard !videoTracks.isEmpty else { return false }
+
+            for track in videoTracks {
+                let formats = try await track.load(.formatDescriptions)
+                for format in formats {
+                    let mediaSubType = CMFormatDescriptionGetMediaSubType(format)
+
+                    // VP8, VP9, and some other codecs are not supported by AVFoundation
+                    // FourCC codes: 'vp08' = VP8, 'vp09' = VP9
+                    let vp8Code = fourCC("vp08")
+                    let vp9Code = fourCC("vp09")
+
+                    if mediaSubType == vp8Code || mediaSubType == vp9Code {
+                        return false
+                    }
+                }
+            }
+
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Convert a 4-character string to FourCharCode
+    private static func fourCC(_ string: String) -> FourCharCode {
+        let chars = Array(string.utf8)
+        guard chars.count == 4 else { return 0 }
+        return FourCharCode(chars[0]) << 24 | FourCharCode(chars[1]) << 16 | FourCharCode(chars[2]) << 8 | FourCharCode(chars[3])
+    }
 }

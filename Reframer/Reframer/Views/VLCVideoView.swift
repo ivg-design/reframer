@@ -231,20 +231,24 @@ class VLCVideoView: NSView {
             }
         }
 
-        // Parse media to get metadata (async if available)
-        let parseAsyncSel = NSSelectorFromString("parseWithOptions:")
-        if media.responds(to: parseAsyncSel) {
-            _ = media.perform(parseAsyncSel, with: 1)
-        } else {
-            let parseSel = NSSelectorFromString("parse")
-            if media.responds(to: parseSel) {
-                media.perform(parseSel)
+        // Parse media to get metadata on a background thread to avoid blocking UI
+        DispatchQueue.global(qos: .userInitiated).async {
+            let parseAsyncSel = NSSelectorFromString("parseWithOptions:")
+            if media.responds(to: parseAsyncSel) {
+                _ = media.perform(parseAsyncSel, with: 1)
+            } else {
+                let parseSel = NSSelectorFromString("parse")
+                if media.responds(to: parseSel) {
+                    media.perform(parseSel)
+                }
             }
-        }
 
-        // Check if media is parsed and get info
-        if let isParsed = media.value(forKey: "isParsed") as? Bool {
-            print("VLCVideoView: Media isParsed: \(isParsed)")
+            DispatchQueue.main.async {
+                // Check if media is parsed and get info
+                if let isParsed = media.value(forKey: "isParsed") as? Bool {
+                    print("VLCVideoView: Media isParsed: \(isParsed)")
+                }
+            }
         }
 
         // Set media on player
