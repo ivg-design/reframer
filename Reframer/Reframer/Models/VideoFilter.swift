@@ -3,54 +3,83 @@ import CoreImage
 
 /// Available video filters for reference overlay work
 enum VideoFilter: String, CaseIterable, Identifiable {
+    case brightness = "Brightness"
+    case contrast = "Contrast"
+    case saturation = "Saturation"
+    case exposure = "Exposure"
     case edges = "Edges"
     case sharpen = "Sharpen"
     case unsharpMask = "Unsharp Mask"
-    case contrast = "High Contrast"
-    case saturation = "Saturation"
     case monochrome = "Monochrome"
     case invert = "Invert"
     case lineOverlay = "Line Overlay"
     case noir = "Noir"
-    case exposure = "Exposure"
 
     var id: String { rawValue }
 
     /// SF Symbol name for the filter
     var iconName: String {
         switch self {
+        case .brightness: return "sun.max"
+        case .contrast: return "circle.lefthalf.filled"
+        case .saturation: return "drop.fill"
+        case .exposure: return "plusminus.circle"
         case .edges: return "square.3.layers.3d.down.left"
         case .sharpen: return "triangle"
         case .unsharpMask: return "circle.hexagongrid"
-        case .contrast: return "circle.lefthalf.filled"
-        case .saturation: return "drop.fill"
         case .monochrome: return "paintpalette"
         case .invert: return "circle.lefthalf.striped.horizontal.inverse"
         case .lineOverlay: return "pencil.and.outline"
         case .noir: return "moon.fill"
-        case .exposure: return "sun.max"
         }
     }
 
     /// Short description of the filter
     var description: String {
         switch self {
-        case .edges: return "Sobel edge detection - great for tracing"
+        case .brightness: return "Adjust image brightness"
+        case .contrast: return "Adjust image contrast"
+        case .saturation: return "Adjust color intensity"
+        case .exposure: return "Adjust exposure (EV stops)"
+        case .edges: return "Edge detection for tracing"
         case .sharpen: return "Enhance edge sharpness"
-        case .unsharpMask: return "Classic sharpening with radius control"
-        case .contrast: return "Boost contrast for visibility"
-        case .saturation: return "Adjust color intensity (0 = grayscale)"
-        case .monochrome: return "Convert to single color"
+        case .unsharpMask: return "Professional sharpening"
+        case .monochrome: return "Sepia/tint effect"
         case .invert: return "Invert all colors"
-        case .lineOverlay: return "Black and white line drawing"
-        case .noir: return "High contrast black and white"
-        case .exposure: return "Adjust brightness (negative = darker, positive = brighter)"
+        case .lineOverlay: return "Line drawing effect"
+        case .noir: return "B&W film effect"
         }
     }
 
     /// Create the CIFilter for this filter type with current settings
     func createFilter(settings: FilterSettings) -> CIFilter? {
         switch self {
+        case .brightness:
+            let filter = CIFilter(name: "CIColorControls")
+            filter?.setValue(settings.brightnessLevel, forKey: kCIInputBrightnessKey)
+            filter?.setValue(1.0, forKey: kCIInputContrastKey)
+            filter?.setValue(1.0, forKey: kCIInputSaturationKey)
+            return filter
+
+        case .contrast:
+            let filter = CIFilter(name: "CIColorControls")
+            filter?.setValue(0.0, forKey: kCIInputBrightnessKey)
+            filter?.setValue(settings.contrastLevel, forKey: kCIInputContrastKey)
+            filter?.setValue(1.0, forKey: kCIInputSaturationKey)
+            return filter
+
+        case .saturation:
+            let filter = CIFilter(name: "CIColorControls")
+            filter?.setValue(0.0, forKey: kCIInputBrightnessKey)
+            filter?.setValue(1.0, forKey: kCIInputContrastKey)
+            filter?.setValue(settings.saturationLevel, forKey: kCIInputSaturationKey)
+            return filter
+
+        case .exposure:
+            let filter = CIFilter(name: "CIExposureAdjust")
+            filter?.setValue(settings.exposure, forKey: kCIInputEVKey)
+            return filter
+
         case .edges:
             let filter = CIFilter(name: "CIEdges")
             filter?.setValue(settings.edgeIntensity, forKey: kCIInputIntensityKey)
@@ -65,20 +94,6 @@ enum VideoFilter: String, CaseIterable, Identifiable {
             let filter = CIFilter(name: "CIUnsharpMask")
             filter?.setValue(settings.unsharpRadius, forKey: kCIInputRadiusKey)
             filter?.setValue(settings.unsharpIntensity, forKey: kCIInputIntensityKey)
-            return filter
-
-        case .contrast:
-            let filter = CIFilter(name: "CIColorControls")
-            filter?.setValue(settings.brightness, forKey: kCIInputBrightnessKey)
-            filter?.setValue(settings.contrast, forKey: kCIInputContrastKey)
-            filter?.setValue(1.0, forKey: kCIInputSaturationKey)  // Don't affect saturation
-            return filter
-
-        case .saturation:
-            let filter = CIFilter(name: "CIColorControls")
-            filter?.setValue(0.0, forKey: kCIInputBrightnessKey)  // Don't affect brightness
-            filter?.setValue(1.0, forKey: kCIInputContrastKey)    // Don't affect contrast
-            filter?.setValue(settings.saturationLevel, forKey: kCIInputSaturationKey)
             return filter
 
         case .monochrome:
@@ -104,11 +119,6 @@ enum VideoFilter: String, CaseIterable, Identifiable {
 
         case .noir:
             return CIFilter(name: "CIPhotoEffectNoir")
-
-        case .exposure:
-            let filter = CIFilter(name: "CIExposureAdjust")
-            filter?.setValue(settings.exposure, forKey: kCIInputEVKey)
-            return filter
         }
     }
 }
