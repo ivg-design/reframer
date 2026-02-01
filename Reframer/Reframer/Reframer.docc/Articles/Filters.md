@@ -19,7 +19,7 @@ Reframer includes a variety of video filters that can be applied in real-time. U
 | **Unsharp Mask** | Professional sharpening with radius control |
 | **Monochrome** | Converts to sepia/tinted tones |
 | **Invert** | Inverts all colors |
-| **Line Overlay** | Creates a line-art effect |
+| **Line Art** | Line drawing effect with 3 simple controls |
 | **Noir** | Black and white film effect |
 
 ## Using Filters

@@ -24,12 +24,10 @@ struct FilterSettings: Codable, Equatable {
     var monochromeB: Double = 0.3  // 0.0 - 1.0
     var monochromeIntensity: Double = 1.0  // 0.0 - 1.0
 
-    // MARK: - Line Overlay
-    var lineOverlayNoise: Double = 0.07  // 0.0 - 0.1
-    var lineOverlaySharpness: Double = 0.71  // 0.0 - 2.0
-    var lineOverlayEdge: Double = 1.0  // 0.0 - 200.0
-    var lineOverlayThreshold: Double = 0.1  // 0.0 - 1.0
-    var lineOverlayContrast: Double = 50.0  // 0.25 - 200.0
+    // MARK: - Line Art (simplified - noise/sharpness are fixed internally)
+    var lineArtEdge: Double = 50.0       // 0.1 to 200 (line sensitivity)
+    var lineArtThreshold: Double = 0.1   // 0.0 to 1.0 (line visibility cutoff)
+    var lineArtContrast: Double = 50.0   // 1 to 200 (line darkness)
 
     // MARK: - Factory Methods
 
@@ -56,8 +54,8 @@ struct FilterSettings: Codable, Equatable {
     /// Preset for line drawing style
     static var lineDrawing: FilterSettings {
         var settings = FilterSettings()
-        settings.lineOverlayEdge = 50.0
-        settings.lineOverlayContrast = 75.0
+        settings.lineArtEdge = 75.0
+        settings.lineArtContrast = 100.0
         return settings
     }
 }
