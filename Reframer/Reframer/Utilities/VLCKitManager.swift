@@ -181,17 +181,23 @@ class VLCKitManager {
 
             do {
                 try FileManager.default.createDirectory(at: extractDir, withIntermediateDirectories: true)
+                print("VLCKit: Extracting tar.xz from \(tempURL.path) to \(extractDir.path)")
 
                 // Extract tar.xz
                 let tarProcess = Process()
                 tarProcess.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
                 tarProcess.arguments = ["-xf", tempURL.path, "-C", extractDir.path]
+                let errorPipe = Pipe()
+                tarProcess.standardError = errorPipe
                 try tarProcess.run()
                 tarProcess.waitUntilExit()
 
-                guard tarProcess.terminationStatus == 0 else {
+                if tarProcess.terminationStatus != 0 {
+                    let errorStr = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                    print("VLCKit: tar extraction failed with code \(tarProcess.terminationStatus): \(errorStr)")
                     throw VLCKitError.extractFailed
                 }
+                print("VLCKit: tar extraction successful")
 
                 // Find VLCKit.framework
                 let binaryPackage = extractDir.appendingPathComponent("VLCKit - binary package")
@@ -359,25 +365,38 @@ class VLCKitManager {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
         process.arguments = ["attach", dmgPath.path, "-plist", "-nobrowse", "-quiet"]
         let pipe = Pipe()
+        let errorPipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = pipe
+        process.standardError = errorPipe
         try process.run()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
 
-        guard process.terminationStatus == 0 else {
-            print("VLCKit: Failed to mount DMG")
+        if process.terminationStatus != 0 {
+            let errorStr = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            print("VLCKit: Failed to mount DMG - exit code \(process.terminationStatus): \(errorStr)")
             throw VLCKitError.extractFailed
         }
 
-        let plist = try PropertyListSerialization.propertyList(from: data, format: nil)
-        if let dict = plist as? [String: Any],
-           let entities = dict["system-entities"] as? [[String: Any]] {
-            for entity in entities {
-                if let mountPoint = entity["mount-point"] as? String {
-                    return URL(fileURLWithPath: mountPoint)
+        do {
+            let plist = try PropertyListSerialization.propertyList(from: data, format: nil)
+            if let dict = plist as? [String: Any],
+               let entities = dict["system-entities"] as? [[String: Any]] {
+                for entity in entities {
+                    if let mountPoint = entity["mount-point"] as? String {
+                        print("VLCKit: DMG mounted at \(mountPoint)")
+                        return URL(fileURLWithPath: mountPoint)
+                    }
                 }
             }
+            print("VLCKit: Could not find mount point in plist response")
+        } catch {
+            print("VLCKit: Failed to parse hdiutil plist output: \(error)")
+            if let str = String(data: data, encoding: .utf8) {
+                print("VLCKit: Raw hdiutil output: \(str.prefix(500))")
+            }
+            throw error
         }
 
         throw VLCKitError.extractFailed
