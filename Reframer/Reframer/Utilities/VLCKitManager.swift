@@ -587,13 +587,13 @@ class VLCKitManager {
     /// These options create a private VLCLibrary instance
     func getLibraryOptions() -> [String] {
         return [
-            "--codec=avcodec,all",         // Prefer software codecs
-            "--no-videotoolbox",           // Disable Video Toolbox (doesn't support VP9)
-            "--avcodec-hw=none",           // Disable hardware decode for codec fallback
-            "--avcodec-skiploopfilter=0",  // Full quality decoding
+            "--codec=dav1d,vpx,avcodec,all",  // Prefer dav1d for AV1, vpx for VP8/VP9, then avcodec
+            "--no-videotoolbox",              // Disable Video Toolbox (doesn't support VP9)
+            "--avcodec-hw=none",              // Disable hardware decode for codec fallback
+            "--avcodec-skiploopfilter=0",     // Full quality decoding
             "--no-video-title-show",
             "--no-stats",
-            "-vv"                          // Some verbosity for debugging
+            "-vv"                             // Some verbosity for debugging
         ]
     }
 
