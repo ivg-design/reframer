@@ -14,6 +14,7 @@ class FilterPanelView: NSView {
 
     private let visualEffectView = NSVisualEffectView()
     private let scrollView = NSScrollView()
+    private let contentView = NSView()  // Document view for scroll
     private let contentStack = NSStackView()
     private let titleLabel = NSTextField(labelWithString: "Filters")
     private let closeButton = NSButton()
@@ -90,26 +91,27 @@ class FilterPanelView: NSView {
 
         addSubview(titleBar)
 
-        // Scroll view for content
+        // Scroll view setup
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
         addSubview(scrollView)
 
-        // Content stack
+        // Document view for scrolling
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = contentView
+
+        // Content stack - TOP aligned
         contentStack.orientation = .vertical
-        contentStack.spacing = 16
+        contentStack.spacing = 12
         contentStack.alignment = .leading
         contentStack.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(contentStack)
 
-        let clipView = NSClipView()
-        clipView.documentView = contentStack
-        clipView.drawsBackground = false
-        scrollView.contentView = clipView
-
-        // Layout
+        // Layout constraints
         NSLayoutConstraint.activate([
             visualEffectView.topAnchor.constraint(equalTo: topAnchor),
             visualEffectView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -125,9 +127,16 @@ class FilterPanelView: NSView {
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16),
 
-            contentStack.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            contentStack.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -20),
-            contentStack.topAnchor.constraint(equalTo: scrollView.documentView!.topAnchor)
+            // Document view fills scroll view width, height is content-based
+            contentView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+
+            // Content stack pinned to TOP of document view
+            contentStack.topAnchor.constraint(equalTo: contentView.topAnchor),
+            contentStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            contentStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
 
         buildStaticContent()
@@ -139,39 +148,45 @@ class FilterPanelView: NSView {
         contentStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         filterToggles.removeAll()
 
-        // Build two-column grid of filter toggles
-        let grid = NSGridView()
-        grid.translatesAutoresizingMaskIntoConstraints = false
-        grid.rowSpacing = 8
-        grid.columnSpacing = 16
-        grid.rowAlignment = .firstBaseline
-
+        // Build two-column grid of filter toggles with aligned columns
         let filters = VideoFilter.allCases
         let rowCount = (filters.count + 1) / 2
 
-        for row in 0..<rowCount {
-            let leftIndex = row
-            let rightIndex = row + rowCount
+        // Create the grid container
+        let gridContainer = NSStackView()
+        gridContainer.orientation = .horizontal
+        gridContainer.spacing = 20
+        gridContainer.alignment = .top
+        gridContainer.distribution = .fillEqually
 
-            let leftView = createFilterToggleRow(for: filters[leftIndex])
-            filterToggles[filters[leftIndex]] = leftView.toggle
+        // Left column
+        let leftColumn = NSStackView()
+        leftColumn.orientation = .vertical
+        leftColumn.spacing = 8
+        leftColumn.alignment = .leading
 
-            if rightIndex < filters.count {
-                let rightView = createFilterToggleRow(for: filters[rightIndex])
-                filterToggles[filters[rightIndex]] = rightView.toggle
-                grid.addRow(with: [leftView.container, rightView.container])
+        // Right column
+        let rightColumn = NSStackView()
+        rightColumn.orientation = .vertical
+        rightColumn.spacing = 8
+        rightColumn.alignment = .leading
+
+        for i in 0..<filters.count {
+            let filter = filters[i]
+            let row = createFilterToggleRow(for: filter)
+            filterToggles[filter] = row.toggle
+
+            if i < rowCount {
+                leftColumn.addArrangedSubview(row.container)
             } else {
-                grid.addRow(with: [leftView.container, NSView()])
+                rightColumn.addArrangedSubview(row.container)
             }
         }
 
-        // Set column widths
-        if grid.numberOfColumns >= 2 {
-            grid.column(at: 0).width = 130
-            grid.column(at: 1).width = 130
-        }
+        gridContainer.addArrangedSubview(leftColumn)
+        gridContainer.addArrangedSubview(rightColumn)
 
-        contentStack.addArrangedSubview(grid)
+        contentStack.addArrangedSubview(gridContainer)
 
         // Parameters container
         parametersContainer = NSStackView()
@@ -180,9 +195,6 @@ class FilterPanelView: NSView {
         parametersContainer.alignment = .leading
         parametersContainer.translatesAutoresizingMaskIntoConstraints = false
         contentStack.addArrangedSubview(parametersContainer)
-
-        // Width constraint for parameters
-        parametersContainer.widthAnchor.constraint(equalToConstant: 280).isActive = true
     }
 
     private func createFilterToggleRow(for filter: VideoFilter) -> (container: NSView, toggle: NSSwitch) {
@@ -196,14 +208,18 @@ class FilterPanelView: NSView {
         icon.image = NSImage(systemSymbolName: filter.iconName, accessibilityDescription: filter.rawValue)
         icon.contentTintColor = .secondaryLabelColor
         icon.translatesAutoresizingMaskIntoConstraints = false
-        icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 16),
+            icon.heightAnchor.constraint(equalToConstant: 16)
+        ])
 
-        // Label
+        // Label with fixed width for alignment
         let label = NSTextField(labelWithString: filter.rawValue)
         label.font = .systemFont(ofSize: 11)
         label.textColor = .labelColor
         label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.widthAnchor.constraint(equalToConstant: 80).isActive = true
 
         // Toggle switch
         let toggle = NSSwitch()
@@ -215,10 +231,6 @@ class FilterPanelView: NSView {
         container.addArrangedSubview(icon)
         container.addArrangedSubview(label)
         container.addArrangedSubview(toggle)
-
-        // Make label expand to fill space
-        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        toggle.setContentHuggingPriority(.required, for: .horizontal)
 
         return (container, toggle)
     }
@@ -237,7 +249,7 @@ class FilterPanelView: NSView {
         separator.boxType = .separator
         separator.translatesAutoresizingMaskIntoConstraints = false
         parametersContainer.addArrangedSubview(separator)
-        separator.widthAnchor.constraint(equalTo: parametersContainer.widthAnchor).isActive = true
+        separator.widthAnchor.constraint(equalToConstant: 260).isActive = true
 
         // Add sliders for each active filter (in consistent order)
         let orderedFilters = VideoFilter.allCases.filter { activeFilters.contains($0) }
@@ -290,7 +302,6 @@ class FilterPanelView: NSView {
             addSlider(key: "monochromeIntensity", label: "Intensity", min: 0, max: 1, defaultValue: 1.0)
 
         case .invert, .noir:
-            // No parameters
             let noParams = NSTextField(labelWithString: "No adjustable parameters")
             noParams.font = .systemFont(ofSize: 10)
             noParams.textColor = .tertiaryLabelColor
@@ -308,12 +319,12 @@ class FilterPanelView: NSView {
         row.orientation = .horizontal
         row.spacing = 8
         row.alignment = .centerY
-        row.translatesAutoresizingMaskIntoConstraints = false
 
         let nameLabel = NSTextField(labelWithString: label)
         nameLabel.font = .systemFont(ofSize: 11)
         nameLabel.textColor = .labelColor
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        nameLabel.widthAnchor.constraint(equalToConstant: 60).isActive = true
 
         let slider = NSSlider()
         slider.minValue = min
@@ -324,6 +335,7 @@ class FilterPanelView: NSView {
         slider.identifier = NSUserInterfaceItemIdentifier(key)
         slider.controlSize = .small
         slider.translatesAutoresizingMaskIntoConstraints = false
+        slider.widthAnchor.constraint(equalToConstant: 140).isActive = true
         sliders[key] = slider
 
         let valueLabel = NSTextField(labelWithString: String(format: "%.2f", defaultValue))
@@ -331,19 +343,12 @@ class FilterPanelView: NSView {
         valueLabel.textColor = .secondaryLabelColor
         valueLabel.alignment = .right
         valueLabel.translatesAutoresizingMaskIntoConstraints = false
+        valueLabel.widthAnchor.constraint(equalToConstant: 40).isActive = true
         valueLabels[key] = valueLabel
 
         row.addArrangedSubview(nameLabel)
         row.addArrangedSubview(slider)
         row.addArrangedSubview(valueLabel)
-
-        // Set explicit widths
-        NSLayoutConstraint.activate([
-            nameLabel.widthAnchor.constraint(equalToConstant: 65),
-            slider.widthAnchor.constraint(greaterThanOrEqualToConstant: 120),
-            valueLabel.widthAnchor.constraint(equalToConstant: 45),
-            row.widthAnchor.constraint(equalToConstant: 280)
-        ])
 
         parametersContainer.addArrangedSubview(row)
     }
