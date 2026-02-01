@@ -112,6 +112,25 @@ class MainViewController: NSViewController {
             }
             .store(in: &cancellables)
 
+        // Fallback if AVFoundation fails (unsupported codec in supported container)
+        NotificationCenter.default.publisher(for: .avFoundationPlaybackFailed)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self, let url = self.videoState.videoURL else { return }
+                guard self.videoState.playbackEngine == .auto else { return }
+                if self.videoState.videoAudioURL != nil {
+                    return
+                }
+                if VLCKitManager.shared.isReady {
+                    self.switchToVLCPlayer(url: url)
+                } else if VLCKitManager.shared.isInstalled && !VLCKitManager.shared.isEnabled {
+                    self.showEnableVLCKitPrompt(url: url)
+                } else {
+                    self.showInstallVLCKitPrompt(url: url)
+                }
+            }
+            .store(in: &cancellables)
+
         // Initial state
         dropZoneView?.isHidden = videoState.isVideoLoaded
         videoView?.isHidden = !videoState.isVideoLoaded
@@ -122,20 +141,29 @@ class MainViewController: NSViewController {
     private func handleVideoURLChange(_ url: URL) {
         let manager = VLCKitManager.shared
 
-        if manager.requiresVLCKit(url: url) {
-            // This format requires VLCKit
+        switch videoState.playbackEngine {
+        case .vlc:
             if manager.isReady {
                 switchToVLCPlayer(url: url)
             } else if manager.isInstalled && !manager.isEnabled {
-                // VLCKit installed but disabled - ask to enable
                 showEnableVLCKitPrompt(url: url)
             } else {
-                // VLCKit not installed - show install prompt
                 showInstallVLCKitPrompt(url: url)
             }
-        } else {
-            // Use AVFoundation
+        case .avFoundation:
             switchToAVPlayer()
+        case .auto:
+            if manager.requiresVLCKit(url: url) {
+                if manager.isReady {
+                    switchToVLCPlayer(url: url)
+                } else if manager.isInstalled && !manager.isEnabled {
+                    showEnableVLCKitPrompt(url: url)
+                } else {
+                    showInstallVLCKitPrompt(url: url)
+                }
+            } else {
+                switchToAVPlayer()
+            }
         }
     }
 

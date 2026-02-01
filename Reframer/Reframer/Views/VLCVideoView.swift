@@ -213,6 +213,7 @@ class VLCVideoView: NSView {
         state.currentFrame = 0
         state.duration = 0
         state.totalFrames = 0
+        state.isVideoLoaded = false
 
         // Create VLCMedia using URL (not path) for proper handling
         guard let mediaClass: AnyClass = NSClassFromString("VLCMedia") else {
@@ -230,11 +231,28 @@ class VLCVideoView: NSView {
         print("VLCVideoView: Created media for \(url.lastPathComponent)")
         print("VLCVideoView: Media object: \(media)")
 
-        // Parse media to get metadata (synchronous)
-        let parseSel = NSSelectorFromString("parse")
-        if media.responds(to: parseSel) {
-            media.perform(parseSel)
-            print("VLCVideoView: Parsed media")
+        if let headers = state.videoHeaders, !headers.isEmpty {
+            let options = headers.map { ":http-header=\($0.key): \($0.value)" }
+            let addOptionsSel = NSSelectorFromString("addOptions:")
+            let addOptionSel = NSSelectorFromString("addOption:")
+            if media.responds(to: addOptionsSel) {
+                _ = media.perform(addOptionsSel, with: options)
+            } else if media.responds(to: addOptionSel) {
+                for option in options {
+                    _ = media.perform(addOptionSel, with: option)
+                }
+            }
+        }
+
+        // Parse media to get metadata (async if available)
+        let parseAsyncSel = NSSelectorFromString("parseWithOptions:")
+        if media.responds(to: parseAsyncSel) {
+            _ = media.perform(parseAsyncSel, with: 1)
+        } else {
+            let parseSel = NSSelectorFromString("parse")
+            if media.responds(to: parseSel) {
+                media.perform(parseSel)
+            }
         }
 
         // Check if media is parsed and get info
@@ -390,11 +408,54 @@ class VLCVideoView: NSView {
             state.totalFrames = Int(durationSeconds * state.frameRate)
         }
 
-        // Try to get video size
-        // VLCKit doesn't easily expose this, use a default
-        if state.videoNaturalSize == .zero {
+        if let info = extractVideoInfo(from: media) {
+            if let size = info.size, size != .zero {
+                state.videoNaturalSize = size
+            } else if state.videoNaturalSize == .zero {
+                state.videoNaturalSize = CGSize(width: 1920, height: 1080)
+            }
+            if let fps = info.fps, fps > 0 {
+                state.frameRate = fps
+                state.totalFrames = Int(state.duration * fps)
+            }
+        } else if state.videoNaturalSize == .zero {
             state.videoNaturalSize = CGSize(width: 1920, height: 1080)
         }
+    }
+
+    private func extractVideoInfo(from media: NSObject) -> (size: CGSize?, fps: Double?)? {
+        // Try tracksInformation first (older VLCKit API)
+        if let infos = media.value(forKey: "tracksInformation") as? [[String: Any]] {
+            for info in infos {
+                let width = info["width"] as? Int ?? info["videoWidth"] as? Int
+                let height = info["height"] as? Int ?? info["videoHeight"] as? Int
+                let fpsValue = info["frameRate"] as? Double ?? info["fps"] as? Double
+                if let width = width, let height = height, width > 0, height > 0 {
+                    return (CGSize(width: width, height: height), fpsValue)
+                }
+            }
+        }
+
+        // Try tracks array (newer VLCKit API)
+        if let tracks = media.value(forKey: "tracks") as? [NSObject] {
+            for track in tracks {
+                let width = track.value(forKey: "videoWidth") as? Int ?? track.value(forKey: "width") as? Int
+                let height = track.value(forKey: "videoHeight") as? Int ?? track.value(forKey: "height") as? Int
+                var fps: Double?
+                if let fpsValue = track.value(forKey: "frameRate") as? Double {
+                    fps = fpsValue
+                } else if let num = track.value(forKey: "frameRateNum") as? Double,
+                          let den = track.value(forKey: "frameRateDen") as? Double,
+                          den != 0 {
+                    fps = num / den
+                }
+                if let width = width, let height = height, width > 0, height > 0 {
+                    return (CGSize(width: width, height: height), fps)
+                }
+            }
+        }
+
+        return nil
     }
 
     // MARK: - Cleanup

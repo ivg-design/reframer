@@ -44,6 +44,8 @@ class ControlBar: NSView {
     private var isHovering = false
     private var isScrubbing = false
     private var firstResponderObserver: Any?
+    private var openPressRecognizer: NSPressGestureRecognizer?
+    private var didHandleOpenLongPress = false
 
     // MARK: - Initialization
 
@@ -222,6 +224,12 @@ class ControlBar: NSView {
     private func setupActions() {
         openButton?.target = self
         openButton?.action = #selector(openClicked)
+        if let openButton = openButton {
+            let press = NSPressGestureRecognizer(target: self, action: #selector(openLongPress(_:)))
+            press.minimumPressDuration = 0.35
+            openButton.addGestureRecognizer(press)
+            openPressRecognizer = press
+        }
 
         stepBackButton?.target = self
         stepBackButton?.action = #selector(stepBackClicked)
@@ -297,7 +305,17 @@ class ControlBar: NSView {
     // MARK: - IBActions
 
     @objc private func openClicked(_ sender: Any?) {
+        if didHandleOpenLongPress {
+            didHandleOpenLongPress = false
+            return
+        }
         NotificationCenter.default.post(name: .openVideo, object: nil)
+    }
+
+    @objc private func openLongPress(_ sender: NSPressGestureRecognizer) {
+        guard sender.state == .began else { return }
+        didHandleOpenLongPress = true
+        NotificationCenter.default.post(name: .openYouTube, object: nil)
     }
 
     @objc private func stepBackClicked(_ sender: Any?) {

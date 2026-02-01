@@ -1,0 +1,37 @@
+{
+  "configurations" : [
+    {
+      "id" : "9D6E2E52-5E2A-4F3C-A8D8-9A0D18C6CF12",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Reframer.xcodeproj",
+      "identifier" : "AAA50001",
+      "name" : "Reframer"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Reframer.xcodeproj",
+        "identifier" : "BBB50001",
+        "name" : "ReframerTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Reframer.xcodeproj",
+        "identifier" : "CCC50001",
+        "name" : "ReframerUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

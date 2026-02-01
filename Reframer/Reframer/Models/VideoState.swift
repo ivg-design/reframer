@@ -3,8 +3,18 @@ import AVFoundation
 import Combine
 
 class VideoState: ObservableObject {
+    enum PlaybackEngine {
+        case auto
+        case avFoundation
+        case vlc
+    }
+
     // Video loading
     @Published var videoURL: URL?
+    @Published var videoAudioURL: URL?
+    @Published var videoHeaders: [String: String]?
+    @Published var videoTitle: String?
+    @Published var playbackEngine: PlaybackEngine = .auto
     @Published var isVideoLoaded: Bool = false
 
     // Playback

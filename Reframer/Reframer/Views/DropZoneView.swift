@@ -181,8 +181,12 @@ class DropZoneView: NSView {
     private func loadVideo(from url: URL) -> Bool {
         guard VideoFormats.isSupported(url) else { return false }
 
+        videoState?.videoAudioURL = nil
+        videoState?.videoHeaders = nil
+        videoState?.videoTitle = nil
+        videoState?.playbackEngine = .auto
+        videoState?.isVideoLoaded = false
         videoState?.videoURL = url
-        videoState?.isVideoLoaded = true
         return true
     }
 }

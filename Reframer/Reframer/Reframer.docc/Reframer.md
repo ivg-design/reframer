@@ -23,6 +23,7 @@ The app window is completely transparent and frameless, showing only the video c
 - **Video filters** — Apply and combine real-time effects like edge detection, sharpening, and color adjustments
 - **Lock mode** — Click through the video to interact with apps below
 - **Keyboard shortcuts** — Full control without touching the mouse
+- **YouTube links** — Paste a YouTube URL (long-press Open)
 
 ## Topics
 

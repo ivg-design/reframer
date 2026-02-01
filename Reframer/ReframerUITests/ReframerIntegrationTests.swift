@@ -30,11 +30,7 @@ final class ReframerIntegrationTests: XCTestCase {
             Self.appLaunched = true
 
             // Wait for video to load
-            let frameField = app.textFields["input-frame"]
-            let loaded = frameField.waitForExistence(timeout: 5)
-            if !loaded {
-                XCTFail("Video failed to load in setup - frame field not found")
-            }
+            waitForVideoReady()
         } else {
             // Ensure app is active
             app.activate()
@@ -124,9 +120,18 @@ final class ReframerIntegrationTests: XCTestCase {
     }
 
     func isVideoLoaded() -> Bool {
-        // Check if the frame field exists - it only appears when video is loaded
-        let frameField = app.textFields["input-frame"]
-        return frameField.exists
+        let slider = app.sliders["slider-timeline"]
+        return slider.exists && slider.isEnabled
+    }
+
+    private func waitForVideoReady(timeout: TimeInterval = 8) {
+        let slider = app.sliders["slider-timeline"]
+        let predicate = NSPredicate(format: "exists == true AND isEnabled == true")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: slider)
+        let result = XCTWaiter.wait(for: [expectation], timeout: timeout)
+        if result != .completed {
+            XCTFail("Video failed to load in setup - timeline slider not enabled")
+        }
     }
 
     // MARK: - Video Loading
@@ -185,6 +190,22 @@ final class ReframerIntegrationTests: XCTestCase {
 
         // Close help
         app.typeKey(.escape, modifierFlags: [])
+    }
+
+    // MARK: - YouTube Prompt
+
+    func testYouTubePromptAppearsOnLongPress() throws {
+        let openButton = app.buttons["button-open"]
+        XCTAssertTrue(openButton.exists, "Open button should exist")
+
+        openButton.press(forDuration: 0.4)
+
+        let inputField = app.textFields["youtube-url-input"]
+        XCTAssertTrue(inputField.waitForExistence(timeout: 2), "YouTube URL input should appear")
+
+        if app.buttons["Cancel"].exists {
+            app.buttons["Cancel"].click()
+        }
     }
 
     // MARK: - F-VP-002: Spacebar Play/Pause

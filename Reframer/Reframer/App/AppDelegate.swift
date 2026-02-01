@@ -29,6 +29,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var controlWindow: TransparentWindow!
     private var helpWindow: TransparentWindow?
     private var filterPanelWindow: TransparentWindow?
+    private var youtubeProgressAlert: NSAlert?
+    private var youtubeResolveToken = UUID()
 
     let videoState = VideoState()
     private var cancellables = Set<AnyCancellable>()
@@ -55,14 +57,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Auto-load test video if specified (for UI testing)
         if let testVideoPath = ProcessInfo.processInfo.environment["TEST_VIDEO_PATH"] {
             let url = URL(fileURLWithPath: testVideoPath)
-            if FileManager.default.fileExists(atPath: testVideoPath) {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    self?.videoState.videoURL = url
-                    self?.videoState.isVideoLoaded = true
+                if FileManager.default.fileExists(atPath: testVideoPath) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                        self?.videoState.videoAudioURL = nil
+                        self?.videoState.videoHeaders = nil
+                        self?.videoState.videoTitle = nil
+                        self?.videoState.playbackEngine = .auto
+                        self?.videoState.isVideoLoaded = false
+                        self?.videoState.videoURL = url
+                    }
                 }
             }
         }
-    }
 
     func applicationWillTerminate(_ notification: Notification) {
         if let monitor = globalShortcutMonitor {
@@ -85,8 +91,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if VideoFormats.isSupported(url) {
             // Delay slightly to ensure windows are ready
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.videoState.videoAudioURL = nil
+                self?.videoState.videoHeaders = nil
+                self?.videoState.videoTitle = nil
+                self?.videoState.playbackEngine = .auto
+                self?.videoState.isVideoLoaded = false
                 self?.videoState.videoURL = url
-                self?.videoState.isVideoLoaded = true
             }
         } else {
             // Show error for unsupported formats
@@ -357,6 +367,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.openVideoFile()
+            }
+            .store(in: &cancellables)
+
+        // Open YouTube notification
+        NotificationCenter.default.publisher(for: .openYouTube)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.openYouTubePrompt()
             }
             .store(in: &cancellables)
     }
@@ -662,9 +680,130 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.message = "Select a video file"
 
         if panel.runModal() == .OK, let url = panel.url {
+            videoState.videoAudioURL = nil
+            videoState.videoHeaders = nil
+            videoState.videoTitle = nil
+            videoState.playbackEngine = .auto
+            videoState.isVideoLoaded = false
             videoState.videoURL = url
-            videoState.isVideoLoaded = true
         }
+    }
+
+    private func openYouTubePrompt() {
+        let alert = NSAlert()
+        alert.messageText = "Open YouTube Video"
+        alert.informativeText = "Paste a YouTube link to start playback."
+
+        let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 420, height: 24))
+        inputField.placeholderString = "https://www.youtube.com/watch?v=..."
+        inputField.setAccessibilityIdentifier("youtube-url-input")
+        if let clipboard = NSPasteboard.general.string(forType: .string) {
+            inputField.stringValue = clipboard
+        }
+        alert.accessoryView = inputField
+        alert.addButton(withTitle: "Open")
+        alert.addButton(withTitle: "Cancel")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            let trimmed = inputField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: trimmed) else {
+                let errorAlert = NSAlert()
+                errorAlert.messageText = "Invalid URL"
+                errorAlert.informativeText = "Please enter a valid YouTube URL."
+                errorAlert.runModal()
+                return
+            }
+            resolveYouTubeURL(url)
+        }
+    }
+
+    private func resolveYouTubeURL(_ url: URL) {
+        let token = UUID()
+        youtubeResolveToken = token
+
+        showYouTubeProgress()
+        YouTubeResolver.shared.resolve(url: url) { [weak self] result in
+            guard let self = self, self.youtubeResolveToken == token else { return }
+            self.hideYouTubeProgress()
+
+            switch result {
+            case .failure(let error):
+                let alert = NSAlert()
+                alert.messageText = "YouTube Playback Failed"
+                alert.informativeText = error.localizedDescription
+                alert.alertStyle = .warning
+                alert.runModal()
+            case .success(let selection):
+                var candidate = selection.primary
+                var engine: VideoState.PlaybackEngine = .avFoundation
+
+                if !candidate.isAVFoundationCompatible {
+                    if VLCKitManager.shared.isReady {
+                        engine = .vlc
+                    } else if let fallback = selection.fallbackCombined,
+                              fallback.isAVFoundationCompatible {
+                        candidate = fallback
+                        engine = .avFoundation
+                    } else {
+                        let alert = NSAlert()
+                        alert.messageText = "YouTube Format Not Supported"
+                        alert.informativeText = "The highest-quality stream requires VLC. Install and enable VLCKit to play this video."
+                        alert.alertStyle = .warning
+                        alert.runModal()
+                        return
+                    }
+                }
+
+                self.videoState.videoAudioURL = candidate.audioURL
+                self.videoState.videoHeaders = selection.headers
+                self.videoState.videoTitle = selection.title
+                self.videoState.playbackEngine = engine
+                self.videoState.isVideoLoaded = false
+                self.videoState.videoURL = candidate.videoURL
+                self.videoState.isPlaying = true
+            }
+        }
+    }
+
+    private func showYouTubeProgress() {
+        let alert = NSAlert()
+        alert.messageText = "Resolving YouTube Stream"
+        alert.informativeText = "Fetching stream information…"
+        alert.addButton(withTitle: "Cancel")
+
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        let spinner = NSProgressIndicator()
+        spinner.style = .spinning
+        spinner.startAnimation(nil)
+        let label = NSTextField(labelWithString: "Please wait")
+        stack.addArrangedSubview(spinner)
+        stack.addArrangedSubview(label)
+        alert.accessoryView = stack
+
+        youtubeProgressAlert = alert
+
+        if let window = mainWindow {
+            alert.beginSheetModal(for: window) { [weak self] response in
+                if response == .alertFirstButtonReturn {
+                    self?.youtubeResolveToken = UUID()
+                    self?.hideYouTubeProgress()
+                }
+            }
+        } else {
+            alert.runModal()
+        }
+    }
+
+    private func hideYouTubeProgress() {
+        guard let alert = youtubeProgressAlert else { return }
+        if let window = mainWindow, let sheet = window.attachedSheet, sheet == alert.window {
+            window.endSheet(sheet)
+        } else {
+            alert.window.orderOut(nil)
+        }
+        youtubeProgressAlert = nil
     }
 
     // MARK: - Menu Actions (IBActions for storyboard)

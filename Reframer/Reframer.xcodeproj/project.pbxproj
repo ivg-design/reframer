@@ -11,6 +11,7 @@
 		0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19D82333A5671C5FB146764 /* VideoFormats.swift */; };
 		15FDF44DEF2AEB44C895443B /* VideoState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE63ACD63859E708710A97D4 /* VideoState.swift */; };
 		2491A9B249AD2563B719271A /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C014B4F5CB12CD15A1A186 /* Notifications.swift */; };
+		YT001002 /* YouTubeResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001001 /* YouTubeResolver.swift */; };
 		370628C9CD00AD6AA6DF0707 /* ControlBar.xib in Resources */ = {isa = PBXBuildFile; fileRef = B972E974DDAFCDB4952DE88C /* ControlBar.xib */; };
 		5E887FAA7C23F19E7451BD73 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8072E56EC759E00E54249624 /* MainViewController.swift */; };
 		6E1F01CFBCE69080FA2B16F6 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 331DF56DBDF1FEEE4E142195 /* MainMenu.xib */; };
@@ -23,6 +24,7 @@
 		BBB00001 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10001 /* TestHelpers.swift */; };
 		BBB00002 /* VideoStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10002 /* VideoStateTests.swift */; };
 		BBB00003 /* VideoFormatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10003 /* VideoFormatsTests.swift */; };
+		YT001004 /* YouTubeResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001003 /* YouTubeResolverTests.swift */; };
 		CCC00001 /* ReframerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC10001 /* ReframerUITests.swift */; };
 		CCC00002 /* ReframerUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC10002 /* ReframerUITestsLaunchTests.swift */; };
 		CCC00003 /* ReframerIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC10003 /* ReframerIntegrationTests.swift */; };
@@ -65,6 +67,7 @@
 		331DF56DBDF1FEEE4E142195 /* MainMenu.xib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.xib; path = MainMenu.xib; sourceTree = "<group>"; };
 		5F1E904417161A398ABD5FE0 /* VideoView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		70C014B4F5CB12CD15A1A186 /* Notifications.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
+		YT001001 /* YouTubeResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = YouTubeResolver.swift; sourceTree = "<group>"; };
 		8072E56EC759E00E54249624 /* MainViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		82AA3D89B4B8C208795E63C8 /* VLCVideoView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VLCVideoView.swift; sourceTree = "<group>"; };
 		8E4B5700799E838C1B840355 /* PreferencesWindowController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PreferencesWindowController.swift; sourceTree = "<group>"; };
@@ -78,6 +81,7 @@
 		BBB10001 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
 		BBB10002 /* VideoStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStateTests.swift; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.simpleColoring; };
 		BBB10003 /* VideoFormatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFormatsTests.swift; sourceTree = "<group>"; };
+		YT001003 /* YouTubeResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeResolverTests.swift; sourceTree = "<group>"; };
 		BBB20002 /* ReframerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ReframerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CCC10001 /* ReframerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerUITests.swift; sourceTree = "<group>"; };
 		CCC10002 /* ReframerUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerUITestsLaunchTests.swift; sourceTree = "<group>"; };
@@ -205,16 +209,17 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
-		AAA40007 /* Utilities */ = {
-			isa = PBXGroup;
-			children = (
-				D19D82333A5671C5FB146764 /* VideoFormats.swift */,
-				70C014B4F5CB12CD15A1A186 /* Notifications.swift */,
-				2502FE4461DC2B65CC2AD0F1 /* VLCKitManager.swift */,
-			);
-			path = Utilities;
-			sourceTree = "<group>";
-		};
+			AAA40007 /* Utilities */ = {
+				isa = PBXGroup;
+				children = (
+					D19D82333A5671C5FB146764 /* VideoFormats.swift */,
+					70C014B4F5CB12CD15A1A186 /* Notifications.swift */,
+					2502FE4461DC2B65CC2AD0F1 /* VLCKitManager.swift */,
+					YT001001 /* YouTubeResolver.swift */,
+				);
+				path = Utilities;
+				sourceTree = "<group>";
+			};
 		AAA40008 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -228,17 +233,18 @@
 			path = Reframer/Resources;
 			sourceTree = SOURCE_ROOT;
 		};
-		BBB40001 /* ReframerTests */ = {
-			isa = PBXGroup;
-			children = (
-				BBB10001 /* TestHelpers.swift */,
-				BBB10002 /* VideoStateTests.swift */,
-				BBB10003 /* VideoFormatsTests.swift */,
-				DDD40001 /* TestFixtures */,
-			);
-			path = ReframerTests;
-			sourceTree = "<group>";
-		};
+			BBB40001 /* ReframerTests */ = {
+				isa = PBXGroup;
+				children = (
+					BBB10001 /* TestHelpers.swift */,
+					BBB10002 /* VideoStateTests.swift */,
+					BBB10003 /* VideoFormatsTests.swift */,
+					YT001003 /* YouTubeResolverTests.swift */,
+					DDD40001 /* TestFixtures */,
+				);
+				path = ReframerTests;
+				sourceTree = "<group>";
+			};
 		CCC40001 /* ReframerUITests */ = {
 			isa = PBXGroup;
 			children = (
@@ -397,37 +403,39 @@
 		AAA50002 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (
-				7148C7DD0239873CFBA24CB6 /* AppDelegate.swift in Sources */,
-				7C580FCBE04BAD9DED666438 /* DropZoneView.swift in Sources */,
-				FFDA91AD48516D4B047630BE /* VideoView.swift in Sources */,
-				0631DC8CF1CB9806E1F13AE0 /* ControlBar.swift in Sources */,
-				5E887FAA7C23F19E7451BD73 /* MainViewController.swift in Sources */,
-				F1BD590341D153225E413522 /* HelpView.swift in Sources */,
-				15FDF44DEF2AEB44C895443B /* VideoState.swift in Sources */,
-				0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */,
-				2491A9B249AD2563B719271A /* Notifications.swift in Sources */,
-				903D85FA96F4D67AAE7D51A6 /* EdgeIndicatorView.swift in Sources */,
-				VF001002 /* VideoFilter.swift in Sources */,
-				FS001002 /* FilterSettings.swift in Sources */,
-				FM001002 /* FilterMenuButton.swift in Sources */,
-				FP001002 /* FilterPanelView.swift in Sources */,
-				BA0EBAA4561101336A2CB3CF /* VLCVideoView.swift in Sources */,
-				ED8A2C8BB3058B6D41186E0D /* PreferencesWindowController.swift in Sources */,
-				B8CFABAEDE33931C8E299E81 /* VLCKitManager.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+				files = (
+					7148C7DD0239873CFBA24CB6 /* AppDelegate.swift in Sources */,
+					7C580FCBE04BAD9DED666438 /* DropZoneView.swift in Sources */,
+					FFDA91AD48516D4B047630BE /* VideoView.swift in Sources */,
+					0631DC8CF1CB9806E1F13AE0 /* ControlBar.swift in Sources */,
+					5E887FAA7C23F19E7451BD73 /* MainViewController.swift in Sources */,
+					F1BD590341D153225E413522 /* HelpView.swift in Sources */,
+					15FDF44DEF2AEB44C895443B /* VideoState.swift in Sources */,
+					0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */,
+					2491A9B249AD2563B719271A /* Notifications.swift in Sources */,
+					YT001002 /* YouTubeResolver.swift in Sources */,
+					903D85FA96F4D67AAE7D51A6 /* EdgeIndicatorView.swift in Sources */,
+					VF001002 /* VideoFilter.swift in Sources */,
+					FS001002 /* FilterSettings.swift in Sources */,
+					FM001002 /* FilterMenuButton.swift in Sources */,
+					FP001002 /* FilterPanelView.swift in Sources */,
+					BA0EBAA4561101336A2CB3CF /* VLCVideoView.swift in Sources */,
+					ED8A2C8BB3058B6D41186E0D /* PreferencesWindowController.swift in Sources */,
+					B8CFABAEDE33931C8E299E81 /* VLCKitManager.swift in Sources */,
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
 		BBB50002 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (
-				BBB00001 /* TestHelpers.swift in Sources */,
-				BBB00002 /* VideoStateTests.swift in Sources */,
-				BBB00003 /* VideoFormatsTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+				files = (
+					BBB00001 /* TestHelpers.swift in Sources */,
+					BBB00002 /* VideoStateTests.swift in Sources */,
+					BBB00003 /* VideoFormatsTests.swift in Sources */,
+					YT001004 /* YouTubeResolverTests.swift in Sources */,
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
 		CCC50002 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;

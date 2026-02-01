@@ -132,6 +132,6 @@
 	<key>CFBundleHelpBookFolder</key>
 	<string>Reframer.help</string>
 	<key>CFBundleHelpBookName</key>
-	<string>com.reframer.help</string>
+	<string>Reframer Help</string>
 </dict>
 </plist>

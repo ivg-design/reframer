@@ -289,30 +289,13 @@ class VLCKitManager {
             do {
                 try FileManager.default.moveItem(at: tempURL, to: dmgPath)
 
-                // Mount DMG
-                let mountPoint = "/Volumes/VLC media player"
-                let hdiutilMount = Process()
-                hdiutilMount.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
-                hdiutilMount.arguments = ["attach", dmgPath.path, "-quiet", "-nobrowse"]
-                try hdiutilMount.run()
-                hdiutilMount.waitUntilExit()
-
-                guard hdiutilMount.terminationStatus == 0 else {
-                    print("VLCKit: Failed to mount DMG")
-                    throw VLCKitError.extractFailed
-                }
-
+                let mountURL = try self.mountDMG(at: dmgPath)
                 defer {
-                    // Unmount DMG
-                    let hdiutilUnmount = Process()
-                    hdiutilUnmount.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
-                    hdiutilUnmount.arguments = ["detach", mountPoint, "-quiet", "-force"]
-                    try? hdiutilUnmount.run()
-                    hdiutilUnmount.waitUntilExit()
+                    self.unmountDMG(at: mountURL)
                     try? FileManager.default.removeItem(at: dmgPath)
                 }
 
-                let vlcAppPath = URL(fileURLWithPath: mountPoint).appendingPathComponent("VLC.app/Contents/MacOS")
+                let vlcAppPath = mountURL.appendingPathComponent("VLC.app/Contents/MacOS")
                 let sourcePlugins = vlcAppPath.appendingPathComponent("plugins")
 
                 guard FileManager.default.fileExists(atPath: sourcePlugins.path) else {
@@ -352,6 +335,43 @@ class VLCKitManager {
         }
     }
 
+    private func mountDMG(at dmgPath: URL) throws -> URL {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        process.arguments = ["attach", dmgPath.path, "-plist", "-nobrowse", "-quiet"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            print("VLCKit: Failed to mount DMG")
+            throw VLCKitError.extractFailed
+        }
+
+        let plist = try PropertyListSerialization.propertyList(from: data, format: nil)
+        if let dict = plist as? [String: Any],
+           let entities = dict["system-entities"] as? [[String: Any]] {
+            for entity in entities {
+                if let mountPoint = entity["mount-point"] as? String {
+                    return URL(fileURLWithPath: mountPoint)
+                }
+            }
+        }
+
+        throw VLCKitError.extractFailed
+    }
+
+    private func unmountDMG(at mountURL: URL) {
+        let hdiutilUnmount = Process()
+        hdiutilUnmount.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        hdiutilUnmount.arguments = ["detach", mountURL.path, "-quiet", "-force"]
+        try? hdiutilUnmount.run()
+        hdiutilUnmount.waitUntilExit()
+    }
+
     private func validateInstallation() -> Bool {
         print("VLCKit: Validating installation...")
 
@@ -374,13 +394,18 @@ class VLCKitManager {
             return false
         }
 
-        // Check for key plugins
-        let keyPlugins = ["libmkv_plugin.dylib", "libvpx_plugin.dylib"]
-        for plugin in keyPlugins {
-            let pluginPath = pluginsPath.appendingPathComponent(plugin)
-            if FileManager.default.fileExists(atPath: pluginPath.path) {
-                print("VLCKit: Found key plugin: \(plugin)")
+        // Check for key plugins (search recursively)
+        let keyPlugins = Set(["libmkv_plugin.dylib", "libvpx_plugin.dylib"])
+        var foundPlugins = Set<String>()
+        if let enumerator = FileManager.default.enumerator(at: pluginsPath, includingPropertiesForKeys: nil) {
+            for case let fileURL as URL in enumerator {
+                if keyPlugins.contains(fileURL.lastPathComponent) {
+                    foundPlugins.insert(fileURL.lastPathComponent)
+                }
             }
+        }
+        for plugin in foundPlugins {
+            print("VLCKit: Found key plugin: \(plugin)")
         }
 
         print("VLCKit: VALIDATION PASSED - \(contents.count) plugin files found")

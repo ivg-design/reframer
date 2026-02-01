@@ -11,9 +11,15 @@ class VideoView: NSView {
     private let playerLayer = AVPlayerLayer()
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
-    private var currentAsset: AVURLAsset?
+    private var currentAsset: AVAsset?
+    private var currentVideoAsset: AVURLAsset?
+    private var currentAudioAsset: AVURLAsset?
     private var timeObserver: Any?
+    private var playerItemStatusObservation: NSKeyValueObservation?
+    private var playerItemFailedObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
+    private var loadToken = UUID()
+    private var filterToken = UUID()
 
     // Core Image context for filter processing (reused for performance)
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -204,58 +210,132 @@ class VideoView: NSView {
         cleanup()
         guard let state = videoState else { return }
 
+        let token = UUID()
+        loadToken = token
+        filterToken = token
+
         // Reset state for new video
+        state.isVideoLoaded = false
         state.currentTime = 0
         state.currentFrame = 0
         state.duration = 0
         state.totalFrames = 0
         lastSeekTime = -1  // Allow scrubbing from the start
+        if state.videoTitle == nil {
+            state.videoTitle = url.lastPathComponent
+        }
+        let headers = state.videoHeaders
+        let videoAsset = makeURLAsset(url: url, headers: headers)
+        currentVideoAsset = videoAsset
 
-        let asset = AVURLAsset(url: url)
-        currentAsset = asset
-        playerItem = AVPlayerItem(asset: asset)
-        player = AVPlayer(playerItem: playerItem)
-        player?.volume = state.volume
-        playerLayer.player = player
+        let audioAsset: AVURLAsset?
+        if let audioURL = state.videoAudioURL {
+            audioAsset = makeURLAsset(url: audioURL, headers: headers)
+        } else {
+            audioAsset = nil
+        }
+        currentAudioAsset = audioAsset
 
-        // Apply current filters if any
-        applyCurrentFilters()
-
-        // Load asset properties
         Task { [weak self, weak state] in
+            guard let self = self else { return }
             do {
-                let duration = try await asset.load(.duration)
-                let tracks = try await asset.load(.tracks)
-
-                await MainActor.run {
-                    guard let state = state else { return }
-                    state.duration = CMTimeGetSeconds(duration)
-                    state.totalFrames = Int(state.duration * state.frameRate)
+                let assetForPlayer: AVAsset
+                if let audioAsset = audioAsset {
+                    assetForPlayer = try await self.buildComposition(
+                        videoAsset: videoAsset,
+                        audioAsset: audioAsset,
+                        token: token
+                    )
+                } else {
+                    assetForPlayer = videoAsset
                 }
 
-                if let track = tracks.first(where: { $0.mediaType == .video }) {
-                    let fps = try? await track.load(.nominalFrameRate)
-                    let (naturalSize, preferredTransform) = try await track.load(.naturalSize, .preferredTransform)
-                    let transformedSize = naturalSize.applying(preferredTransform)
-                    let resolvedSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
-
-                    await MainActor.run {
-                        guard let state = state else { return }
-                        if let fps = fps, fps > 0 {
-                            state.frameRate = Double(fps)
-                            state.totalFrames = Int(state.duration * Double(fps))
-                        }
-                        state.videoNaturalSize = resolvedSize
+                await MainActor.run {
+                    guard self.loadToken == token else { return }
+                    self.currentAsset = assetForPlayer
+                    self.playerItem = AVPlayerItem(asset: assetForPlayer)
+                    self.player = AVPlayer(playerItem: self.playerItem)
+                    self.player?.volume = state?.volume ?? 0
+                    self.playerLayer.player = self.player
+                    self.installPlayerItemObservers(token: token)
+                    self.installTimeObserver()
+                    self.applyCurrentFilters()
+                    if state?.isPlaying == true {
+                        self.player?.play()
                     }
                 }
+
+                try await self.loadMetadata(for: assetForPlayer, state: state, token: token)
             } catch {
                 await MainActor.run {
-                    self?.showVideoLoadError(error)
+                    self.showVideoLoadError(error)
+                }
+            }
+        }
+    }
+
+    private var lastSeekTime: Double = -1
+
+    private func makeURLAsset(url: URL, headers: [String: String]?) -> AVURLAsset {
+        if let headers = headers {
+            return AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+        }
+        return AVURLAsset(url: url)
+    }
+
+    private func installPlayerItemObservers(token: UUID) {
+        playerItemStatusObservation = playerItem?.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            guard let self = self, let state = self.videoState else { return }
+            DispatchQueue.main.async {
+                guard self.loadToken == token else { return }
+                switch item.status {
+                case .readyToPlay:
+                    state.isVideoLoaded = true
+                case .failed:
+                    state.isVideoLoaded = false
+                    if state.playbackEngine == .auto {
+                        NotificationCenter.default.post(
+                            name: .avFoundationPlaybackFailed,
+                            object: item.error ?? NSError(domain: "AVFoundation", code: -1)
+                        )
+                    } else {
+                        self.showVideoLoadError(item.error ?? NSError(domain: "AVFoundation", code: -1))
+                    }
+                default:
+                    break
                 }
             }
         }
 
-        // Time observer for playback position
+        if let observer = playerItemFailedObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let item = playerItem {
+            playerItemFailedObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemFailedToPlayToEndTime,
+                object: item,
+                queue: .main
+            ) { [weak self] notification in
+                guard let self = self else { return }
+                let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+                self.videoState?.isVideoLoaded = false
+                if self.videoState?.playbackEngine == .auto {
+                    NotificationCenter.default.post(
+                        name: .avFoundationPlaybackFailed,
+                        object: error ?? NSError(domain: "AVFoundation", code: -1)
+                    )
+                } else if let error = error {
+                    self.showVideoLoadError(error)
+                }
+            }
+        }
+    }
+
+    private func installTimeObserver() {
+        if let obs = timeObserver {
+            player?.removeTimeObserver(obs)
+            timeObserver = nil
+        }
         let interval = CMTime(value: 1, timescale: 30)
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let state = self?.videoState else { return }
@@ -267,7 +347,73 @@ class VideoView: NSView {
         }
     }
 
-    private var lastSeekTime: Double = -1
+    private func buildComposition(videoAsset: AVURLAsset, audioAsset: AVURLAsset, token: UUID) async throws -> AVAsset {
+        let composition = AVMutableComposition()
+        let duration = try await videoAsset.load(.duration)
+        let videoTracks = try await videoAsset.load(.tracks)
+        guard let sourceVideoTrack = videoTracks.first(where: { $0.mediaType == .video }) else {
+            return videoAsset
+        }
+
+        let compVideoTrack = composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        )
+        compVideoTrack?.preferredTransform = sourceVideoTrack.preferredTransform
+        try compVideoTrack?.insertTimeRange(
+            CMTimeRange(start: .zero, duration: duration),
+            of: sourceVideoTrack,
+            at: .zero
+        )
+
+        let audioTracks = try await audioAsset.load(.tracks)
+        if let sourceAudioTrack = audioTracks.first(where: { $0.mediaType == .audio }) {
+            let compAudioTrack = composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            )
+            let audioDuration = try await audioAsset.load(.duration)
+            let insertDuration = min(duration, audioDuration)
+            try compAudioTrack?.insertTimeRange(
+                CMTimeRange(start: .zero, duration: insertDuration),
+                of: sourceAudioTrack,
+                at: .zero
+            )
+        }
+
+        return composition
+    }
+
+    private func loadMetadata(for asset: AVAsset, state: VideoState?, token: UUID) async throws {
+        let duration = try await asset.load(.duration)
+        let tracks = try await asset.load(.tracks)
+
+        await MainActor.run {
+            guard let state = state, self.loadToken == token else { return }
+            state.duration = CMTimeGetSeconds(duration)
+            state.totalFrames = Int(state.duration * state.frameRate)
+        }
+
+        if let track = tracks.first(where: { $0.mediaType == .video }) {
+            var fps = try? await track.load(.nominalFrameRate)
+            let (naturalSize, preferredTransform) = try await track.load(.naturalSize, .preferredTransform)
+            let transformedSize = naturalSize.applying(preferredTransform)
+            let resolvedSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
+
+            if (fps == nil || fps == 0), let sourceTrack = try? await currentVideoAsset?.load(.tracks).first(where: { $0.mediaType == .video }) {
+                fps = try? await sourceTrack.load(.nominalFrameRate)
+            }
+
+            await MainActor.run {
+                guard let state = state, self.loadToken == token else { return }
+                if let fps = fps, fps > 0 {
+                    state.frameRate = Double(fps)
+                    state.totalFrames = Int(state.duration * Double(fps))
+                }
+                state.videoNaturalSize = resolvedSize
+            }
+        }
+    }
 
     func scrub(to time: Double) {
         guard let state = videoState else { return }
@@ -327,10 +473,17 @@ class VideoView: NSView {
             player?.removeTimeObserver(obs)
             timeObserver = nil
         }
+        playerItemStatusObservation = nil
+        if let observer = playerItemFailedObserver {
+            NotificationCenter.default.removeObserver(observer)
+            playerItemFailedObserver = nil
+        }
         player?.pause()
         player = nil
         playerItem = nil
         currentAsset = nil
+        currentVideoAsset = nil
+        currentAudioAsset = nil
     }
 
     deinit {
@@ -344,30 +497,19 @@ class VideoView: NSView {
               let state = videoState,
               let playerItem = playerItem else { return }
 
-        // If no filters active (neither quick nor advanced), remove any existing composition
-        guard state.quickFilter != nil || !state.advancedFilters.isEmpty else {
-            playerItem.videoComposition = nil
-            return
-        }
-
-        // Build list of CIFilters to apply
-        var filters: [CIFilter] = []
-
-        // First apply quick filter (if any)
-        if let quickFilter = state.quickFilter,
-           let ciFilter = quickFilter.createQuickFilter(normalizedValue: state.quickFilterValue) {
-            filters.append(ciFilter)
-        }
-
-        // Then apply advanced filters in order
+        let quickFilter = state.quickFilter
+        let quickFilterValue = state.quickFilterValue
         let orderedAdvanced = state.orderedAdvancedFilters
-        let advancedCIFilters = orderedAdvanced.compactMap { $0.createFilter(settings: state.filterSettings) }
-        filters.append(contentsOf: advancedCIFilters)
+        let settings = state.filterSettings
 
-        guard !filters.isEmpty else {
+        // If no filters active (neither quick nor advanced), remove any existing composition
+        guard quickFilter != nil || !orderedAdvanced.isEmpty else {
             playerItem.videoComposition = nil
             return
         }
+
+        let token = UUID()
+        filterToken = token
 
         // Get video track to determine size and timing
         Task { [weak self] in
@@ -382,11 +524,15 @@ class VideoView: NSView {
                 let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
 
                 await MainActor.run {
+                    guard self.filterToken == token else { return }
                     self.createVideoComposition(
                         for: playerItem,
                         renderSize: renderSize,
                         frameRate: nominalFrameRate,
-                        filters: filters
+                        quickFilter: quickFilter,
+                        quickFilterValue: quickFilterValue,
+                        advancedFilters: orderedAdvanced,
+                        settings: settings
                     )
                 }
             } catch {
@@ -399,7 +545,10 @@ class VideoView: NSView {
         for playerItem: AVPlayerItem,
         renderSize: CGSize,
         frameRate: Float,
-        filters: [CIFilter]
+        quickFilter: VideoFilter?,
+        quickFilterValue: Double,
+        advancedFilters: [VideoFilter],
+        settings: FilterSettings
     ) {
         let composition = AVMutableVideoComposition(asset: playerItem.asset, applyingCIFiltersWithHandler: { [weak self] request in
             guard let self = self else {
@@ -410,7 +559,17 @@ class VideoView: NSView {
             // Start with source image
             var currentImage = request.sourceImage
 
-            // Chain all filters together
+            // Chain all filters together (create per-frame to avoid thread-safety issues)
+            var filters: [CIFilter] = []
+            if let quickFilter = quickFilter,
+               let quick = quickFilter.createQuickFilter(normalizedValue: quickFilterValue) {
+                filters.append(quick)
+            }
+            for filter in advancedFilters {
+                if let created = filter.createFilter(settings: settings) {
+                    filters.append(created)
+                }
+            }
             for filter in filters {
                 filter.setValue(currentImage, forKey: kCIInputImageKey)
                 if let outputImage = filter.outputImage {
@@ -426,11 +585,8 @@ class VideoView: NSView {
         composition.renderSize = renderSize
 
         // Set frame duration based on video frame rate
-        if frameRate > 0 {
-            composition.frameDuration = CMTime(value: 1, timescale: CMTimeScale(frameRate))
-        } else {
-            composition.frameDuration = CMTime(value: 1, timescale: 30)
-        }
+        let fps = frameRate > 0 ? Double(frameRate) : 30.0
+        composition.frameDuration = CMTimeMakeWithSeconds(1.0 / fps, preferredTimescale: 600)
 
         playerItem.videoComposition = composition
     }

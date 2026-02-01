@@ -38,6 +38,7 @@ You can load videos in several ways:
 - **Drag and drop** — Drop a video file onto the window
 - **Click the drop zone** — Opens a file picker
 - **Keyboard** — Press **⌘O** to open a file
+- **YouTube link** — Click and hold **Open**, then paste a YouTube URL
 
 Supported formats include MP4, MOV, AVI, MKV, WebM, and ProRes.
 
