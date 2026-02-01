@@ -99,9 +99,16 @@ class VideoView: NSView {
         state.$videoURL
             .receive(on: DispatchQueue.main)
             .sink { [weak self] url in
-                if let url = url {
-                    self?.loadVideo(url: url)
+                guard let self = self, let url = url else { return }
+                // Skip VLC-only formats - VLCVideoView handles those
+                if VLCKitManager.shared.requiresVLCKit(url: url) {
+                    return
                 }
+                // Skip if playback engine is explicitly set to VLC
+                if self.videoState?.playbackEngine == .vlc {
+                    return
+                }
+                self.loadVideo(url: url)
             }
             .store(in: &cancellables)
 

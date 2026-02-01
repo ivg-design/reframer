@@ -441,7 +441,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private static var accessibilityPromptShown = false
+
     private func requestAccessibilityPermissionIfNeeded() {
+        // Only check/prompt once per app launch
+        guard !Self.accessibilityPromptShown else { return }
+        Self.accessibilityPromptShown = true
+
         // First check if already trusted (without prompting)
         if AXIsProcessTrusted() {
             return  // Already authorized, no prompt needed
@@ -794,7 +800,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 420, height: 24))
         inputField.placeholderString = "https://www.youtube.com/watch?v=..."
         inputField.setAccessibilityIdentifier("youtube-url-input")
-        if let clipboard = NSPasteboard.general.string(forType: .string) {
+        // Only pre-fill if clipboard contains a valid YouTube URL
+        if let clipboard = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           clipboard.hasPrefix("http"),
+           clipboard.contains("youtube") || clipboard.contains("youtu.be") {
             inputField.stringValue = clipboard
         }
         alert.accessoryView = inputField
