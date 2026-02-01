@@ -30,8 +30,11 @@ struct FilterSettings: Codable, Equatable {
     var lineOverlayThreshold: Double = 0.1  // 0.0 - 1.0
     var lineOverlayContrast: Double = 50.0  // 0.25 - 200.0
 
+    // MARK: - Saturation (standalone)
+    var saturationLevel: Double = 1.0  // 0.0 = grayscale, 1.0 = normal, 2.0 = vibrant
+
     // MARK: - Exposure
-    var exposure: Double = 1.0  // 0.0 - 3.0
+    var exposure: Double = 0.0  // -3.0 to +3.0 (negative = darker, positive = brighter)
 
     // MARK: - Factory Methods
 

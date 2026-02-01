@@ -178,8 +178,11 @@ class FilterPanelView: NSView {
         addSlider(key: "lineOverlayThreshold", label: "Line Threshold", min: 0, max: 1, defaultValue: 0.1)
         addSlider(key: "lineOverlayContrast", label: "Line Contrast", min: 0.25, max: 200, defaultValue: 50)
 
+        // Saturation
+        addSlider(key: "saturationLevel", label: "Saturation", min: 0, max: 2, defaultValue: 1.0)
+
         // Exposure
-        addSlider(key: "exposure", label: "Exposure EV", min: 0, max: 3, defaultValue: 1.0)
+        addSlider(key: "exposure", label: "Exposure EV", min: -3, max: 3, defaultValue: 0)
     }
 
     private func buildFilterCheckboxes() {
@@ -308,6 +311,7 @@ class FilterPanelView: NSView {
         setSlider("lineOverlayEdge", value: settings.lineOverlayEdge)
         setSlider("lineOverlayThreshold", value: settings.lineOverlayThreshold)
         setSlider("lineOverlayContrast", value: settings.lineOverlayContrast)
+        setSlider("saturationLevel", value: settings.saturationLevel)
         setSlider("exposure", value: settings.exposure)
     }
 
@@ -348,6 +352,7 @@ class FilterPanelView: NSView {
         case "lineOverlayEdge": settings.lineOverlayEdge = value
         case "lineOverlayThreshold": settings.lineOverlayThreshold = value
         case "lineOverlayContrast": settings.lineOverlayContrast = value
+        case "saturationLevel": settings.saturationLevel = value
         case "exposure": settings.exposure = value
         default: break
         }

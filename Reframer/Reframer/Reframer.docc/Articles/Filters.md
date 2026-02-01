@@ -14,12 +14,12 @@ Reframer includes a variety of video filters that can be applied in real-time. U
 | **Sharpen** | Increases image sharpness and detail |
 | **Unsharp Mask** | Professional sharpening with radius and intensity control |
 | **High Contrast** | Increases contrast for better visibility |
+| **Saturation** | Adjust color intensity (0 = grayscale, 1 = normal, 2 = vibrant) |
 | **Monochrome** | Converts to sepia/monochrome tones |
 | **Invert** | Inverts all colors |
 | **Line Overlay** | Creates a line-art effect |
 | **Noir** | Black and white film effect |
-| **Brighten** | Increases exposure |
-| **Darken** | Decreases exposure |
+| **Exposure** | Adjust brightness (negative = darker, positive = brighter) |
 
 ## Using Filters
 
@@ -48,8 +48,9 @@ Access filters through the **Filter** menu:
 
 Filters are applied in a consistent order when combined. For example:
 - **Edges + High Contrast** creates bold, visible outlines
-- **Sharpen + Monochrome** creates a crisp black-and-white reference
-- **Unsharp Mask + Brighten** enhances detail in dark footage
+- **Sharpen + Saturation (0)** creates a crisp grayscale reference
+- **Unsharp Mask + Exposure (+1)** enhances detail in dark footage
+- **Noir + Exposure (-0.5)** creates dramatic dark B&W
 
 ## Keyboard Shortcut
 
