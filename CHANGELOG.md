@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Global shortcut permission prompt handled explicitly
 - Frame/zoom/opacity inputs capture Cmd+Shift/Option/Ctrl arrow selectors
 - Scroll wheel discrete stepping triggers on any tick
+- Open button long-press reliably triggers YouTube prompt
+- Parameterless quick filters now keep the opacity field readable while disabling edits
 - Supported format detection checks UTType in addition to extensions
 - Mute toggle restores last volume instead of resetting
 - UI test runner now clears quarantine and re-signs before automation runs
