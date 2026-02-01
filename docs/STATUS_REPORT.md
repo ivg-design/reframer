@@ -1,6 +1,6 @@
 # Status Report (2026-02-01 - Session 5)
 
-## Current Status: 🟡 MPV Integration In Progress (Not Yet Validated)
+## Current Status: 🟡 MPV Integration In Progress (UI Automation Blocked)
 
 ## Session 5 Summary
 
@@ -23,7 +23,7 @@ This session replaces the previous extended‑format integration with libmpv and
    - Help + README + changelog updates started
 
 ### What’s Still Pending
-1. **Run remote runner build + UI tests** (not yet executed)
+1. **UI tests are blocked by macOS Input Monitoring** (TCC denies ListenEvent for DTServiceHub when tests are launched from non‑interactive shells). Terminal‑based GUI runner added, but Input Monitoring still requires manual approval on the runner.
 2. **Verify MPV rendering on target hardware**
 
 ---
@@ -46,6 +46,15 @@ ssh laptop "export UITEST_MODE=1 && /Users/ivg/Library/Developer/Xcode/DerivedDa
 # Kill and cleanup
 ssh laptop "pkill Reframer"
 ```
+
+### GUI Runner (for UI tests)
+
+```bash
+ssh laptop "/Users/ivg/github/video-overlay/Reframer-filters/scripts/runner_test_gui.sh"
+```
+
+If UI tests hang, approve Input Monitoring for **Terminal** and (if prompted) **Xcode** or **DTServiceHub** in:
+System Settings → Privacy & Security → Input Monitoring.
 
 ---
 

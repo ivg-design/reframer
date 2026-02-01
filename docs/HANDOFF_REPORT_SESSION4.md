@@ -24,6 +24,14 @@ ssh laptop "export UITEST_MODE=1 && /Users/ivg/Library/Developer/Xcode/DerivedDa
 ssh laptop "cd /Users/ivg/github/video-overlay/Reframer-filters/Reframer && xcodebuild -scheme Reframer -destination 'platform=macOS' test"
 ```
 
+### GUI Runner (Preferred for UI tests)
+
+```bash
+ssh laptop "/Users/ivg/github/video-overlay/Reframer-filters/scripts/runner_test_gui.sh"
+```
+
+If UI tests hang, approve Input Monitoring for **Terminal** and (if prompted) **Xcode** or **DTServiceHub** in System Settings → Privacy & Security → Input Monitoring.
+
 ### Notes
 - Keep the runner user logged in to allow AppKit UI tests to interact with windows.
 - Accessibility permissions must be granted once on the runner.
