@@ -74,6 +74,26 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
         done < <(find "$DERIVED_DATA_PATH/Build/Products" -name "Reframer*.app" -print 2>/dev/null)
     fi
 
+    # Ensure Accessibility permission for UI test runner (prevents automation prompt hang)
+    if command -v sqlite3 >/dev/null 2>&1 && [ -f "$HOME/Library/Application Support/com.apple.TCC/TCC.db" ]; then
+        RUNNER_APP=$(find "$DERIVED_DATA_PATH/Build/Products" -name "ReframerUITests-Runner.app" -print -quit 2>/dev/null || true)
+        if [ -n "$RUNNER_APP" ] && command -v csreq >/dev/null 2>&1; then
+            REQ=$(codesign -dr - "$RUNNER_APP" 2>/dev/null | sed -n 's/^# designated => //p')
+            if [ -n "$REQ" ]; then
+                TMP_REQ=$(mktemp)
+                /usr/bin/csreq -r "$REQ" -b "$TMP_REQ" 2>/dev/null || true
+                if [ -s "$TMP_REQ" ]; then
+                    CSREQ_BLOB=$(xxd -p "$TMP_REQ" | tr -d '\n')
+                    sqlite3 "$HOME/Library/Application Support/com.apple.TCC/TCC.db" \
+                        "INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, indirect_object_identifier) VALUES ('kTCCServiceAccessibility', 'com.reframer.app.ReframerUITests.xctrunner', 0, 2, 1, 1, X'$CSREQ_BLOB', 'UNUSED');" \
+                        2>/dev/null || true
+                    killall tccd >/dev/null 2>&1 || true
+                fi
+                rm -f "$TMP_REQ"
+            fi
+        fi
+    fi
+
     echo "=== Running Tests ===" | tee -a "$LOG_FILE"
     echo "Command: xcodebuild test-without-building -scheme $SCHEME -destination '$DESTINATION'" | tee -a "$LOG_FILE"
     echo "" | tee -a "$LOG_FILE"
