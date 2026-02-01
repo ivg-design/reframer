@@ -28,6 +28,7 @@
 		CCC00001 /* ReframerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC10001 /* ReframerUITests.swift */; };
 		CCC00002 /* ReframerUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC10002 /* ReframerUITestsLaunchTests.swift */; };
 		CCC00003 /* ReframerIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC10003 /* ReframerIntegrationTests.swift */; };
+		YT001006 /* ReframerYouTubeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001005 /* ReframerYouTubeUITests.swift */; };
 		DDD00001 /* test_30fps_2s.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10001 /* test_30fps_2s.mp4 */; };
 		DDD00002 /* test_60fps_5s.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10002 /* test_60fps_5s.mp4 */; };
 		DDD00003 /* test_4x3_1s.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10003 /* test_4x3_1s.mp4 */; };
@@ -86,6 +87,7 @@
 		CCC10001 /* ReframerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerUITests.swift; sourceTree = "<group>"; };
 		CCC10002 /* ReframerUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		CCC10003 /* ReframerIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerIntegrationTests.swift; sourceTree = "<group>"; };
+		YT001005 /* ReframerYouTubeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerYouTubeUITests.swift; sourceTree = "<group>"; };
 		CCC20002 /* ReframerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ReframerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D19D82333A5671C5FB146764 /* VideoFormats.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFormats.swift; sourceTree = "<group>"; };
 		DDD10001 /* test_30fps_2s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_30fps_2s.mp4; sourceTree = "<group>"; };
@@ -245,16 +247,17 @@
 				path = ReframerTests;
 				sourceTree = "<group>";
 			};
-		CCC40001 /* ReframerUITests */ = {
-			isa = PBXGroup;
-			children = (
-				CCC10001 /* ReframerUITests.swift */,
-				CCC10002 /* ReframerUITestsLaunchTests.swift */,
-				CCC10003 /* ReframerIntegrationTests.swift */,
-			);
-			path = ReframerUITests;
-			sourceTree = "<group>";
-		};
+			CCC40001 /* ReframerUITests */ = {
+				isa = PBXGroup;
+				children = (
+					CCC10001 /* ReframerUITests.swift */,
+					CCC10002 /* ReframerUITestsLaunchTests.swift */,
+					CCC10003 /* ReframerIntegrationTests.swift */,
+					YT001005 /* ReframerYouTubeUITests.swift */,
+				);
+				path = ReframerUITests;
+				sourceTree = "<group>";
+			};
 		DDD40001 /* TestFixtures */ = {
 			isa = PBXGroup;
 			children = (
@@ -436,16 +439,17 @@
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};
-		CCC50002 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				CCC00001 /* ReframerUITests.swift in Sources */,
-				CCC00002 /* ReframerUITestsLaunchTests.swift in Sources */,
-				CCC00003 /* ReframerIntegrationTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+			CCC50002 /* Sources */ = {
+				isa = PBXSourcesBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
+					CCC00001 /* ReframerUITests.swift in Sources */,
+					CCC00002 /* ReframerUITestsLaunchTests.swift in Sources */,
+					CCC00003 /* ReframerIntegrationTests.swift in Sources */,
+					YT001006 /* ReframerYouTubeUITests.swift in Sources */,
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */

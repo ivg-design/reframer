@@ -20,6 +20,11 @@ These are prerequisites that many tests depend on.
 - **Method**: Add optional launch argument to auto‑open fixture video and start paused.
 - **Pass**: App launches into known state, enabling deterministic UI tests.
 
+### F-004: YouTube URL hook (optional)
+- **Type**: Test harness
+- **Method**: Use `UITEST_YOUTUBE_URL` to run the YouTube streaming UI test against a real video.
+- **Pass**: The optional UI test can resolve and start playback when a URL is provided.
+
 ---
 
 ## Core Window Behavior
@@ -67,6 +72,16 @@ These are prerequisites that many tests depend on.
 - **Type**: Unit + integration
 - **Method**: `VideoFormats.isSupported` returns true for expected extensions. Load fixtures with matching UTTypes.
 - **Pass**: Supported list matches feature list; open dialog filters correctly.
+
+### V-001b: YouTube link playback (optional)
+- **Type**: UI test (optional)
+- **Method**: Long‑press **Open**, paste `UITEST_YOUTUBE_URL`, click **Open**, wait for timeline slider to enable.
+- **Pass**: Video loads and playback controls respond.
+
+### V-001c: VLC fallback for WebM (conditional)
+- **Type**: Integration/UI test (optional)
+- **Method**: Provide a `.webm` path and enable VLCKit; load via drag‑drop and verify playback/metadata updates.
+- **Pass**: Video renders with correct duration and frame counts.
 
 ### V-002: Play / pause toggle
 - **Type**: Integration/UI test
