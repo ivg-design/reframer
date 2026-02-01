@@ -12,7 +12,7 @@ enum VideoFilter: String, CaseIterable, Identifiable {
     case unsharpMask = "Unsharp Mask"
     case monochrome = "Monochrome"
     case invert = "Invert"
-    case lineOverlay = "Line Overlay"
+    case lineArt = "Line Art"
     case noir = "Noir"
 
     var id: String { rawValue }
@@ -29,7 +29,7 @@ enum VideoFilter: String, CaseIterable, Identifiable {
         case .unsharpMask: return "circle.hexagongrid"
         case .monochrome: return "paintpalette"
         case .invert: return "circle.lefthalf.striped.horizontal.inverse"
-        case .lineOverlay: return "pencil.and.outline"
+        case .lineArt: return "scribble.variable"
         case .noir: return "moon.fill"
         }
     }
@@ -46,7 +46,7 @@ enum VideoFilter: String, CaseIterable, Identifiable {
         case .unsharpMask: return "Professional sharpening"
         case .monochrome: return "Sepia/tint effect"
         case .invert: return "Invert all colors"
-        case .lineOverlay: return "Line drawing effect"
+        case .lineArt: return "Line drawing (can overlay)"
         case .noir: return "B&W film effect"
         }
     }
@@ -108,13 +108,14 @@ enum VideoFilter: String, CaseIterable, Identifiable {
         case .invert:
             return CIFilter(name: "CIColorInvert")
 
-        case .lineOverlay:
+        case .lineArt:
             let filter = CIFilter(name: "CILineOverlay")
-            filter?.setValue(settings.lineOverlayNoise, forKey: "inputNRNoiseLevel")
-            filter?.setValue(settings.lineOverlaySharpness, forKey: "inputNRSharpness")
-            filter?.setValue(settings.lineOverlayEdge, forKey: "inputEdgeIntensity")
-            filter?.setValue(settings.lineOverlayThreshold, forKey: "inputThreshold")
-            filter?.setValue(settings.lineOverlayContrast, forKey: "inputContrast")
+            // Simplified parameters with sensible defaults
+            filter?.setValue(0.07, forKey: "inputNRNoiseLevel")  // Fixed - noise reduction
+            filter?.setValue(0.71, forKey: "inputNRSharpness")   // Fixed - sharpness
+            filter?.setValue(settings.lineArtEdge, forKey: "inputEdgeIntensity")
+            filter?.setValue(settings.lineArtThreshold, forKey: "inputThreshold")
+            filter?.setValue(settings.lineArtContrast, forKey: "inputContrast")
             return filter
 
         case .noir:

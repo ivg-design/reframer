@@ -296,12 +296,10 @@ class FilterPanelView: NSView {
             noParams.textColor = .tertiaryLabelColor
             parametersContainer.addArrangedSubview(noParams)
 
-        case .lineOverlay:
-            addSlider(key: "lineOverlayNoise", label: "Noise", min: 0, max: 0.1, defaultValue: 0.07)
-            addSlider(key: "lineOverlaySharpness", label: "Sharpness", min: 0, max: 2, defaultValue: 0.71)
-            addSlider(key: "lineOverlayEdge", label: "Edge", min: 0, max: 200, defaultValue: 1.0)
-            addSlider(key: "lineOverlayThreshold", label: "Threshold", min: 0, max: 1, defaultValue: 0.1)
-            addSlider(key: "lineOverlayContrast", label: "Contrast", min: 0.25, max: 200, defaultValue: 50)
+        case .lineArt:
+            addSlider(key: "lineArtEdge", label: "Sensitivity", min: 0.1, max: 200, defaultValue: 50)
+            addSlider(key: "lineArtThreshold", label: "Threshold", min: 0, max: 1, defaultValue: 0.1)
+            addSlider(key: "lineArtContrast", label: "Darkness", min: 1, max: 200, defaultValue: 50)
         }
     }
 
@@ -391,11 +389,9 @@ class FilterPanelView: NSView {
         setSlider("monochromeG", value: settings.monochromeG)
         setSlider("monochromeB", value: settings.monochromeB)
         setSlider("monochromeIntensity", value: settings.monochromeIntensity)
-        setSlider("lineOverlayNoise", value: settings.lineOverlayNoise)
-        setSlider("lineOverlaySharpness", value: settings.lineOverlaySharpness)
-        setSlider("lineOverlayEdge", value: settings.lineOverlayEdge)
-        setSlider("lineOverlayThreshold", value: settings.lineOverlayThreshold)
-        setSlider("lineOverlayContrast", value: settings.lineOverlayContrast)
+        setSlider("lineArtEdge", value: settings.lineArtEdge)
+        setSlider("lineArtThreshold", value: settings.lineArtThreshold)
+        setSlider("lineArtContrast", value: settings.lineArtContrast)
     }
 
     private func setSlider(_ key: String, value: Double) {
@@ -431,11 +427,9 @@ class FilterPanelView: NSView {
         case "monochromeG": settings.monochromeG = value
         case "monochromeB": settings.monochromeB = value
         case "monochromeIntensity": settings.monochromeIntensity = value
-        case "lineOverlayNoise": settings.lineOverlayNoise = value
-        case "lineOverlaySharpness": settings.lineOverlaySharpness = value
-        case "lineOverlayEdge": settings.lineOverlayEdge = value
-        case "lineOverlayThreshold": settings.lineOverlayThreshold = value
-        case "lineOverlayContrast": settings.lineOverlayContrast = value
+        case "lineArtEdge": settings.lineArtEdge = value
+        case "lineArtThreshold": settings.lineArtThreshold = value
+        case "lineArtContrast": settings.lineArtContrast = value
         default: break
         }
 
