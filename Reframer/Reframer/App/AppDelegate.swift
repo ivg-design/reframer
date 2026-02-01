@@ -103,11 +103,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         } else {
             // Show error for unsupported formats
-            let alert = NSAlert()
-            alert.messageText = "Unsupported Format"
-            alert.informativeText = "The file '\(url.lastPathComponent)' is not a supported video format.\n\nSupported formats: \(VideoFormats.displayString)"
-            alert.alertStyle = .warning
-            alert.runModal()
+            showErrorAlert(title: "Unsupported Format",
+                           message: "The file '\(url.lastPathComponent)' is not a supported video format.\n\nSupported formats: \(VideoFormats.displayString)")
         }
     }
 
@@ -808,14 +805,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.message = "Select a video file"
-        panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url else { return }
-            self?.videoState.videoAudioURL = nil
-            self?.videoState.videoHeaders = nil
-            self?.videoState.videoTitle = nil
-            self?.videoState.playbackEngine = .auto
-            self?.videoState.isVideoLoaded = false
-            self?.videoState.videoURL = url
+
+        // Show as sheet attached to main window so it appears above the floating window
+        if let window = mainWindow {
+            panel.beginSheetModal(for: window) { [weak self] response in
+                guard response == .OK, let url = panel.url else { return }
+                self?.videoState.videoAudioURL = nil
+                self?.videoState.videoHeaders = nil
+                self?.videoState.videoTitle = nil
+                self?.videoState.playbackEngine = .auto
+                self?.videoState.isVideoLoaded = false
+                self?.videoState.videoURL = url
+            }
+        } else {
+            panel.begin { [weak self] response in
+                guard response == .OK, let url = panel.url else { return }
+                self?.videoState.videoAudioURL = nil
+                self?.videoState.videoHeaders = nil
+                self?.videoState.videoTitle = nil
+                self?.videoState.playbackEngine = .auto
+                self?.videoState.isVideoLoaded = false
+                self?.videoState.videoURL = url
+            }
         }
     }
 
@@ -837,16 +848,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: "Open")
         alert.addButton(withTitle: "Cancel")
 
-        if alert.runModal() == .alertFirstButtonReturn {
+        // Show as sheet attached to main window so it appears above the floating window
+        guard let window = mainWindow else { return }
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
             let trimmed = inputField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let url = URL(string: trimmed) else {
-                let errorAlert = NSAlert()
-                errorAlert.messageText = "Invalid URL"
-                errorAlert.informativeText = "Please enter a valid YouTube URL."
-                errorAlert.runModal()
+                self?.showErrorAlert(title: "Invalid URL", message: "Please enter a valid YouTube URL.")
                 return
             }
-            resolveYouTubeURL(url)
+            self?.resolveYouTubeURL(url)
+        }
+    }
+
+    /// Show an error alert as a sheet on the main window
+    private func showErrorAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        if let window = mainWindow {
+            alert.beginSheetModal(for: window, completionHandler: nil)
+        } else {
+            alert.runModal()
         }
     }
 
@@ -861,11 +885,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             switch result {
             case .failure(let error):
-                let alert = NSAlert()
-                alert.messageText = "YouTube Playback Failed"
-                alert.informativeText = error.localizedDescription
-                alert.alertStyle = .warning
-                alert.runModal()
+                self.showErrorAlert(title: "YouTube Playback Failed", message: error.localizedDescription)
             case .success(let selection):
                 var candidate = selection.primary
                 var engine: VideoState.PlaybackEngine = .avFoundation
@@ -878,11 +898,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         candidate = fallback
                         engine = .avFoundation
                     } else {
-                        let alert = NSAlert()
-                        alert.messageText = "YouTube Format Not Supported"
-                        alert.informativeText = "The highest-quality stream requires VLC. Install and enable VLCKit to play this video."
-                        alert.alertStyle = .warning
-                        alert.runModal()
+                        self.showErrorAlert(title: "YouTube Format Not Supported",
+                                            message: "The highest-quality stream requires VLC. Install and enable VLCKit to play this video.")
                         return
                     }
                 }
@@ -1014,12 +1031,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let alert = NSAlert()
         alert.messageText = "Move to Applications folder?"
-        alert.informativeText = "Video Overlay should be installed in /Applications."
+        alert.informativeText = "Reframer should be installed in /Applications."
         alert.addButton(withTitle: "Move")
         alert.addButton(withTitle: "Cancel")
-        let response = alert.runModal()
-        guard response == .alertFirstButtonReturn else { return }
 
+        // Show as sheet if main window is ready, otherwise use modal
+        let handleResponse: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            self?.performMoveToApplications(from: bundleURL, to: applicationsURL)
+        }
+
+        if let window = mainWindow {
+            alert.beginSheetModal(for: window, completionHandler: handleResponse)
+        } else {
+            handleResponse(alert.runModal())
+        }
+    }
+
+    private func performMoveToApplications(from bundleURL: URL, to applicationsURL: URL) {
         let destinationURL = applicationsURL.appendingPathComponent(bundleURL.lastPathComponent)
         let fileManager = FileManager.default
 
@@ -1042,10 +1071,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     NSApp.terminate(nil)
                 }
             } catch {
-                let errorAlert = NSAlert(error: error)
-                errorAlert.messageText = "Could not move app"
-                errorAlert.informativeText = "Please drag Reframer into /Applications manually."
-                errorAlert.runModal()
+                showErrorAlert(title: "Could not move app",
+                               message: "Please drag Reframer into /Applications manually.\n\n\(error.localizedDescription)")
             }
         }
     }
