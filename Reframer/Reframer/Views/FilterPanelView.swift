@@ -15,7 +15,7 @@ class FilterPanelView: NSView {
     private let visualEffectView = NSVisualEffectView()
     private let scrollView = NSScrollView()
     private let contentStack = NSStackView()
-    private let titleLabel = NSTextField(labelWithString: "Filter Settings")
+    private let titleLabel = NSTextField(labelWithString: "Filters")
     private let closeButton = NSButton()
     private let resetButton = NSButton()
     private let clearButton = NSButton()
@@ -23,9 +23,12 @@ class FilterPanelView: NSView {
     // Filter checkboxes
     private var filterCheckboxes: [VideoFilter: NSButton] = [:]
 
-    // Sliders organized by section
+    // Sliders organized by filter
     private var sliders: [String: NSSlider] = [:]
     private var valueLabels: [String: NSTextField] = [:]
+
+    // Container for parameter sliders (rebuilt when filters change)
+    private var parametersContainer = NSStackView()
 
     // MARK: - Initialization
 
@@ -97,7 +100,7 @@ class FilterPanelView: NSView {
 
         // Content stack
         contentStack.orientation = .vertical
-        contentStack.spacing = 12
+        contentStack.spacing = 16
         contentStack.alignment = .leading
         contentStack.translatesAutoresizingMaskIntoConstraints = false
 
@@ -125,106 +128,124 @@ class FilterPanelView: NSView {
             contentStack.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -20)
         ])
 
-        buildContent()
+        buildStaticContent()
     }
 
     // MARK: - Content Building
 
-    private func buildContent() {
+    private func buildStaticContent() {
         contentStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         filterCheckboxes.removeAll()
+
+        // Build all filter checkboxes in a vertical list
+        let checkboxContainer = NSStackView()
+        checkboxContainer.orientation = .vertical
+        checkboxContainer.spacing = 6
+        checkboxContainer.alignment = .leading
+
+        for filter in VideoFilter.allCases {
+            let checkbox = NSButton(checkboxWithTitle: filter.rawValue, target: self, action: #selector(filterCheckboxChanged(_:)))
+            checkbox.font = .systemFont(ofSize: 12)
+            checkbox.identifier = NSUserInterfaceItemIdentifier(filter.rawValue)
+            filterCheckboxes[filter] = checkbox
+            checkboxContainer.addArrangedSubview(checkbox)
+        }
+
+        contentStack.addArrangedSubview(checkboxContainer)
+
+        // Parameters container (will be populated dynamically)
+        parametersContainer.orientation = .vertical
+        parametersContainer.spacing = 12
+        parametersContainer.alignment = .leading
+        parametersContainer.translatesAutoresizingMaskIntoConstraints = false
+        contentStack.addArrangedSubview(parametersContainer)
+    }
+
+    /// Rebuild parameter sliders based on active filters
+    private func rebuildParameters(for activeFilters: Set<VideoFilter>) {
+        // Clear existing
+        parametersContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
         sliders.removeAll()
         valueLabels.removeAll()
 
-        // Active Filters section
-        addSection("Active Filters")
-        buildFilterCheckboxes()
+        guard !activeFilters.isEmpty else { return }
 
-        // Separator
+        // Add separator
         let separator = NSBox()
         separator.boxType = .separator
         separator.translatesAutoresizingMaskIntoConstraints = false
-        contentStack.addArrangedSubview(separator)
-        separator.widthAnchor.constraint(equalTo: contentStack.widthAnchor).isActive = true
+        parametersContainer.addArrangedSubview(separator)
+        separator.widthAnchor.constraint(equalTo: parametersContainer.widthAnchor).isActive = true
 
-        // Parameter Sliders
-        addSection("Filter Parameters")
+        // Add sliders for each active filter (in consistent order)
+        let orderedFilters = VideoFilter.allCases.filter { activeFilters.contains($0) }
 
-        // Edge Detection
-        addSlider(key: "edgeIntensity", label: "Edge Intensity", min: 0, max: 10, defaultValue: 1.0)
-
-        // Sharpen
-        addSlider(key: "sharpness", label: "Sharpness", min: 0, max: 2, defaultValue: 0.4)
-
-        // Unsharp Mask
-        addSlider(key: "unsharpRadius", label: "Unsharp Radius", min: 0, max: 10, defaultValue: 2.5)
-        addSlider(key: "unsharpIntensity", label: "Unsharp Intensity", min: 0, max: 2, defaultValue: 0.5)
-
-        // Color Controls
-        addSlider(key: "brightness", label: "Brightness", min: -1, max: 1, defaultValue: 0)
-        addSlider(key: "contrast", label: "Contrast", min: 0.25, max: 4, defaultValue: 1.5)
-        addSlider(key: "saturation", label: "Saturation", min: 0, max: 2, defaultValue: 1.0)
-
-        // Monochrome
-        addSlider(key: "monochromeR", label: "Mono Red", min: 0, max: 1, defaultValue: 0.6)
-        addSlider(key: "monochromeG", label: "Mono Green", min: 0, max: 1, defaultValue: 0.45)
-        addSlider(key: "monochromeB", label: "Mono Blue", min: 0, max: 1, defaultValue: 0.3)
-        addSlider(key: "monochromeIntensity", label: "Mono Intensity", min: 0, max: 1, defaultValue: 1.0)
-
-        // Line Overlay
-        addSlider(key: "lineOverlayNoise", label: "Line Noise", min: 0, max: 0.1, defaultValue: 0.07)
-        addSlider(key: "lineOverlaySharpness", label: "Line Sharpness", min: 0, max: 2, defaultValue: 0.71)
-        addSlider(key: "lineOverlayEdge", label: "Line Edge", min: 0, max: 200, defaultValue: 1.0)
-        addSlider(key: "lineOverlayThreshold", label: "Line Threshold", min: 0, max: 1, defaultValue: 0.1)
-        addSlider(key: "lineOverlayContrast", label: "Line Contrast", min: 0.25, max: 200, defaultValue: 50)
-
-        // Saturation
-        addSlider(key: "saturationLevel", label: "Saturation", min: 0, max: 2, defaultValue: 1.0)
-
-        // Exposure
-        addSlider(key: "exposure", label: "Exposure EV", min: -3, max: 3, defaultValue: 0)
-    }
-
-    private func buildFilterCheckboxes() {
-        let grid = NSGridView()
-        grid.translatesAutoresizingMaskIntoConstraints = false
-        grid.rowSpacing = 4
-        grid.columnSpacing = 8
-
-        // Create 2 columns of checkboxes
-        let filters = VideoFilter.allCases
-        let midpoint = (filters.count + 1) / 2
-
-        for i in 0..<midpoint {
-            let leftFilter = filters[i]
-            let leftCheckbox = createFilterCheckbox(for: leftFilter)
-            filterCheckboxes[leftFilter] = leftCheckbox
-
-            if i + midpoint < filters.count {
-                let rightFilter = filters[i + midpoint]
-                let rightCheckbox = createFilterCheckbox(for: rightFilter)
-                filterCheckboxes[rightFilter] = rightCheckbox
-                grid.addRow(with: [leftCheckbox, rightCheckbox])
-            } else {
-                grid.addRow(with: [leftCheckbox, NSView()])
-            }
+        for filter in orderedFilters {
+            addParametersForFilter(filter)
         }
 
-        contentStack.addArrangedSubview(grid)
+        // Update slider values from current settings
+        if let settings = videoState?.filterSettings {
+            updateSliders(from: settings)
+        }
     }
 
-    private func createFilterCheckbox(for filter: VideoFilter) -> NSButton {
-        let checkbox = NSButton(checkboxWithTitle: filter.rawValue, target: self, action: #selector(filterCheckboxChanged(_:)))
-        checkbox.font = .systemFont(ofSize: 11)
-        checkbox.identifier = NSUserInterfaceItemIdentifier(filter.rawValue)
-        return checkbox
-    }
+    private func addParametersForFilter(_ filter: VideoFilter) {
+        // Add filter name as header
+        let header = NSTextField(labelWithString: filter.rawValue)
+        header.font = .systemFont(ofSize: 11, weight: .semibold)
+        header.textColor = .controlAccentColor
+        parametersContainer.addArrangedSubview(header)
 
-    private func addSection(_ title: String) {
-        let label = NSTextField(labelWithString: title)
-        label.font = .systemFont(ofSize: 12, weight: .semibold)
-        label.textColor = .secondaryLabelColor
-        contentStack.addArrangedSubview(label)
+        // Add sliders based on filter type
+        switch filter {
+        case .edges:
+            addSlider(key: "edgeIntensity", label: "Intensity", min: 0, max: 10, defaultValue: 1.0)
+
+        case .sharpen:
+            addSlider(key: "sharpness", label: "Sharpness", min: 0, max: 2, defaultValue: 0.4)
+
+        case .unsharpMask:
+            addSlider(key: "unsharpRadius", label: "Radius", min: 0, max: 10, defaultValue: 2.5)
+            addSlider(key: "unsharpIntensity", label: "Intensity", min: 0, max: 2, defaultValue: 0.5)
+
+        case .contrast:
+            addSlider(key: "brightness", label: "Brightness", min: -1, max: 1, defaultValue: 0)
+            addSlider(key: "contrast", label: "Contrast", min: 0.25, max: 4, defaultValue: 1.5)
+
+        case .saturation:
+            addSlider(key: "saturationLevel", label: "Level", min: 0, max: 2, defaultValue: 1.0)
+
+        case .monochrome:
+            addSlider(key: "monochromeR", label: "Red", min: 0, max: 1, defaultValue: 0.6)
+            addSlider(key: "monochromeG", label: "Green", min: 0, max: 1, defaultValue: 0.45)
+            addSlider(key: "monochromeB", label: "Blue", min: 0, max: 1, defaultValue: 0.3)
+            addSlider(key: "monochromeIntensity", label: "Intensity", min: 0, max: 1, defaultValue: 1.0)
+
+        case .invert:
+            // No parameters
+            let noParams = NSTextField(labelWithString: "No adjustable parameters")
+            noParams.font = .systemFont(ofSize: 10)
+            noParams.textColor = .tertiaryLabelColor
+            parametersContainer.addArrangedSubview(noParams)
+
+        case .lineOverlay:
+            addSlider(key: "lineOverlayNoise", label: "Noise", min: 0, max: 0.1, defaultValue: 0.07)
+            addSlider(key: "lineOverlaySharpness", label: "Sharpness", min: 0, max: 2, defaultValue: 0.71)
+            addSlider(key: "lineOverlayEdge", label: "Edge", min: 0, max: 200, defaultValue: 1.0)
+            addSlider(key: "lineOverlayThreshold", label: "Threshold", min: 0, max: 1, defaultValue: 0.1)
+            addSlider(key: "lineOverlayContrast", label: "Contrast", min: 0.25, max: 200, defaultValue: 50)
+
+        case .noir:
+            // No parameters
+            let noParams = NSTextField(labelWithString: "No adjustable parameters")
+            noParams.font = .systemFont(ofSize: 10)
+            noParams.textColor = .tertiaryLabelColor
+            parametersContainer.addArrangedSubview(noParams)
+
+        case .exposure:
+            addSlider(key: "exposure", label: "EV", min: -3, max: 3, defaultValue: 0)
+        }
     }
 
     private func addSlider(key: String, label: String, min: Double, max: Double, defaultValue: Double) {
@@ -260,11 +281,11 @@ class FilterPanelView: NSView {
         row.addArrangedSubview(valueLabel)
 
         NSLayoutConstraint.activate([
-            nameLabel.widthAnchor.constraint(equalToConstant: 100),
-            valueLabel.widthAnchor.constraint(equalToConstant: 50)
+            nameLabel.widthAnchor.constraint(equalToConstant: 70),
+            valueLabel.widthAnchor.constraint(equalToConstant: 45)
         ])
 
-        contentStack.addArrangedSubview(row)
+        parametersContainer.addArrangedSubview(row)
     }
 
     // MARK: - State Binding
@@ -277,6 +298,7 @@ class FilterPanelView: NSView {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] activeFilters in
                 self?.updateFilterCheckboxes(activeFilters: activeFilters)
+                self?.rebuildParameters(for: activeFilters)
             }
             .store(in: &cancellables)
 
@@ -301,7 +323,7 @@ class FilterPanelView: NSView {
         setSlider("unsharpIntensity", value: settings.unsharpIntensity)
         setSlider("brightness", value: settings.brightness)
         setSlider("contrast", value: settings.contrast)
-        setSlider("saturation", value: settings.saturation)
+        setSlider("saturationLevel", value: settings.saturationLevel)
         setSlider("monochromeR", value: settings.monochromeR)
         setSlider("monochromeG", value: settings.monochromeG)
         setSlider("monochromeB", value: settings.monochromeB)
@@ -311,7 +333,6 @@ class FilterPanelView: NSView {
         setSlider("lineOverlayEdge", value: settings.lineOverlayEdge)
         setSlider("lineOverlayThreshold", value: settings.lineOverlayThreshold)
         setSlider("lineOverlayContrast", value: settings.lineOverlayContrast)
-        setSlider("saturationLevel", value: settings.saturationLevel)
         setSlider("exposure", value: settings.exposure)
     }
 
@@ -342,7 +363,7 @@ class FilterPanelView: NSView {
         case "unsharpIntensity": settings.unsharpIntensity = value
         case "brightness": settings.brightness = value
         case "contrast": settings.contrast = value
-        case "saturation": settings.saturation = value
+        case "saturationLevel": settings.saturationLevel = value
         case "monochromeR": settings.monochromeR = value
         case "monochromeG": settings.monochromeG = value
         case "monochromeB": settings.monochromeB = value
@@ -352,7 +373,6 @@ class FilterPanelView: NSView {
         case "lineOverlayEdge": settings.lineOverlayEdge = value
         case "lineOverlayThreshold": settings.lineOverlayThreshold = value
         case "lineOverlayContrast": settings.lineOverlayContrast = value
-        case "saturationLevel": settings.saturationLevel = value
         case "exposure": settings.exposure = value
         default: break
         }
