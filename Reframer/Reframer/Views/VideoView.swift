@@ -1,5 +1,6 @@
 import Cocoa
 import AVFoundation
+import CoreImage
 import Combine
 
 /// Pure AppKit video view with zoom, pan, and mouse handling
@@ -10,8 +11,12 @@ class VideoView: NSView {
     private let playerLayer = AVPlayerLayer()
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
+    private var currentAsset: AVURLAsset?
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
+
+    // Core Image context for filter processing (reused for performance)
+    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     weak var videoState: VideoState? {
         didSet { bindState() }
@@ -117,6 +122,17 @@ class VideoView: NSView {
             .compactMap { $0.object as? Int }
             .sink { [weak self] amount in self?.stepFrame(forward: false, amount: amount) }
             .store(in: &cancellables)
+
+        // Observe filter changes
+        state.$activeFilter
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyCurrentFilter() }
+            .store(in: &cancellables)
+
+        state.$filterSettings
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyCurrentFilter() }
+            .store(in: &cancellables)
     }
 
     // MARK: - Layout
@@ -185,10 +201,14 @@ class VideoView: NSView {
         lastSeekTime = -1  // Allow scrubbing from the start
 
         let asset = AVURLAsset(url: url)
+        currentAsset = asset
         playerItem = AVPlayerItem(asset: asset)
         player = AVPlayer(playerItem: playerItem)
         player?.volume = state.volume
         playerLayer.player = player
+
+        // Apply current filter if any
+        applyCurrentFilter()
 
         // Load asset properties
         Task { [weak self, weak state] in
@@ -299,10 +319,96 @@ class VideoView: NSView {
         player?.pause()
         player = nil
         playerItem = nil
+        currentAsset = nil
     }
 
     deinit {
         cleanup()
+    }
+
+    // MARK: - Video Filters
+
+    private func applyCurrentFilter() {
+        guard let asset = currentAsset,
+              let state = videoState,
+              let playerItem = playerItem else { return }
+
+        // If no filter, remove any existing composition
+        guard state.activeFilter != .none else {
+            playerItem.videoComposition = nil
+            return
+        }
+
+        // Create filter
+        guard let filter = state.activeFilter.createFilter(settings: state.filterSettings) else {
+            playerItem.videoComposition = nil
+            return
+        }
+
+        // Get video track to determine size and timing
+        Task { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                let tracks = try await asset.load(.tracks)
+                guard let videoTrack = tracks.first(where: { $0.mediaType == .video }) else { return }
+
+                let (naturalSize, preferredTransform, nominalFrameRate) = try await videoTrack.load(.naturalSize, .preferredTransform, .nominalFrameRate)
+                let transformedSize = naturalSize.applying(preferredTransform)
+                let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
+
+                await MainActor.run {
+                    self.createVideoComposition(
+                        for: playerItem,
+                        renderSize: renderSize,
+                        frameRate: nominalFrameRate,
+                        filter: filter
+                    )
+                }
+            } catch {
+                print("Error loading video track for filter: \(error)")
+            }
+        }
+    }
+
+    private func createVideoComposition(
+        for playerItem: AVPlayerItem,
+        renderSize: CGSize,
+        frameRate: Float,
+        filter: CIFilter
+    ) {
+        let composition = AVMutableVideoComposition(asset: playerItem.asset, applyingCIFiltersWithHandler: { [weak self] request in
+            guard let self = self else {
+                request.finish(with: request.sourceImage, context: nil)
+                return
+            }
+
+            // Get source image
+            let sourceImage = request.sourceImage
+
+            // Apply filter
+            filter.setValue(sourceImage, forKey: kCIInputImageKey)
+
+            // Get output or fall back to source
+            if let outputImage = filter.outputImage {
+                // Clamp to extent to prevent infinite extent issues with some filters
+                let clampedImage = outputImage.clamped(to: sourceImage.extent)
+                request.finish(with: clampedImage, context: self.ciContext)
+            } else {
+                request.finish(with: sourceImage, context: self.ciContext)
+            }
+        })
+
+        composition.renderSize = renderSize
+
+        // Set frame duration based on video frame rate
+        if frameRate > 0 {
+            composition.frameDuration = CMTime(value: 1, timescale: CMTimeScale(frameRate))
+        } else {
+            composition.frameDuration = CMTime(value: 1, timescale: 30)
+        }
+
+        playerItem.videoComposition = composition
     }
 
     // MARK: - Mouse Handling

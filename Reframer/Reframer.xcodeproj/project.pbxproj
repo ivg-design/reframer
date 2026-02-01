@@ -10,6 +10,10 @@
 		0631DC8CF1CB9806E1F13AE0 /* ControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242CE7E3F5EFF404409747F7 /* ControlBar.swift */; };
 		0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19D82333A5671C5FB146764 /* VideoFormats.swift */; };
 		15FDF44DEF2AEB44C895443B /* VideoState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE63ACD63859E708710A97D4 /* VideoState.swift */; };
+		VF001002 /* VideoFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF001001 /* VideoFilter.swift */; };
+		FS001002 /* FilterSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FS001001 /* FilterSettings.swift */; };
+		FM001002 /* FilterMenuButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = FM001001 /* FilterMenuButton.swift */; };
+		FP001002 /* FilterPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FP001001 /* FilterPanelView.swift */; };
 		2491A9B249AD2563B719271A /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C014B4F5CB12CD15A1A186 /* Notifications.swift */; };
 		370628C9CD00AD6AA6DF0707 /* ControlBar.xib in Resources */ = {isa = PBXBuildFile; fileRef = B972E974DDAFCDB4952DE88C /* ControlBar.xib */; };
 		5E887FAA7C23F19E7451BD73 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8072E56EC759E00E54249624 /* MainViewController.swift */; };
@@ -63,6 +67,10 @@
 		AAA10013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AAA20001 /* Reframer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Reframer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE63ACD63859E708710A97D4 /* VideoState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoState.swift; sourceTree = "<group>"; };
+		VF001001 /* VideoFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilter.swift; sourceTree = "<group>"; };
+		FS001001 /* FilterSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FilterSettings.swift; sourceTree = "<group>"; };
+		FM001001 /* FilterMenuButton.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FilterMenuButton.swift; sourceTree = "<group>"; };
+		FP001001 /* FilterPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FilterPanelView.swift; sourceTree = "<group>"; };
 		B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EdgeIndicatorView.swift; sourceTree = "<group>"; };
 		B972E974DDAFCDB4952DE88C /* ControlBar.xib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.xib; path = ControlBar.xib; sourceTree = "<group>"; };
 		BBB10001 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
@@ -163,6 +171,8 @@
 				8072E56EC759E00E54249624 /* MainViewController.swift */,
 				1DD11BE9E49C9FFF9BB26A6E /* HelpView.swift */,
 				B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */,
+				FM001001 /* FilterMenuButton.swift */,
+				FP001001 /* FilterPanelView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -171,6 +181,8 @@
 			isa = PBXGroup;
 			children = (
 				AE63ACD63859E708710A97D4 /* VideoState.swift */,
+				VF001001 /* VideoFilter.swift */,
+				FS001001 /* FilterSettings.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -377,6 +389,10 @@
 				0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */,
 				2491A9B249AD2563B719271A /* Notifications.swift in Sources */,
 				903D85FA96F4D67AAE7D51A6 /* EdgeIndicatorView.swift in Sources */,
+				VF001002 /* VideoFilter.swift in Sources */,
+				FS001002 /* FilterSettings.swift in Sources */,
+				FM001002 /* FilterMenuButton.swift in Sources */,
+				FP001002 /* FilterPanelView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
