@@ -442,12 +442,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func requestAccessibilityPermissionIfNeeded() {
+        // First check if already trusted (without prompting)
+        if AXIsProcessTrusted() {
+            return  // Already authorized, no prompt needed
+        }
+
+        // Only prompt if not already trusted and not in UI test mode
         let shouldPrompt = ProcessInfo.processInfo.environment["UITEST_MODE"] == nil
         if shouldPrompt {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(options)
-        } else {
-            _ = AXIsProcessTrusted()
         }
     }
 
