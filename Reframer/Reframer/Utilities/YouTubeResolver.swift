@@ -240,15 +240,16 @@ final class YouTubeResolver {
         let bestAVVideo = videoOnlyNoAV1.filter { $0.isAVFoundationCompatibleVideo }.max(by: formatSort)
         let bestAVAudio = audioOnly.filter { $0.isAVFoundationCompatibleAudio }.max(by: formatSort)
 
-        // VLC compatible (VP8/VP9 WebM, excluding AV1)
-        let bestVLCCombined = combinedNoAV1.filter { $0.isVLCCompatible }.max(by: formatSort)
-        let bestVLCVideo = videoOnlyNoAV1.filter { $0.isVLCCompatible }.max(by: formatSort)
+        // VLC-only: VP8/VP9 WebM that are NOT playable by AVFoundation
+        // These are specifically for VLC fallback when AVFoundation can't play
+        let bestVLCOnlyCombined = combinedNoAV1.filter { $0.isVPx && $0.ext == "webm" }.max(by: formatSort)
+        let bestVLCOnlyVideo = videoOnlyNoAV1.filter { $0.isVPx && $0.ext == "webm" }.max(by: formatSort)
 
         // Log available formats for debugging
         print("YouTubeResolver: Found \(formats.count) formats total")
         print("YouTubeResolver: AV1 formats: \(formats.filter { $0.isAV1 }.count) (excluded)")
         print("YouTubeResolver: AVFoundation-compatible: \(videoOnlyNoAV1.filter { $0.isAVFoundationCompatibleVideo }.count) video, \(audioOnly.filter { $0.isAVFoundationCompatibleAudio }.count) audio")
-        print("YouTubeResolver: VLC-compatible (VP8/VP9): \(videoOnlyNoAV1.filter { $0.isVPx }.count) video")
+        print("YouTubeResolver: VLC-only (VP8/VP9 WebM): \(combinedNoAV1.filter { $0.isVPx && $0.ext == "webm" }.count) combined, \(videoOnlyNoAV1.filter { $0.isVPx && $0.ext == "webm" }.count) video")
 
         // Primary: AVFoundation compatible
         let avCandidate: YouTubeStreamCandidate? = {
@@ -271,9 +272,10 @@ final class YouTubeResolver {
             return nil
         }()
 
-        // Fallback: VLC compatible (VP8/VP9 WebM) - NOT AV1
+        // Fallback: VLC-only (VP8/VP9 WebM) - formats that require VLC
         let vlcCandidate: YouTubeStreamCandidate? = {
-            if let video = bestVLCVideo, let audio = bestAVAudio {
+            // Prefer VP9 video-only + m4a audio (better quality separation)
+            if let video = bestVLCOnlyVideo, let audio = bestAVAudio {
                 return YouTubeStreamCandidate(
                     videoURL: video.url,
                     audioURL: audio.url,
@@ -281,7 +283,8 @@ final class YouTubeResolver {
                     isAVFoundationCompatible: false
                 )
             }
-            if let combined = bestVLCCombined {
+            // Fall back to combined VP9 WebM if no separate tracks
+            if let combined = bestVLCOnlyCombined {
                 return YouTubeStreamCandidate(
                     videoURL: combined.url,
                     audioURL: nil,

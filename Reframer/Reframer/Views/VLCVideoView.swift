@@ -1,8 +1,18 @@
 import Cocoa
 import Combine
+import os.log
 
 /// Video view that uses VLCKit for playback (dynamically loaded)
 class VLCVideoView: NSView {
+
+    // MARK: - Debug Logging
+
+    private static let debugLog = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "com.reframer", category: "VLCVideoView")
+
+    private func vlcLog(_ message: String) {
+        os_log("%{public}@", log: Self.debugLog, type: .debug, message)
+        print("VLCVideoView: \(message)")
+    }
 
     // MARK: - Properties
 
@@ -36,7 +46,7 @@ class VLCVideoView: NSView {
         layer?.backgroundColor = .clear
 
         guard VLCKitManager.shared.isReady else {
-            print("VLCVideoView: VLCKit not ready")
+            vlcLog("VLCKit not ready")
             return
         }
 
@@ -46,16 +56,16 @@ class VLCVideoView: NSView {
     // MARK: - VLCKit Setup
 
     private func setupVLCPlayer() {
-        print("VLCVideoView: Setting up VLC player...")
+        vlcLog("Setting up VLC player...")
         if let pluginPath = getenv("VLC_PLUGIN_PATH") {
-            print("VLCVideoView: VLC_PLUGIN_PATH = \(String(cString: pluginPath))")
+            vlcLog("VLC_PLUGIN_PATH = \(String(cString: pluginPath))")
         } else {
-            print("VLCVideoView: VLC_PLUGIN_PATH not set!")
+            vlcLog("VLC_PLUGIN_PATH not set!")
         }
 
         // First create the VLCVideoView (the drawable)
         guard let videoViewClass = NSClassFromString("VLCVideoView") as? NSView.Type else {
-            print("VLCVideoView: VLCVideoView class not found, using self as drawable")
+            vlcLog("VLCVideoView class not found, using self as drawable")
             setupPlayerWithDrawable(self)
             return
         }
@@ -64,48 +74,43 @@ class VLCVideoView: NSView {
         videoView.autoresizingMask = [.width, .height]
         addSubview(videoView)
         vlcVideoView = videoView
-        print("VLCVideoView: Created VLCVideoView")
+        vlcLog("Created VLCVideoView drawable")
 
         setupPlayerWithDrawable(videoView)
     }
 
     private func setupPlayerWithDrawable(_ drawable: NSView) {
+        // First ensure VLCLibrary is properly initialized
+        guard let libraryClass = NSClassFromString("VLCLibrary") as AnyObject?,
+              let sharedLibrary = libraryClass.perform(NSSelectorFromString("sharedLibrary"))?.takeUnretainedValue() as? NSObject else {
+            vlcLog("VLCLibrary.sharedLibrary() not available - library not initialized")
+            return
+        }
+        vlcLog("VLCLibrary.sharedLibrary() is valid")
+
         // Get VLCMediaPlayer class dynamically
         guard let playerClass: AnyClass = NSClassFromString("VLCMediaPlayer") else {
-            print("VLCVideoView: VLCMediaPlayer class not found")
+            vlcLog("VLCMediaPlayer class not found")
             return
         }
-        print("VLCVideoView: Found VLCMediaPlayer class")
+        vlcLog("Found VLCMediaPlayer class")
 
-        // Get options from VLCKitManager - these will create a private VLCLibrary
-        let options = VLCKitManager.shared.getLibraryOptions()
-        print("VLCVideoView: Using options: \(options)")
-
-        // Create media player with initWithDrawable:options: to use private library with our options
-        // This is critical - initWithVideoView: uses shared library and ignores VLC_PLUGIN_PATH timing
-        let initWithDrawableOptionsSel = NSSelectorFromString("initWithDrawable:options:")
+        // Create media player with initWithVideoView: which uses the shared library
+        // The shared library was already initialized by VLCKitManager.loadFramework() with proper plugin path
         let playerResult = (playerClass as AnyObject).perform(NSSelectorFromString("alloc"))
         guard let allocatedPlayer = playerResult?.takeUnretainedValue() as? NSObject else {
-            print("VLCVideoView: Failed to alloc VLCMediaPlayer")
+            vlcLog("Failed to alloc VLCMediaPlayer")
             return
         }
 
-        // Call initWithDrawable:options: - this creates a private VLCLibrary with our options
-        if allocatedPlayer.responds(to: initWithDrawableOptionsSel) {
-            // Use NSInvocation-style call for two arguments
-            let imp = allocatedPlayer.method(for: initWithDrawableOptionsSel)
-            typealias InitFunc = @convention(c) (AnyObject, Selector, NSView, NSArray) -> AnyObject
-            let initFunc = unsafeBitCast(imp, to: InitFunc.self)
-            _ = initFunc(allocatedPlayer, initWithDrawableOptionsSel, drawable, options as NSArray)
-            mediaPlayer = allocatedPlayer
-            print("VLCVideoView: Created media player with drawable and options (private library)")
-        } else {
-            // Fallback to initWithVideoView: if method not available
-            print("VLCVideoView: initWithDrawable:options: not found, falling back to initWithVideoView:")
-            let initWithVideoViewSel = NSSelectorFromString("initWithVideoView:")
+        let initWithVideoViewSel = NSSelectorFromString("initWithVideoView:")
+        if allocatedPlayer.responds(to: initWithVideoViewSel) {
             _ = allocatedPlayer.perform(initWithVideoViewSel, with: drawable)
             mediaPlayer = allocatedPlayer
-            print("VLCVideoView: Created media player with video view (shared library)")
+            vlcLog("Created media player with shared library")
+        } else {
+            vlcLog("initWithVideoView: not found")
+            return
         }
 
         // Set up notifications for media player state changes
@@ -376,33 +381,51 @@ class VLCVideoView: NSView {
         // Get state value
         if let stateValue = mediaPlayer?.value(forKey: "state") as? Int {
             // VLCMediaPlayerState: 0=stopped, 1=opening, 2=buffering, 3=playing, 4=paused, 5=ended, 6=error
-            print("VLCVideoView: State changed to \(stateValue)")
+            vlcLog("State changed to \(stateValue)")
             switch stateValue {
             case 0: // Stopped
-                print("VLCVideoView: Stopped")
+                vlcLog("Stopped")
             case 1: // Opening
-                print("VLCVideoView: Opening")
+                vlcLog("Opening")
             case 2: // Buffering
-                print("VLCVideoView: Buffering")
+                vlcLog("Buffering")
             case 3: // Playing
-                print("VLCVideoView: Playing")
+                vlcLog("Playing")
                 state.isPlaying = true
                 state.isVideoLoaded = true
                 updateMediaInfo()
             case 4: // Paused
-                print("VLCVideoView: Paused")
+                vlcLog("Paused")
                 state.isPlaying = false
             case 5: // Ended
-                print("VLCVideoView: Ended")
+                vlcLog("Ended")
                 state.isPlaying = false
                 state.currentTime = 0
                 state.currentFrame = 0
             case 6: // Error
-                print("VLCVideoView: Error state")
+                // Try to get more details about the error
+                var errorDetails = "VLC failed to decode this video."
+                if let media = mediaPlayer?.value(forKey: "media") as? NSObject {
+                    if let mediaState = media.value(forKey: "state") as? Int {
+                        vlcLog("Media state = \(mediaState)")
+                    }
+                    // Check for parsing errors
+                    if let parsedStatus = media.value(forKey: "parsedStatus") as? Int {
+                        vlcLog("Parsed status = \(parsedStatus)")
+                        if parsedStatus == 4 { // VLCMediaParsedStatusFailed
+                            errorDetails = "VLC failed to parse media file. The format may not be supported."
+                        }
+                    }
+                    // Try to get additional metadata
+                    if let metaDict = media.value(forKey: "metaDictionary") as? [String: Any] {
+                        vlcLog("Media metadata: \(metaDict)")
+                    }
+                }
+                vlcLog("Error state - \(errorDetails)")
                 state.isVideoLoaded = false
-                showVideoLoadError("VLC failed to decode this video.")
+                showVideoLoadError(errorDetails)
             default:
-                print("VLCVideoView: Unknown state \(stateValue)")
+                vlcLog("Unknown state \(stateValue)")
                 break
             }
         }

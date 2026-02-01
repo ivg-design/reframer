@@ -143,6 +143,14 @@ class MainViewController: NSViewController {
     private func handleVideoURLChange(_ url: URL) {
         let manager = VLCKitManager.shared
 
+        print("MainViewController: === handleVideoURLChange ===")
+        print("MainViewController: URL = \(url.lastPathComponent)")
+        print("MainViewController: Full URL = \(url.absoluteString.prefix(100))...")
+        print("MainViewController: playbackEngine = \(videoState.playbackEngine)")
+        print("MainViewController: videoAudioURL = \(videoState.videoAudioURL?.absoluteString.prefix(50) ?? "nil")")
+        print("MainViewController: VLCKitManager.isReady = \(manager.isReady)")
+        print("MainViewController: requiresVLCKit = \(manager.requiresVLCKit(url: url))")
+
         switch videoState.playbackEngine {
         case .vlc:
             if manager.isReady {
@@ -187,12 +195,14 @@ class MainViewController: NSViewController {
     }
 
     private func switchToAVPlayer() {
+        print("MainViewController: Switching to AVFoundation player")
         isUsingVLC = false
         vlcVideoView?.isHidden = true
         videoView?.isHidden = false
     }
 
     private func switchToVLCPlayer(url: URL) {
+        print("MainViewController: Switching to VLC player for \(url.lastPathComponent)")
         isUsingVLC = true
         videoView?.isHidden = true
 

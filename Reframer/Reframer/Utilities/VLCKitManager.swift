@@ -586,14 +586,14 @@ class VLCKitManager {
     /// Get the options to pass when creating VLCMediaPlayer
     /// These options create a private VLCLibrary instance
     func getLibraryOptions() -> [String] {
+        // Module names correspond to plugin filenames: lib<module>_plugin.dylib
+        // e.g., libvpx_plugin.dylib -> module name is "vpx"
+        // Note: --codec option restricts decoder selection; omitting it lets VLC auto-select
         return [
-            "--codec=dav1d,vpx,avcodec,all",  // Prefer dav1d for AV1, vpx for VP8/VP9, then avcodec
-            "--no-videotoolbox",              // Disable Video Toolbox (doesn't support VP9)
-            "--avcodec-hw=none",              // Disable hardware decode for codec fallback
-            "--avcodec-skiploopfilter=0",     // Full quality decoding
+            "--no-plugins-cache",           // Force plugin rescan every time
             "--no-video-title-show",
             "--no-stats",
-            "-vv"                             // Some verbosity for debugging
+            "-vvv"                          // Verbose logging for debugging
         ]
     }
 

@@ -1,8 +1,34 @@
-# Status Report (2026-02-01 - Session 2)
+# Status Report (2026-02-01 - Session 3)
 
-## Current Status: 🔧 Testing VLCKit & YouTube Fixes
+## Current Status: ⏳ Ready for Remote Testing
 
-## Recent Changes (This Session)
+## Recent Changes (Session 3)
+
+### Remote Test Runner Setup
+- Created `scripts/driver.sh` - Main Mac driver to trigger remote tests
+- Created `scripts/runner_test.sh` - Runs xcodebuild tests on runner Mac
+- Created `scripts/runner_bootstrap.sh` - One-time runner setup
+- Created `scripts/runner_watch_or_pull.sh` - Git sync on runner
+- Added comprehensive documentation in `docs/REMOTE_TEST_RUNNER_SETUP.md`
+
+### YouTubeResolver Fallback Fix
+- Fixed VLC fallback selection to specifically select VP9/VP8 WebM (not H.264)
+- Previously `isVLCCompatible` included H.264 which was redundant with AVFoundation
+- Now fallback is truly VLC-only formats that require VLC
+
+### VLCKitManager Simplification
+- Removed `--codec=` restriction that may have been limiting decoder selection
+- Added `--no-plugins-cache` to force plugin rescans
+- VLC now auto-selects best decoder for each format
+
+### VLCVideoView Error Logging
+- Added media state and parsed status to error messages
+- Helps diagnose VLC decoding failures
+
+### MainViewController Logging
+- Enhanced URL change logging to trace player selection decisions
+
+## Recent Changes (Session 2)
 
 ### VLCKit Installation Fixes
 - Fixed DMG mounting race condition - was reading hdiutil output before process completed
