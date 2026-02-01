@@ -149,6 +149,11 @@ class FilterMenuButton: NSView {
 
     // MARK: - Filter Menu (Single Select, Simple Filters Only)
 
+    private func quickFilterIdentifier(for filter: VideoFilter) -> NSUserInterfaceItemIdentifier {
+        let slug = filter.rawValue.lowercased().replacingOccurrences(of: " ", with: "-")
+        return NSUserInterfaceItemIdentifier("quick-filter-\(slug)")
+    }
+
     private func showFilterMenu(with event: NSEvent) {
         didShowMenu = true
         holdTimer?.invalidate()
@@ -175,6 +180,7 @@ class FilterMenuButton: NSView {
             item.target = self
             item.action = #selector(filterSelected(_:))
             item.representedObject = filter
+            item.identifier = quickFilterIdentifier(for: filter)
 
             // Radio-style: checkmark on active filter only
             if videoState?.quickFilter == filter {
@@ -183,8 +189,8 @@ class FilterMenuButton: NSView {
                 item.state = .off
             }
 
-            menu.addItem(item)
-        }
+        menu.addItem(item)
+    }
 
         menu.addItem(.separator())
 

@@ -641,7 +641,7 @@ final class ReframerIntegrationTests: XCTestCase {
 
         // Select Invert (parameterless)
         filterButton.press(forDuration: 0.4)
-        let invertItem = app.menuItems["Invert"]
+        let invertItem = app.menuItems["quick-filter-invert"]
         guard invertItem.waitForExistence(timeout: 2) else {
             throw XCTSkip("Filter menu did not appear")
         }
@@ -655,7 +655,7 @@ final class ReframerIntegrationTests: XCTestCase {
 
         // Select Brightness (adjustable) to restore slider
         filterButton.press(forDuration: 0.4)
-        let brightnessItem = app.menuItems["Brightness"]
+        let brightnessItem = app.menuItems["quick-filter-brightness"]
         if brightnessItem.waitForExistence(timeout: 2) {
             brightnessItem.click()
             Thread.sleep(forTimeInterval: 0.3)
