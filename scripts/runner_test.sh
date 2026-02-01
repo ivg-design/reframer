@@ -99,8 +99,10 @@ if [ -d "$XCRESULT_PATH" ]; then
         head -100 | tee -a "$SUMMARY_FILE" || true
 
     # Count pass/fail from log
-    PASSED=$(grep -c " passed " "$LOG_FILE" 2>/dev/null || echo "0")
-    FAILED=$(grep -c " failed " "$LOG_FILE" 2>/dev/null || echo "0")
+    PASSED=$(grep -c " passed " "$LOG_FILE" 2>/dev/null || true)
+    FAILED=$(grep -c " failed " "$LOG_FILE" 2>/dev/null || true)
+    PASSED=${PASSED:-0}
+    FAILED=${FAILED:-0}
     TOTAL=$((PASSED + FAILED))
 
     {
