@@ -119,6 +119,7 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
         XCODE_APP="/Applications/Xcode.app/Contents/MacOS/Xcode"
         DTSERVICEHUB="/Applications/Xcode.app/Contents/SharedFrameworks/DVTInstrumentsFoundation.framework/Versions/A/Resources/DTServiceHub"
         SWBBUILDSERVICE="/Applications/Xcode.app/Contents/SharedFrameworks/SwiftBuild.framework/Versions/A/PlugIns/SWBBuildService.bundle/Contents/MacOS/SWBBuildService"
+        TERMINAL_APP="/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal"
         if [ -x "$XCODE_APP" ]; then
             CSREQ_BLOB=$(tcc_csreq_for "$XCODE_APP")
             if [ -n "$CSREQ_BLOB" ]; then
@@ -136,6 +137,13 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
             CSREQ_BLOB=$(tcc_csreq_for "$SWBBUILDSERVICE")
             if [ -n "$CSREQ_BLOB" ]; then
                 tcc_insert "kTCCServiceDeveloperTool" "com.apple.dt.SWBBuildService" 0 "$CSREQ_BLOB"
+            fi
+        fi
+        if [ -x "$TERMINAL_APP" ]; then
+            CSREQ_BLOB=$(tcc_csreq_for "$TERMINAL_APP")
+            if [ -n "$CSREQ_BLOB" ]; then
+                tcc_insert "kTCCServiceListenEvent" "com.apple.Terminal" 0 "$CSREQ_BLOB"
+                tcc_insert "kTCCServiceAccessibility" "com.apple.Terminal" 0 "$CSREQ_BLOB"
             fi
         fi
 
