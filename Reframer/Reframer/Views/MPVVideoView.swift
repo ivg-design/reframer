@@ -371,7 +371,7 @@ final class MPVVideoView: NSOpenGLView {
         guard let handle = mpvHandle else { return }
         while true {
             guard let eventPtr = MPVLibrary.shared.mpv_wait_event(handle, 0) else { break }
-            let event = eventPtr.pointee
+            let event = eventPtr.assumingMemoryBound(to: mpv_event.self).pointee
             if event.event_id == 0 { break }
             guard let namePtr = MPVLibrary.shared.mpv_event_name(event.event_id) else { continue }
             let name = String(cString: namePtr)

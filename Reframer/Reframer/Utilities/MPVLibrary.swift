@@ -17,7 +17,7 @@ typealias mpv_get_property_fn = @convention(c) (mpv_handle?, UnsafePointer<CChar
 typealias mpv_get_property_string_fn = @convention(c) (mpv_handle?, UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
 typealias mpv_free_fn = @convention(c) (UnsafeMutableRawPointer?) -> Void
 typealias mpv_set_wakeup_callback_fn = @convention(c) (mpv_handle?, (@convention(c) (UnsafeMutableRawPointer?) -> Void)?, UnsafeMutableRawPointer?) -> Void
-typealias mpv_wait_event_fn = @convention(c) (mpv_handle?, Double) -> UnsafePointer<mpv_event>?
+typealias mpv_wait_event_fn = @convention(c) (mpv_handle?, Double) -> UnsafeRawPointer?
 typealias mpv_event_name_fn = @convention(c) (Int32) -> UnsafePointer<CChar>?
 typealias mpv_error_string_fn = @convention(c) (Int32) -> UnsafePointer<CChar>?
 
