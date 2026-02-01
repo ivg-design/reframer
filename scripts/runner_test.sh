@@ -10,6 +10,11 @@ ARTIFACTS_BASE="${ARTIFACTS_BASE:-$HOME/ci_artifacts}"
 KEEP_ARTIFACTS="${KEEP_ARTIFACTS:-10}"
 # ======================================
 
+if [ -n "${DONE_FILE:-}" ]; then
+    mkdir -p "$(dirname "$DONE_FILE")" 2>/dev/null || true
+    trap 'touch "$DONE_FILE" 2>/dev/null || true' EXIT
+fi
+
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ARTIFACT_DIR="$ARTIFACTS_BASE/$TIMESTAMP"
 LOG_FILE="$ARTIFACT_DIR/build.log"
@@ -205,5 +210,9 @@ echo "Keeping last $KEEP_ARTIFACTS runs" >> "$LOG_FILE"
     echo "Summary:   $SUMMARY_FILE"
     echo "xcresult:  $XCRESULT_PATH"
 } | tee -a "$SUMMARY_FILE"
+
+if [ -n "${DONE_FILE:-}" ]; then
+    touch "$DONE_FILE" 2>/dev/null || true
+fi
 
 exit $TEST_EXIT_CODE
