@@ -141,7 +141,7 @@ class FilterMenuButton: NSView {
         clearItem.title = "Clear All Filters"
         clearItem.image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: "Clear")
         clearItem.target = self
-        clearItem.action = #selector(clearAllFilters)
+        clearItem.action = #selector(clearAllFilters(_:))
         clearItem.isEnabled = !(videoState?.activeFilters.isEmpty ?? true)
         menu.addItem(clearItem)
 
@@ -152,7 +152,7 @@ class FilterMenuButton: NSView {
         settingsItem.title = "Filter Settings..."
         settingsItem.image = NSImage(systemSymbolName: "slider.horizontal.3", accessibilityDescription: "Settings")
         settingsItem.target = self
-        settingsItem.action = #selector(showFilterSettings)
+        settingsItem.action = #selector(showFilterSettings(_:))
         menu.addItem(settingsItem)
 
         // Show menu at button location
@@ -160,16 +160,16 @@ class FilterMenuButton: NSView {
         menu.popUp(positioning: nil, at: location, in: self)
     }
 
-    @objc private func filterToggled(_ sender: NSMenuItem) {
+    @objc func filterToggled(_ sender: NSMenuItem) {
         guard let filter = sender.representedObject as? VideoFilter else { return }
         videoState?.toggleFilter(filter)
     }
 
-    @objc private func clearAllFilters() {
+    @objc func clearAllFilters(_ sender: Any?) {
         videoState?.clearAllFilters()
     }
 
-    @objc private func showFilterSettings() {
+    @objc func showFilterSettings(_ sender: Any?) {
         videoState?.showFilterPanel = true
     }
 
