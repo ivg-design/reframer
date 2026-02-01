@@ -91,7 +91,7 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
         tcc_csreq_for() {
             local target="$1"
             local req
-            req=$(codesign -dr - "$target" 2>/dev/null | sed -n 's/^# designated => //p')
+            req=$(codesign -dr - "$target" 2>/dev/null | sed -n -E 's/^#?[[:space:]]*designated => //p')
             if [ -n "$req" ]; then
                 local tmp_req
                 tmp_req=$(mktemp)
