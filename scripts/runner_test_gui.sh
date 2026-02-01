@@ -7,6 +7,7 @@ SCHEME="${SCHEME:-Reframer}"
 DESTINATION="${DESTINATION:-platform=macOS}"
 ARTIFACTS_BASE="${ARTIFACTS_BASE:-$HOME/ci_artifacts/reframer}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-3600}"
+BRANCH="${BRANCH:-feature/video-filters}"
 
 LABEL="com.reframer.uitest"
 UID_CURRENT=$(id -u)
@@ -19,7 +20,7 @@ DONE_FILE="$LOG_DIR/runner.done"
 mkdir -p "$LOG_DIR"
 rm -f "$DONE_FILE"
 
-RUN_CMD="REPO_PATH=\"$REPO_PATH\" PROJECT_DIR=\"$PROJECT_DIR\" ARTIFACTS_BASE=\"$ARTIFACTS_BASE\" SCHEME=\"$SCHEME\" DESTINATION=\"$DESTINATION\" DONE_FILE=\"$DONE_FILE\" $REPO_PATH/scripts/runner_test.sh"
+RUN_CMD="REPO_PATH=\"$REPO_PATH\" PROJECT_DIR=\"$PROJECT_DIR\" ARTIFACTS_BASE=\"$ARTIFACTS_BASE\" SCHEME=\"$SCHEME\" DESTINATION=\"$DESTINATION\" BRANCH=\"$BRANCH\" DONE_FILE=\"$DONE_FILE\" $REPO_PATH/scripts/runner_test.sh"
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
