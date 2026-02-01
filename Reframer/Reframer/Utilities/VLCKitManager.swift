@@ -405,17 +405,51 @@ class VLCKitManager {
     }
 
     private func mountDMG(at dmgPath: URL) throws -> URL {
+        print("VLCKit: Mounting DMG at \(dmgPath.path)")
+
+        // Verify DMG exists and has content
+        let attrs = try FileManager.default.attributesOfItem(atPath: dmgPath.path)
+        let dmgSize = (attrs[.size] as? Int64) ?? 0
+        print("VLCKit: DMG file size: \(dmgSize) bytes")
+        guard dmgSize > 10_000_000 else {  // At least 10MB
+            print("VLCKit: DMG file too small, likely corrupted")
+            throw VLCKitError.extractFailed
+        }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
-        process.arguments = ["attach", dmgPath.path, "-plist", "-nobrowse", "-quiet"]
+        // Remove -quiet flag to get better output
+        process.arguments = ["attach", dmgPath.path, "-plist", "-nobrowse"]
+
         let pipe = Pipe()
         let errorPipe = Pipe()
         process.standardOutput = pipe
         process.standardError = errorPipe
+
+        // Capture data asynchronously to avoid blocking issues
+        var outputData = Data()
+        var errorData = Data()
+
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            outputData.append(handle.availableData)
+        }
+        errorPipe.fileHandleForReading.readabilityHandler = { handle in
+            errorData.append(handle.availableData)
+        }
+
         try process.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+
+        // Clean up handlers
+        pipe.fileHandleForReading.readabilityHandler = nil
+        errorPipe.fileHandleForReading.readabilityHandler = nil
+
+        // Read any remaining data
+        outputData.append(pipe.fileHandleForReading.readDataToEndOfFile())
+        errorData.append(errorPipe.fileHandleForReading.readDataToEndOfFile())
+
+        print("VLCKit: hdiutil exit code: \(process.terminationStatus)")
+        print("VLCKit: hdiutil output size: \(outputData.count) bytes")
 
         if process.terminationStatus != 0 {
             let errorStr = String(data: errorData, encoding: .utf8) ?? "Unknown error"
@@ -423,8 +457,17 @@ class VLCKitManager {
             throw VLCKitError.extractFailed
         }
 
+        guard outputData.count > 0 else {
+            print("VLCKit: hdiutil produced no output")
+            let errorStr = String(data: errorData, encoding: .utf8) ?? ""
+            if !errorStr.isEmpty {
+                print("VLCKit: hdiutil stderr: \(errorStr)")
+            }
+            throw VLCKitError.extractFailed
+        }
+
         do {
-            let plist = try PropertyListSerialization.propertyList(from: data, format: nil)
+            let plist = try PropertyListSerialization.propertyList(from: outputData, format: nil)
             if let dict = plist as? [String: Any],
                let entities = dict["system-entities"] as? [[String: Any]] {
                 for entity in entities {
@@ -437,7 +480,7 @@ class VLCKitManager {
             print("VLCKit: Could not find mount point in plist response")
         } catch {
             print("VLCKit: Failed to parse hdiutil plist output: \(error)")
-            if let str = String(data: data, encoding: .utf8) {
+            if let str = String(data: outputData, encoding: .utf8) {
                 print("VLCKit: Raw hdiutil output: \(str.prefix(500))")
             }
             throw error

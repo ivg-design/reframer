@@ -37,7 +37,8 @@ enum YouTubeResolverError: LocalizedError {
 final class YouTubeResolver {
     static let shared = YouTubeResolver()
 
-    private let ytDlpURL = URL(string: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp")!
+    // Use macOS standalone binary (no Python dependency)
+    private let ytDlpURL = URL(string: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos")!
 
     private var toolsDirectory: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
