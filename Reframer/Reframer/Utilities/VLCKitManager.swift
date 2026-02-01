@@ -135,9 +135,31 @@ class VLCKitManager {
                 return
             }
 
+            // Validate HTTP response
+            if let httpResponse = response as? HTTPURLResponse {
+                print("VLCKit: VLCKit download HTTP status: \(httpResponse.statusCode)")
+                print("VLCKit: Final URL: \(httpResponse.url?.absoluteString ?? "unknown")")
+                guard httpResponse.statusCode == 200 else {
+                    print("VLCKit: VLCKit download failed with HTTP \(httpResponse.statusCode)")
+                    DispatchQueue.main.async { completion(.failure(VLCKitError.downloadFailed)) }
+                    return
+                }
+            }
+
             guard let tempURL = tempURL else {
                 DispatchQueue.main.async { completion(.failure(VLCKitError.downloadFailed)) }
                 return
+            }
+
+            // Validate downloaded file size (VLCKit tar.xz should be ~88MB, at least 70MB)
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: tempURL.path),
+               let fileSize = attrs[.size] as? Int64 {
+                print("VLCKit: Downloaded VLCKit size: \(fileSize / 1024 / 1024) MB")
+                if fileSize < 70_000_000 {  // Less than 70MB is suspicious
+                    print("VLCKit: Downloaded file too small, likely corrupted or error page")
+                    DispatchQueue.main.async { completion(.failure(VLCKitError.downloadFailed)) }
+                    return
+                }
             }
 
             DispatchQueue.main.async {
@@ -263,9 +285,31 @@ class VLCKitManager {
                 return
             }
 
+            // Validate HTTP response
+            if let httpResponse = response as? HTTPURLResponse {
+                print("VLCKit: VLC download HTTP status: \(httpResponse.statusCode)")
+                print("VLCKit: Final URL: \(httpResponse.url?.absoluteString ?? "unknown")")
+                guard httpResponse.statusCode == 200 else {
+                    print("VLCKit: VLC download failed with HTTP \(httpResponse.statusCode)")
+                    DispatchQueue.main.async { completion(.failure(VLCKitError.downloadFailed)) }
+                    return
+                }
+            }
+
             guard let tempURL = tempURL else {
                 DispatchQueue.main.async { completion(.failure(VLCKitError.downloadFailed)) }
                 return
+            }
+
+            // Validate downloaded file size (VLC DMG should be ~49MB, at least 40MB)
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: tempURL.path),
+               let fileSize = attrs[.size] as? Int64 {
+                print("VLCKit: Downloaded VLC DMG size: \(fileSize / 1024 / 1024) MB")
+                if fileSize < 40_000_000 {  // Less than 40MB is suspicious
+                    print("VLCKit: Downloaded file too small, likely corrupted or error page")
+                    DispatchQueue.main.async { completion(.failure(VLCKitError.downloadFailed)) }
+                    return
+                }
             }
 
             DispatchQueue.main.async {
