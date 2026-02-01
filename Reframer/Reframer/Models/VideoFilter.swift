@@ -27,6 +27,16 @@ enum VideoFilter: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Whether the quick filter has a user-adjustable slider
+    var isQuickFilterAdjustable: Bool {
+        switch self {
+        case .invert, .noir:
+            return false
+        default:
+            return true
+        }
+    }
+
     /// Simple filters available in dropdown menu
     static var simpleFilters: [VideoFilter] {
         allCases.filter { $0.isSimpleFilter }

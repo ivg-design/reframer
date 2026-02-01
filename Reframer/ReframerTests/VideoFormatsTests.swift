@@ -68,6 +68,11 @@ final class VideoFormatsTests: XCTestCase {
         XCTAssertTrue(VideoFormats.isSupported(url), "Extensions should be case-insensitive")
     }
 
+    func testIsSupportedWithContentType() {
+        XCTAssertTrue(VideoFormats.isSupported(contentType: .mpeg4Movie), "MPEG4 content type should be supported")
+        XCTAssertTrue(VideoFormats.isSupported(contentType: .movie), "Generic movie content type should be supported")
+    }
+
     // MARK: - UTType support
 
     func testMPEG4MovieTypeSupported() {

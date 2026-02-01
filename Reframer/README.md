@@ -21,6 +21,7 @@ The app window is completely transparent and frameless, showing only the video c
 
 - **Transparent overlay** — No window chrome, just pure video
 - **Always on top** — Stays visible above all other windows
+- **Persistent settings** — Remembers opacity, volume, and window position
 - **Frame-accurate navigation** — Step through videos frame by frame
 - **Zoom and pan** — Inspect details at any scale (Ctrl+drag to pan, Shift+scroll to zoom)
 - **Adjustable opacity** — Blend with your workspace

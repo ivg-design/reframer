@@ -64,14 +64,17 @@ When a numeric field (frame, zoom, opacity) is **focused**:
 | Decrement by 1 | **↓** |
 | Increment by 10 | **Shift ↑** |
 | Decrement by 10 | **Shift ↓** |
+| Increment by 10 (Option/Ctrl) | **Option ↑** / **Ctrl ↑** |
+| Decrement by 10 (Option/Ctrl) | **Option ↓** / **Ctrl ↓** |
 | Fine increment (zoom only) | **⌘ ↑** |
+| Select all | **⌘ A** |
 | Apply and defocus | **Enter** or **Esc** |
 
 > Note: Arrow keys only adjust values when an input field is focused. Outside input fields, arrow keys pan the video.
 
-## Global Shortcuts
+## Global Shortcuts (Lock Mode)
 
-These work even when Reframer is not the active app:
+These work when Reframer is locked, even if it isn't the active app:
 
 | Action | Shortcut |
 |--------|----------|

@@ -1,5 +1,6 @@
 import Cocoa
 import Combine
+import ApplicationServices
 
 // Custom window that can become key
 class TransparentWindow: NSWindow {
@@ -34,7 +35,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     let videoState = VideoState()
     private var cancellables = Set<AnyCancellable>()
-    private let controlWindowHeight: CGFloat = 40
+    private let controlWindowHeight: CGFloat = 80
+    private let windowFrameDefaultsKey = "VideoOverlay.mainWindowFrame"
 
     private var mainViewController: MainViewController!
     private var controlBar: ControlBar!
@@ -43,6 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
+        NSApp.appearance = NSAppearance(named: .darkAqua)
         createMainWindow()
         createControlWindow()
         observeWindowFrameChanges()
@@ -218,11 +221,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         // Main window is just the video canvas - toolbar will be BELOW it
         let windowSize = NSSize(width: 800, height: 560)
-        let origin = NSPoint(
+        let defaultOrigin = NSPoint(
             x: screenFrame.midX - windowSize.width / 2,
             y: screenFrame.midY - windowSize.height / 2 + controlWindowHeight / 2
         )
-        let windowFrame = NSRect(origin: origin, size: windowSize)
+        let defaultFrame = NSRect(origin: defaultOrigin, size: windowSize)
+        let windowFrame = loadSavedWindowFrame(defaultFrame: defaultFrame, screenFrame: screenFrame)
 
         let window = TransparentWindow(
             contentRect: windowFrame,
@@ -306,6 +310,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow.makeKeyAndOrderFront(nil)
     }
 
+    private func loadSavedWindowFrame(defaultFrame: NSRect, screenFrame: NSRect) -> NSRect {
+        guard let savedString = UserDefaults.standard.string(forKey: windowFrameDefaultsKey) else {
+            return defaultFrame
+        }
+
+        let savedFrame = NSRectFromString(savedString)
+        if savedFrame.width <= 0 || savedFrame.height <= 0 {
+            return defaultFrame
+        }
+
+        return sanitizeWindowFrame(savedFrame, screenFrame: screenFrame)
+    }
+
+    private func sanitizeWindowFrame(_ frame: NSRect, screenFrame: NSRect) -> NSRect {
+        var adjusted = frame
+
+        if adjusted.width > screenFrame.width {
+            adjusted.size.width = screenFrame.width
+        }
+        if adjusted.height > screenFrame.height {
+            adjusted.size.height = screenFrame.height
+        }
+
+        if adjusted.minX < screenFrame.minX {
+            adjusted.origin.x = screenFrame.minX
+        }
+        if adjusted.maxX > screenFrame.maxX {
+            adjusted.origin.x = screenFrame.maxX - adjusted.width
+        }
+        if adjusted.minY < screenFrame.minY {
+            adjusted.origin.y = screenFrame.minY
+        }
+        if adjusted.maxY > screenFrame.maxY {
+            adjusted.origin.y = screenFrame.maxY - adjusted.height
+        }
+
+        return adjusted
+    }
+
     // MARK: - State Observation
 
     private func observeState() {
@@ -382,6 +425,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Global Shortcuts
 
     private func setupGlobalShortcuts() {
+        requestAccessibilityPermissionIfNeeded()
         globalShortcutMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleGlobalKey(event)
         }
@@ -397,6 +441,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func requestAccessibilityPermissionIfNeeded() {
+        let shouldPrompt = ProcessInfo.processInfo.environment["UITEST_MODE"] == nil
+        if shouldPrompt {
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+        } else {
+            _ = AXIsProcessTrusted()
+        }
+    }
+
     @discardableResult
     private func handleGlobalKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
@@ -404,20 +458,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hasShift = flags.contains(.shift)
 
         // Cmd+Shift+L - Toggle lock (global)
-        if hasCommand && hasShift && event.keyCode == 37 {
+        if hasCommand && hasShift && event.keyCode == KeyCode.l {
             videoState.isLocked.toggle()
             return true
         }
 
         // Cmd+PageUp - Step frame forward (global)
-        if hasCommand && event.keyCode == 116 {
-            NotificationCenter.default.post(name: .frameStepForward, object: hasShift ? 10 : 1)
+        if hasCommand && event.keyCode == KeyCode.pageUp {
+            guard videoState.isLocked else { return false }
+            videoState.requestFrameStep(direction: .forward, amount: hasShift ? 10 : 1)
             return true
         }
 
         // Cmd+PageDown - Step frame backward (global)
-        if hasCommand && event.keyCode == 121 {
-            NotificationCenter.default.post(name: .frameStepBackward, object: hasShift ? 10 : 1)
+        if hasCommand && event.keyCode == KeyCode.pageDown {
+            guard videoState.isLocked else { return false }
+            videoState.requestFrameStep(direction: .backward, amount: hasShift ? 10 : 1)
             return true
         }
 
@@ -428,7 +484,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @discardableResult
     private func handleLocalKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let commandOnly = flags == [.command]
         let noModifiers = flags.isEmpty
+
+        if commandOnly && event.keyCode == KeyCode.a,
+           let textView = activeFieldEditor() {
+            textView.selectAll(nil)
+            return true
+        }
+
+        if flags.contains(.command) && event.keyCode == KeyCode.pageUp && videoState.isLocked {
+            videoState.requestFrameStep(direction: .forward, amount: flags.contains(.shift) ? 10 : 1)
+            return true
+        }
+
+        if flags.contains(.command) && event.keyCode == KeyCode.pageDown && videoState.isLocked {
+            videoState.requestFrameStep(direction: .backward, amount: flags.contains(.shift) ? 10 : 1)
+            return true
+        }
 
         // Don't handle if a text field is first responder (check all windows)
         // Check ALL windows, not just key window, since control bar is in separate window
@@ -448,37 +521,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         switch event.keyCode {
         // Space - Play/Pause
-        case 49 where noModifiers && videoState.isVideoLoaded:
+        case KeyCode.space where noModifiers && videoState.isVideoLoaded:
             videoState.isPlaying.toggle()
             return true
 
         // L - Toggle lock
-        case 37 where noModifiers:
+        case KeyCode.l where noModifiers:
             videoState.isLocked.toggle()
             return true
 
         // H - Toggle help
-        case 4 where noModifiers:
+        case KeyCode.h where noModifiers:
             videoState.showHelp.toggle()
             return true
 
         // 0 - Reset zoom to 100%
-        case 29 where noModifiers && videoState.isVideoLoaded && !videoState.isLocked:
+        case KeyCode.zero where noModifiers && videoState.isVideoLoaded && !videoState.isLocked:
             videoState.zoomScale = 1.0
             return true
 
         // R - Reset view
-        case 15 where noModifiers && !videoState.isLocked:
+        case KeyCode.r where noModifiers && !videoState.isLocked:
             videoState.resetView()
             return true
 
         // ? (Shift+/) - Toggle help
-        case 44 where flags.contains(.shift):
+        case KeyCode.questionMark where flags.contains(.shift):
             videoState.showHelp.toggle()
             return true
 
         // Escape - Close help or filter panel
-        case 53:
+        case KeyCode.escape:
             if videoState.showHelp {
                 videoState.showHelp = false
                 return true
@@ -490,27 +563,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return false
 
         // F - Toggle filter panel
-        case 3 where videoState.isVideoLoaded && noModifiers:
+        case KeyCode.f where videoState.isVideoLoaded && noModifiers:
             videoState.showFilterPanel.toggle()
             return true
 
         // Arrow keys for pan (when unlocked and video loaded)
-        case 123 where videoState.isVideoLoaded && !videoState.isLocked: // Left
+        case KeyCode.leftArrow where videoState.isVideoLoaded && !videoState.isLocked: // Left
             let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
             videoState.panOffset.width -= amount
             return true
 
-        case 124 where videoState.isVideoLoaded && !videoState.isLocked: // Right
+        case KeyCode.rightArrow where videoState.isVideoLoaded && !videoState.isLocked: // Right
             let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
             videoState.panOffset.width += amount
             return true
 
-        case 126 where videoState.isVideoLoaded && !videoState.isLocked: // Up
+        case KeyCode.upArrow where videoState.isVideoLoaded && !videoState.isLocked: // Up
             let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
             videoState.panOffset.height += amount
             return true
 
-        case 125 where videoState.isVideoLoaded && !videoState.isLocked: // Down
+        case KeyCode.downArrow where videoState.isVideoLoaded && !videoState.isLocked: // Down
             let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
             videoState.panOffset.height -= amount
             return true
@@ -518,6 +591,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         default:
             return false
         }
+    }
+
+    private func activeFieldEditor() -> NSTextView? {
+        for window in NSApp.windows {
+            if let textView = window.firstResponder as? NSTextView {
+                return textView
+            }
+            if let textField = window.firstResponder as? NSTextField,
+               let editor = window.fieldEditor(false, for: textField) as? NSTextView {
+                return editor
+            }
+        }
+        return nil
     }
 
     // MARK: - Window Frame Updates
@@ -541,6 +627,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateControlWindowFrame()
         updateHelpWindowFrame()
         updateFilterPanelWindowFrame()
+        saveWindowFrame()
     }
 
     private func updateControlWindowFrame() {
@@ -554,6 +641,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             height: controlWindowHeight
         )
         controlWindow.setFrame(controlFrame, display: true)
+    }
+
+    private func saveWindowFrame() {
+        guard let mainWindow = mainWindow else { return }
+        let frameString = NSStringFromRect(mainWindow.frame)
+        UserDefaults.standard.set(frameString, forKey: windowFrameDefaultsKey)
     }
 
     // MARK: - Help Window
@@ -678,14 +771,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.message = "Select a video file"
-
-        if panel.runModal() == .OK, let url = panel.url {
-            videoState.videoAudioURL = nil
-            videoState.videoHeaders = nil
-            videoState.videoTitle = nil
-            videoState.playbackEngine = .auto
-            videoState.isVideoLoaded = false
-            videoState.videoURL = url
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.videoState.videoAudioURL = nil
+            self?.videoState.videoHeaders = nil
+            self?.videoState.videoTitle = nil
+            self?.videoState.playbackEngine = .auto
+            self?.videoState.isVideoLoaded = false
+            self?.videoState.videoURL = url
         }
     }
 
@@ -833,11 +926,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @IBAction func stepForward(_ sender: Any?) {
-        NotificationCenter.default.post(name: .frameStepForward, object: 1)
+        videoState.requestFrameStep(direction: .forward, amount: 1)
     }
 
     @IBAction func stepBackward(_ sender: Any?) {
-        NotificationCenter.default.post(name: .frameStepBackward, object: 1)
+        videoState.requestFrameStep(direction: .backward, amount: 1)
     }
 
     @IBAction func showHelp(_ sender: Any?) {

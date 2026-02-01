@@ -150,36 +150,23 @@ class VLCVideoView: NSView {
             }
             .store(in: &cancellables)
 
-        // Seek notifications
-        NotificationCenter.default.publisher(for: .seekToTime)
+        state.seekRequests
             .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Double }
-            .sink { [weak self] time in
-                self?.seek(to: time)
+            .sink { [weak self] request in
+                switch request {
+                case .time(let time, let accurate):
+                    self?.seek(to: time, accurate: accurate)
+                case .frame(let frame):
+                    self?.seekToFrame(frame)
+                }
             }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: .seekToFrame)
+        state.frameStepRequests
             .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Int }
-            .sink { [weak self] frame in
-                self?.seekToFrame(frame)
-            }
-            .store(in: &cancellables)
-
-        NotificationCenter.default.publisher(for: .frameStepForward)
-            .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Int }
-            .sink { [weak self] amount in
-                self?.stepFrame(forward: true, amount: amount)
-            }
-            .store(in: &cancellables)
-
-        NotificationCenter.default.publisher(for: .frameStepBackward)
-            .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Int }
-            .sink { [weak self] amount in
-                self?.stepFrame(forward: false, amount: amount)
+            .sink { [weak self] request in
+                let forward = request.direction == .forward
+                self?.stepFrame(forward: forward, amount: request.amount)
             }
             .store(in: &cancellables)
     }
@@ -294,16 +281,22 @@ class VLCVideoView: NSView {
         stopTimeObserver()
     }
 
-    func seek(to time: Double) {
+    func seek(to time: Double, accurate: Bool) {
         guard let state = videoState, state.duration > 0 else { return }
-        let position = Float(time / state.duration)
-        mediaPlayer?.perform(Selector(("setPosition:")), with: NSNumber(value: position))
+        let clamped = max(0, min(state.duration, time))
+
+        if accurate, let timeObj = makeVLCTime(milliseconds: Int32(clamped * 1000)) {
+            mediaPlayer?.perform(Selector(("setTime:")), with: timeObj)
+        } else {
+            let position = Float(clamped / state.duration)
+            mediaPlayer?.perform(Selector(("setPosition:")), with: NSNumber(value: position))
+        }
     }
 
     func seekToFrame(_ frame: Int) {
         guard let state = videoState else { return }
         let time = Double(frame) / state.frameRate
-        seek(to: time)
+        seek(to: time, accurate: true)
     }
 
     func stepFrame(forward: Bool, amount: Int) {
@@ -320,6 +313,27 @@ class VLCVideoView: NSView {
         let selector = Selector(("audio"))
         guard let audio = mediaPlayer?.perform(selector)?.takeUnretainedValue() as? NSObject else { return }
         audio.perform(Selector(("setVolume:")), with: NSNumber(value: volume))
+    }
+
+    private func makeVLCTime(milliseconds: Int32) -> NSObject? {
+        guard let timeClass = NSClassFromString("VLCTime") else { return nil }
+
+        let timeWithIntSel = NSSelectorFromString("timeWithInt:")
+        if (timeClass as AnyObject).responds(to: timeWithIntSel),
+           let time = (timeClass as AnyObject).perform(timeWithIntSel, with: NSNumber(value: milliseconds))?.takeUnretainedValue() as? NSObject {
+            return time
+        }
+
+        let allocSel = NSSelectorFromString("alloc")
+        let initSel = NSSelectorFromString("initWithInt:")
+        guard let allocated = (timeClass as AnyObject).perform(allocSel)?.takeUnretainedValue() as? NSObject else { return nil }
+        guard allocated.responds(to: initSel) else { return nil }
+
+        let imp = allocated.method(for: initSel)
+        typealias InitFunc = @convention(c) (AnyObject, Selector, Int32) -> AnyObject
+        let initFunc = unsafeBitCast(imp, to: InitFunc.self)
+        let timeObj = initFunc(allocated, initSel, milliseconds)
+        return timeObj as? NSObject
     }
 
     // MARK: - Time Observer
@@ -382,6 +396,7 @@ class VLCVideoView: NSView {
             case 6: // Error
                 print("VLCVideoView: Error state")
                 state.isVideoLoaded = false
+                showVideoLoadError("VLC failed to decode this video.")
             default:
                 print("VLCVideoView: Unknown state \(stateValue)")
                 break
@@ -463,5 +478,20 @@ class VLCVideoView: NSView {
     deinit {
         stop()
         NotificationCenter.default.removeObserver(self)
+    }
+
+    private func showVideoLoadError(_ message: String) {
+        DispatchQueue.main.async { [weak self] in
+            let alert = NSAlert()
+            alert.messageText = "Playback Error"
+            alert.informativeText = message
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "OK")
+            if let window = self?.window {
+                alert.beginSheetModal(for: window, completionHandler: nil)
+            } else {
+                alert.runModal()
+            }
+        }
     }
 }

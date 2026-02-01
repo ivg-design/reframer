@@ -32,6 +32,7 @@ class VideoView: NSView {
     private var dragStart: NSPoint = .zero
     private var panStart: CGSize = .zero
     private var isPanning: Bool = false  // Track if we started a pan operation
+    private var scrollStepper = ScrollStepAccumulator()
 
     // MARK: - Initialization
 
@@ -104,29 +105,24 @@ class VideoView: NSView {
             }
             .store(in: &cancellables)
 
-        // Listen for seek notifications
-        NotificationCenter.default.publisher(for: .seekToTime)
+        state.seekRequests
             .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Double }
-            .sink { [weak self] time in self?.scrub(to: time) }
+            .sink { [weak self] request in
+                switch request {
+                case .time(let time, let accurate):
+                    self?.seek(to: time, accurate: accurate)
+                case .frame(let frame):
+                    self?.seekToFrame(frame)
+                }
+            }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: .seekToFrame)
+        state.frameStepRequests
             .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Int }
-            .sink { [weak self] frame in self?.seekToFrame(frame) }
-            .store(in: &cancellables)
-
-        NotificationCenter.default.publisher(for: .frameStepForward)
-            .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Int }
-            .sink { [weak self] amount in self?.stepFrame(forward: true, amount: amount) }
-            .store(in: &cancellables)
-
-        NotificationCenter.default.publisher(for: .frameStepBackward)
-            .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Int }
-            .sink { [weak self] amount in self?.stepFrame(forward: false, amount: amount) }
+            .sink { [weak self] request in
+                let forward = request.direction == .forward
+                self?.stepFrame(forward: forward, amount: request.amount)
+            }
             .store(in: &cancellables)
 
         // Observe quick filter changes
@@ -415,33 +411,39 @@ class VideoView: NSView {
         }
     }
 
-    func scrub(to time: Double) {
+    func seek(to time: Double, accurate: Bool) {
         guard let state = videoState else { return }
 
         // Clamp to valid range
         let clampedTime = max(0, min(state.duration, time))
 
-        // Avoid redundant seeks to the same time
-        if abs(clampedTime - lastSeekTime) < 0.01 { return }
+        // Avoid redundant seeks to the same time (especially while scrubbing)
+        if !accurate && abs(clampedTime - lastSeekTime) < 0.02 { return }
         lastSeekTime = clampedTime
 
         let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 600)
         player?.currentItem?.cancelPendingSeeks()
-        player?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
-        state.currentTime = clampedTime
-        state.currentFrame = Int(clampedTime * state.frameRate)
+
+        if accurate {
+            player?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak state] _ in
+                DispatchQueue.main.async {
+                    state?.currentTime = clampedTime
+                    if let rate = state?.frameRate {
+                        state?.currentFrame = Int(clampedTime * rate)
+                    }
+                }
+            }
+        } else {
+            player?.seek(to: cmTime)
+            state.currentTime = clampedTime
+            state.currentFrame = Int(clampedTime * state.frameRate)
+        }
     }
 
     func seekToFrame(_ frame: Int) {
         guard let state = videoState else { return }
         let time = Double(frame) / state.frameRate
-        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-        player?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak state] _ in
-            DispatchQueue.main.async {
-                state?.currentFrame = frame
-                state?.currentTime = time
-            }
-        }
+        seek(to: time, accurate: true)
     }
 
     func stepFrame(forward: Bool, amount: Int) {
@@ -638,7 +640,7 @@ class VideoView: NSView {
 
         guard delta != 0 else { return }
 
-        let direction = delta < 0 ? 1.0 : -1.0
+        let direction = delta > 0 ? 1.0 : -1.0
         let magnitude: Double
         if event.hasPreciseScrollingDeltas {
             magnitude = max(0.25, min(4.0, abs(delta) / 10.0))
@@ -654,10 +656,9 @@ class VideoView: NSView {
             state.adjustZoom(byPercent: direction * 5.0 * magnitude)
         } else {
             // Frame stepping
-            if delta > 0.5 {
-                NotificationCenter.default.post(name: .frameStepBackward, object: 1)
-            } else if delta < -0.5 {
-                NotificationCenter.default.post(name: .frameStepForward, object: 1)
+            let steps = scrollStepper.steps(for: delta, hasPreciseDeltas: event.hasPreciseScrollingDeltas)
+            for step in steps {
+                state.requestFrameStep(direction: step, amount: 1)
             }
         }
     }

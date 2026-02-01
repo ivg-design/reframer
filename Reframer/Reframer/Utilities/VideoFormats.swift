@@ -69,8 +69,36 @@ struct VideoFormats {
 
     /// Check if a URL is a supported video format
     static func isSupported(_ url: URL) -> Bool {
+        if let contentType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType {
+            if isSupported(contentType: contentType) {
+                return true
+            }
+        }
+
         let ext = url.pathExtension.lowercased()
-        return supportedExtensions.contains(ext)
+        if supportedExtensions.contains(ext) {
+            return true
+        }
+
+        if let type = UTType(filenameExtension: ext) {
+            return isSupported(contentType: type)
+        }
+
+        return false
+    }
+
+    static func isSupported(contentType: UTType) -> Bool {
+        for type in supportedTypes {
+            if contentType.conforms(to: type) {
+                return true
+            }
+        }
+
+        if contentType.conforms(to: .movie) || contentType.conforms(to: .video) || contentType.conforms(to: .audiovisualContent) {
+            return true
+        }
+
+        return false
     }
 
     /// Get display string for supported formats

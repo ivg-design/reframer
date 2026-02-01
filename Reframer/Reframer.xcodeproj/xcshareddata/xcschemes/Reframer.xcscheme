@@ -28,6 +28,23 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
+      <PreActions>
+         <ExecutionAction ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Unquarantine UITest Runner"
+               scriptText = "runner=&quot;${BUILT_PRODUCTS_DIR}/ReframerUITests-Runner.app&quot;&#10;app=&quot;${BUILT_PRODUCTS_DIR}/Reframer.app&quot;&#10;if [ -d &quot;$runner&quot; ]; then&#10;  /usr/bin/xattr -dr com.apple.quarantine &quot;$runner&quot; || true&#10;  /usr/bin/xattr -dr com.apple.quarantine &quot;$runner/Contents/PlugIns&quot; || true&#10;  /usr/bin/xattr -dr com.apple.provenance &quot;$runner&quot; || true&#10;  /usr/bin/xattr -dr com.apple.macl &quot;$runner&quot; || true&#10;  /usr/bin/codesign --force --deep --sign - &quot;$runner&quot; || true&#10;fi&#10;if [ -d &quot;$app&quot; ]; then&#10;  /usr/bin/xattr -dr com.apple.quarantine &quot;$app&quot; || true&#10;  /usr/bin/xattr -dr com.apple.provenance &quot;$app&quot; || true&#10;  /usr/bin/xattr -dr com.apple.macl &quot;$app&quot; || true&#10;  /usr/bin/codesign --force --deep --sign - &quot;$app&quot; || true&#10;fi">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "AAA50001"
+                     BuildableName = "Reframer.app"
+                     BlueprintName = "Reframer"
+                     ReferencedContainer = "container:Reframer.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PreActions>
       <TestPlans>
          <TestPlanReference
             reference = "container:Reframer.xctestplan"

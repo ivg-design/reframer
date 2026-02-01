@@ -84,7 +84,7 @@ class HelpView: NSView {
         contentView.addArrangedSubview(makeSection(title: "PLAYBACK", shortcuts: [
             ("Space", "Play / Pause"),
             ("Scroll", "Step frames (unlocked)"),
-            ("⌘ PgUp/Dn", "Step frame (global, ⇧ for 10)")
+            ("⌘ PgUp/Dn", "Step frame (global, ⇧ for 10, lock mode)")
         ]))
 
         contentView.addArrangedSubview(makeSection(title: "PAN (ARROWS)", shortcuts: [
@@ -115,6 +115,7 @@ class HelpView: NSView {
 
         contentView.addArrangedSubview(makeSection(title: "INPUTS", shortcuts: [
             ("↑ / ↓", "Step value (⇧ for 10, ⌘ for 0.1% zoom)"),
+            ("⌘A", "Select all"),
             ("Esc / Enter", "Defocus")
         ]))
 

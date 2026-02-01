@@ -12,10 +12,11 @@ class VLCKitManager {
 
     // Full VLC.app to get plugins (~49MB compressed)
     #if arch(arm64)
-    private let vlcAppURL = URL(string: "https://get.videolan.org/vlc/3.0.21/macosx/vlc-3.0.21-arm64.dmg")!
+    private let vlcAppURL = URL(string: "https://get.videolan.org/vlc/3.0.23/macosx/vlc-3.0.23-arm64.dmg")!
     #else
-    private let vlcAppURL = URL(string: "https://get.videolan.org/vlc/3.0.21/macosx/vlc-3.0.21-intel64.dmg")!
+    private let vlcAppURL = URL(string: "https://get.videolan.org/vlc/3.0.23/macosx/vlc-3.0.23-intel64.dmg")!
     #endif
+    private let expectedVLCVersionPrefix = "3.0.23"
 
     private(set) var isLoaded = false
     private var vlcBundle: Bundle?
@@ -86,6 +87,24 @@ class VLCKitManager {
             }
         }
         print("VLCKit: === End Status ===")
+    }
+
+    private func currentLibVLCVersion() -> String? {
+        guard let libraryClass = NSClassFromString("VLCLibrary") as AnyObject? else { return nil }
+        let sharedSel = NSSelectorFromString("sharedLibrary")
+        guard let library = libraryClass.perform(sharedSel)?.takeUnretainedValue() as? NSObject else { return nil }
+
+        if let version = library.value(forKey: "version") as? String {
+            return version
+        }
+
+        let versionSel = NSSelectorFromString("version")
+        if library.responds(to: versionSel),
+           let version = library.perform(versionSel)?.takeUnretainedValue() as? String {
+            return version
+        }
+
+        return nil
     }
 
     // MARK: - Installation
@@ -444,6 +463,12 @@ class VLCKitManager {
 
             // Log final status
             logInstallationStatus()
+            if let version = currentLibVLCVersion() {
+                print("VLCKit: libVLC version = \(version)")
+                if !version.hasPrefix(expectedVLCVersionPrefix) {
+                    print("VLCKit: WARNING - libVLC version does not match expected \(expectedVLCVersionPrefix). Plugins may fail to load.")
+                }
+            }
 
             return true
         } catch {
@@ -458,10 +483,11 @@ class VLCKitManager {
         return [
             "--codec=avcodec,all",         // Prefer software codecs
             "--no-videotoolbox",           // Disable Video Toolbox (doesn't support VP9)
+            "--avcodec-hw=none",           // Disable hardware decode for codec fallback
             "--avcodec-skiploopfilter=0",  // Full quality decoding
             "--no-video-title-show",
             "--no-stats",
-            "-v"                           // Some verbosity for debugging
+            "-vv"                          // Some verbosity for debugging
         ]
     }
 

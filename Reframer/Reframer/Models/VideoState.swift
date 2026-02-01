@@ -9,6 +9,21 @@ class VideoState: ObservableObject {
         case vlc
     }
 
+    enum SeekRequest: Equatable {
+        case time(Double, accurate: Bool)
+        case frame(Int)
+    }
+
+    enum FrameStepDirection: Equatable {
+        case forward
+        case backward
+    }
+
+    struct FrameStepRequest: Equatable {
+        let direction: FrameStepDirection
+        let amount: Int
+    }
+
     // Video loading
     @Published var videoURL: URL?
     @Published var videoAudioURL: URL?
@@ -27,15 +42,15 @@ class VideoState: ObservableObject {
     @Published var videoNaturalSize: CGSize = .zero
 
     // Volume
-    @Published var volume: Float = 0.0 // Muted by default
-    @Published var isMuted: Bool = true
+    @Published var volume: Float = 0.0 { didSet { handleVolumeChange(oldValue: oldValue) } }
+    @Published var isMuted: Bool = true { didSet { handleMuteChange(oldValue: oldValue) } }
 
     // Zoom & Pan
     @Published var zoomScale: CGFloat = 1.0
     @Published var panOffset: CGSize = .zero
 
     // Opacity
-    @Published var opacity: Double = 1.0
+    @Published var opacity: Double = 1.0 { didSet { persistDouble(opacity, key: DefaultsKeys.opacity) } }
 
     // Quick Filter (single filter from dropdown, controls toolbar slider)
     @Published var quickFilter: VideoFilter? = nil
@@ -50,10 +65,21 @@ class VideoState: ObservableObject {
     @Published var isLocked: Bool = false
 
     // Always on top
-    @Published var isAlwaysOnTop: Bool = true
+    @Published var isAlwaysOnTop: Bool = true { didSet { persistBool(isAlwaysOnTop, key: DefaultsKeys.alwaysOnTop) } }
 
     // Help
     @Published var showHelp: Bool = false
+
+    // Requests
+    let seekRequests = PassthroughSubject<SeekRequest, Never>()
+    let frameStepRequests = PassthroughSubject<FrameStepRequest, Never>()
+
+    @Published private(set) var lastSeekRequest: SeekRequest?
+    @Published private(set) var lastFrameStepRequest: FrameStepRequest?
+
+    private var isLoadingPreferences = false
+    private var isAdjustingMute = false
+    private var lastNonZeroVolume: Float = 0.5
 
     // Computed properties
     var zoomPercentage: Int {
@@ -78,6 +104,20 @@ class VideoState: ObservableObject {
 
     var formattedDuration: String {
         formatTime(duration)
+    }
+
+    private enum DefaultsKeys {
+        static let volume = "VideoOverlay.volume"
+        static let lastVolume = "VideoOverlay.lastVolume"
+        static let muted = "VideoOverlay.muted"
+        static let opacity = "VideoOverlay.opacity"
+        static let alwaysOnTop = "VideoOverlay.alwaysOnTop"
+    }
+
+    init() {
+        isLoadingPreferences = true
+        loadPreferences()
+        isLoadingPreferences = false
     }
 
     // MARK: - Methods
@@ -108,7 +148,24 @@ class VideoState: ObservableObject {
 
     func toggleMute() {
         isMuted.toggle()
-        volume = isMuted ? 0.0 : 0.5
+    }
+
+    func requestSeek(time: Double, accurate: Bool) {
+        let request: SeekRequest = .time(time, accurate: accurate)
+        lastSeekRequest = request
+        seekRequests.send(request)
+    }
+
+    func requestSeek(frame: Int) {
+        let request: SeekRequest = .frame(frame)
+        lastSeekRequest = request
+        seekRequests.send(request)
+    }
+
+    func requestFrameStep(direction: FrameStepDirection, amount: Int) {
+        let request = FrameStepRequest(direction: direction, amount: amount)
+        lastFrameStepRequest = request
+        frameStepRequests.send(request)
     }
 
     // MARK: - Quick Filter Methods (dropdown - single select)
@@ -181,5 +238,93 @@ class VideoState: ObservableObject {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func loadPreferences() {
+        let defaults = UserDefaults.standard
+
+        if defaults.object(forKey: DefaultsKeys.alwaysOnTop) != nil {
+            isAlwaysOnTop = defaults.bool(forKey: DefaultsKeys.alwaysOnTop)
+        }
+
+        if defaults.object(forKey: DefaultsKeys.opacity) != nil {
+            opacity = defaults.double(forKey: DefaultsKeys.opacity)
+        }
+
+        if defaults.object(forKey: DefaultsKeys.lastVolume) != nil {
+            lastNonZeroVolume = defaults.float(forKey: DefaultsKeys.lastVolume)
+        } else {
+            lastNonZeroVolume = 0.5
+        }
+        if lastNonZeroVolume <= 0 {
+            lastNonZeroVolume = 0.5
+        }
+
+        let hasVolume = defaults.object(forKey: DefaultsKeys.volume) != nil
+        let savedVolume = hasVolume ? defaults.float(forKey: DefaultsKeys.volume) : lastNonZeroVolume
+        let hasMuted = defaults.object(forKey: DefaultsKeys.muted) != nil
+        let savedMuted = hasMuted ? defaults.bool(forKey: DefaultsKeys.muted) : true
+
+        isMuted = savedMuted
+        volume = savedMuted ? 0.0 : savedVolume
+    }
+
+    private func handleVolumeChange(oldValue: Float) {
+        guard !isLoadingPreferences else { return }
+        if volume > 0 {
+            lastNonZeroVolume = volume
+            persistFloat(lastNonZeroVolume, key: DefaultsKeys.lastVolume)
+        }
+
+        if !isAdjustingMute {
+            if volume <= 0 && !isMuted {
+                isAdjustingMute = true
+                isMuted = true
+                isAdjustingMute = false
+            } else if volume > 0 && isMuted {
+                isAdjustingMute = true
+                isMuted = false
+                isAdjustingMute = false
+            }
+        }
+
+        persistFloat(volume, key: DefaultsKeys.volume)
+    }
+
+    private func handleMuteChange(oldValue: Bool) {
+        guard !isLoadingPreferences else { return }
+        guard oldValue != isMuted else { return }
+
+        if !isAdjustingMute {
+            isAdjustingMute = true
+            if isMuted {
+                if volume > 0 {
+                    lastNonZeroVolume = volume
+                    persistFloat(lastNonZeroVolume, key: DefaultsKeys.lastVolume)
+                }
+                volume = 0.0
+            } else {
+                let restored = lastNonZeroVolume > 0 ? lastNonZeroVolume : 0.5
+                volume = restored
+            }
+            isAdjustingMute = false
+        }
+
+        persistBool(isMuted, key: DefaultsKeys.muted)
+    }
+
+    private func persistBool(_ value: Bool, key: String) {
+        guard !isLoadingPreferences else { return }
+        UserDefaults.standard.set(value, forKey: key)
+    }
+
+    private func persistFloat(_ value: Float, key: String) {
+        guard !isLoadingPreferences else { return }
+        UserDefaults.standard.set(value, forKey: key)
+    }
+
+    private func persistDouble(_ value: Double, key: String) {
+        guard !isLoadingPreferences else { return }
+        UserDefaults.standard.set(value, forKey: key)
     }
 }

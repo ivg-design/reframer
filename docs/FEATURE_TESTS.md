@@ -2,6 +2,19 @@
 
 This document lists **practical automated tests** (unit, integration, and UI) that should be added to conclusively verify every feature in `FEATURES.md`. Each test includes a short method + expected result. Where a feature can’t be validated purely with unit tests, it is called out and mapped to an **XCUITest/UI test** or **integration test**. The goal is full coverage of all functional requirements.
 
+## Implemented (2026-02-01)
+- UI: Timeline scrub updates frame (`ReframerIntegrationTests.testTimelineScrubUpdatesFrame`)
+- UI: Frame input Shift+Arrow steps 10 frames (`ReframerIntegrationTests.testFrameField_ShiftArrowStepsBy10`)
+- UI: Opacity input Shift+Arrow steps 10% (`ReframerIntegrationTests.testOpacityField_ShiftArrowAdjustsBy10`)
+- UI: Quick filter parameterless disables slider (`ReframerIntegrationTests.testQuickFilterParameterlessDisablesSlider`)
+- UI: Mute restores volume (`ReframerIntegrationTests.testMuteRestoresPreviousVolume`)
+- UI: Cmd+A selects all in inputs (`ReframerIntegrationTests.testInputField_CmdASelectAllReplacesValue`)
+- UI: Cmd+PageDown steps when locked (`ReframerIntegrationTests.testLockMode_CmdPageDownStepsFrames`)
+- Unit: Input command selectors mapped (`ControlBarStepTests`)
+- Unit: Scroll step accumulation (`ScrollStepAccumulatorTests`)
+- Unit: Drop zone load handler (`DropZoneViewTests`)
+- Unit: Preference persistence + mute restore (`VideoStateTests`)
+
 ## Test Harness & Fixtures (Foundational)
 These are prerequisites that many tests depend on.
 

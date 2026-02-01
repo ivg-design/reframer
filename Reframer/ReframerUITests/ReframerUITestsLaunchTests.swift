@@ -12,15 +12,18 @@ final class ReframerUITestsLaunchTests: XCTestCase {
 
     func testLaunch() throws {
         let app = XCUIApplication()
+        app.launchEnvironment["UITEST_MODE"] = "1"
         app.launch()
 
         // Verify app launched successfully
         XCTAssertTrue(app.exists, "App should launch successfully")
 
-        // Take a screenshot for reference
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Launch Screen"
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        if ProcessInfo.processInfo.environment["UITEST_SCREENSHOTS"] == "1" {
+            // Take a screenshot for reference
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.name = "Launch Screen"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
     }
 }

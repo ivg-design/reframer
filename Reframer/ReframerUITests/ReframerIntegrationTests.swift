@@ -1,7 +1,13 @@
 import XCTest
 
-/// Path to test video - update this if needed
-let testVideoPath = "/Users/ivg/github/video-overlay/Reframer/ReframerTests/TestFixtures/test-video.mp4"
+private func fixtureURL(_ name: String, ext: String = "mp4") -> URL {
+    let fileURL = URL(fileURLWithPath: #file)
+    let baseURL = fileURL.deletingLastPathComponent().deletingLastPathComponent() // .../Reframer
+    return baseURL.appendingPathComponent("ReframerTests/TestFixtures/\(name).\(ext)")
+}
+
+/// Path to test video fixture
+let testVideoPath = fixtureURL("test-video").path
 
 /// Comprehensive integration tests with video loaded.
 /// These tests verify actual functionality, not just UI element existence.
@@ -89,6 +95,13 @@ final class ReframerIntegrationTests: XCTestCase {
         guard opacityField.exists else { return 100 }
         let value = opacityField.value as? String ?? "100"
         return Int(value) ?? 100
+    }
+
+    func getSliderValue(_ identifier: String) -> Double {
+        let slider = app.sliders[identifier]
+        guard slider.exists else { return 0 }
+        let raw = slider.value as? String ?? "0"
+        return Double(raw) ?? 0
     }
 
     func isLocked() -> Bool {
@@ -300,6 +313,19 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertEqual(frameAfterBack, frameBeforeBack - 1, "Frame should decrease by exactly 1")
     }
 
+    func testTimelineScrubUpdatesFrame() throws {
+        XCTAssertTrue(isVideoLoaded())
+
+        let slider = app.sliders["slider-timeline"]
+        XCTAssertTrue(slider.exists)
+
+        slider.adjust(toNormalizedSliderPosition: 0.5)
+        Thread.sleep(forTimeInterval: 0.4)
+
+        let frameAfterScrub = getFrameValue()
+        XCTAssertGreaterThan(frameAfterScrub, 0, "Scrubbing should move to a later frame")
+    }
+
     // MARK: - F-ZP-001: Zoom via Scroll Wheel with Shift
 
     // Note: XCUITest can't easily simulate scroll with modifiers
@@ -350,6 +376,32 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertEqual(newZoom, initialZoom + 10, accuracy: 0.5, "Shift+Up should increase zoom by 10")
 
         app.typeKey(.escape, modifierFlags: [])
+    }
+
+    func testInputField_CmdASelectAllReplacesValue() throws {
+        XCTAssertTrue(isVideoLoaded())
+        ensureUnlocked()
+
+        let zoomField = app.textFields["input-zoom"]
+        XCTAssertTrue(zoomField.exists)
+
+        // Set a known value first
+        zoomField.doubleTap()
+        Thread.sleep(forTimeInterval: 0.1)
+        app.typeText("120")
+        app.typeKey(.return, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 0.2)
+
+        // Cmd+A should select all so the next entry replaces the value
+        zoomField.click()
+        app.typeKey("a", modifierFlags: .command)
+        Thread.sleep(forTimeInterval: 0.1)
+        app.typeText("80")
+        app.typeKey(.return, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 0.2)
+
+        let newZoom = getZoomValue()
+        XCTAssertEqual(newZoom, 80, accuracy: 0.5, "Cmd+A should select all and replace the value")
     }
 
     // Note: Cmd+UpArrow in text fields is intercepted by macOS for document navigation
@@ -516,6 +568,26 @@ final class ReframerIntegrationTests: XCTestCase {
         ensureUnlocked()
     }
 
+    func testLockMode_CmdPageDownStepsFrames() throws {
+        XCTAssertTrue(isVideoLoaded())
+        ensureLocked()
+
+        let initialFrame = getFrameValue()
+        app.typeKey(.pageDown, modifierFlags: .command)
+        Thread.sleep(forTimeInterval: 0.3)
+
+        let newFrame = getFrameValue()
+        XCTAssertEqual(newFrame, initialFrame + 1, "Cmd+PageDown should step 1 frame when locked")
+
+        // Shift+Cmd should step 10 frames
+        app.typeKey(.pageDown, modifierFlags: [.command, .shift])
+        Thread.sleep(forTimeInterval: 0.3)
+        let afterShift = getFrameValue()
+        XCTAssertEqual(afterShift, newFrame + 10, "Cmd+Shift+PageDown should step 10 frames when locked")
+
+        ensureUnlocked()
+    }
+
     // MARK: - F-OP-001: Opacity Field
 
     func testOpacityField_ArrowKeysAdjust() throws {
@@ -539,6 +611,54 @@ final class ReframerIntegrationTests: XCTestCase {
         }
 
         app.typeKey(.escape, modifierFlags: [])
+    }
+
+    func testOpacityField_ShiftArrowAdjustsBy10() throws {
+        XCTAssertTrue(isVideoLoaded())
+
+        let opacityField = app.textFields["input-opacity"]
+        opacityField.click()
+        Thread.sleep(forTimeInterval: 0.2)
+
+        let initialOpacity = getOpacityValue()
+
+        app.typeKey(.upArrow, modifierFlags: .shift)
+        Thread.sleep(forTimeInterval: 0.3)
+
+        let newOpacity = getOpacityValue()
+        XCTAssertEqual(newOpacity, min(100, initialOpacity + 10), "Shift+Up should increase opacity by 10%")
+
+        app.typeKey(.escape, modifierFlags: [])
+    }
+
+    func testQuickFilterParameterlessDisablesSlider() throws {
+        XCTAssertTrue(isVideoLoaded())
+
+        let filterButton = app.buttons["button-filter-menu"]
+        XCTAssertTrue(filterButton.exists, "Filter button should exist")
+
+        // Select Invert (parameterless)
+        filterButton.press(forDuration: 0.4)
+        let invertItem = app.menuItems["Invert"]
+        guard invertItem.waitForExistence(timeout: 2) else {
+            throw XCTSkip("Filter menu did not appear")
+        }
+        invertItem.click()
+        Thread.sleep(forTimeInterval: 0.3)
+
+        let opacitySlider = app.sliders["slider-opacity"]
+        let opacityField = app.textFields["input-opacity"]
+        XCTAssertFalse(opacitySlider.isEnabled, "Opacity slider should be disabled for parameterless filter")
+        XCTAssertEqual(opacityField.value as? String, "On", "Opacity field should show On for parameterless filter")
+
+        // Select Brightness (adjustable) to restore slider
+        filterButton.press(forDuration: 0.4)
+        let brightnessItem = app.menuItems["Brightness"]
+        if brightnessItem.waitForExistence(timeout: 2) {
+            brightnessItem.click()
+            Thread.sleep(forTimeInterval: 0.3)
+            XCTAssertTrue(opacitySlider.isEnabled, "Opacity slider should be enabled for adjustable filter")
+        }
     }
 
     // MARK: - F-UI-004: Help Modal
@@ -599,6 +719,24 @@ final class ReframerIntegrationTests: XCTestCase {
         app.typeKey(.escape, modifierFlags: [])
     }
 
+    func testFrameField_ShiftArrowStepsBy10() throws {
+        XCTAssertTrue(isVideoLoaded())
+
+        let frameField = app.textFields["input-frame"]
+        frameField.click()
+        Thread.sleep(forTimeInterval: 0.2)
+
+        let initialFrame = getFrameValue()
+
+        app.typeKey(.upArrow, modifierFlags: .shift)
+        Thread.sleep(forTimeInterval: 0.3)
+
+        let newFrame = getFrameValue()
+        XCTAssertEqual(newFrame, initialFrame + 10, "Shift+Up should increment by 10 frames")
+
+        app.typeKey(.escape, modifierFlags: [])
+    }
+
     // MARK: - F-AU-001: Mute Button
 
     func testMuteButton_Toggles() throws {
@@ -614,6 +752,34 @@ final class ReframerIntegrationTests: XCTestCase {
 
         // Button should still exist (no crash)
         XCTAssertTrue(muteButton.exists)
+    }
+
+    func testMuteRestoresPreviousVolume() throws {
+        let muteButton = app.buttons["button-mute"]
+        let volumeSlider = app.sliders["slider-volume"]
+        XCTAssertTrue(muteButton.exists)
+
+        // Ensure unmuted so slider is visible
+        if !volumeSlider.isHittable {
+            muteButton.click()
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+
+        XCTAssertTrue(volumeSlider.waitForExistence(timeout: 2))
+        volumeSlider.adjust(toNormalizedSliderPosition: 0.7)
+        Thread.sleep(forTimeInterval: 0.2)
+        let initialVolume = getSliderValue("slider-volume")
+
+        // Mute
+        muteButton.click()
+        Thread.sleep(forTimeInterval: 0.2)
+
+        // Unmute
+        muteButton.click()
+        Thread.sleep(forTimeInterval: 0.2)
+
+        let restoredVolume = getSliderValue("slider-volume")
+        XCTAssertEqual(restoredVolume, initialVolume, accuracy: 0.05, "Unmute should restore previous volume")
     }
 
     // MARK: - Compound Workflow Tests

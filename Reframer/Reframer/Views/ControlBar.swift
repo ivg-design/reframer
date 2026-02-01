@@ -47,6 +47,11 @@ class ControlBar: NSView {
     private var openPressRecognizer: NSPressGestureRecognizer?
     private var didHandleOpenLongPress = false
 
+    enum StepCommand {
+        case up
+        case down
+    }
+
     // MARK: - Initialization
 
     override init(frame frameRect: NSRect) {
@@ -217,6 +222,7 @@ class ControlBar: NSView {
         stackView.insertArrangedSubview(button, at: index)
 
         filterMenuButton = button
+        filterMenuButton?.setAccessibilityIdentifier("button-filter-menu")
     }
 
     // MARK: - Actions Setup
@@ -319,7 +325,7 @@ class ControlBar: NSView {
     }
 
     @objc private func stepBackClicked(_ sender: Any?) {
-        NotificationCenter.default.post(name: .frameStepBackward, object: 1)
+        videoState?.requestFrameStep(direction: .backward, amount: 1)
     }
 
     @objc private func playClicked(_ sender: Any?) {
@@ -327,7 +333,7 @@ class ControlBar: NSView {
     }
 
     @objc private func stepForwardClicked(_ sender: Any?) {
-        NotificationCenter.default.post(name: .frameStepForward, object: 1)
+        videoState?.requestFrameStep(direction: .forward, amount: 1)
     }
 
     @objc private func resetClicked(_ sender: Any?) {
@@ -344,12 +350,7 @@ class ControlBar: NSView {
 
     @objc private func timelineChanged(_ sender: Any?) {
         guard let slider = timelineSlider else { return }
-        isScrubbing = slider.isHighlighted
-        let time = slider.doubleValue
-        NotificationCenter.default.post(name: .seekToTime, object: time)
-        if !slider.isHighlighted {
-            isScrubbing = false
-        }
+        handleTimelineChange(value: slider.doubleValue, isHighlighted: slider.isHighlighted)
     }
 
     @objc private func opacitySliderChanged(_ sender: Any?) {
@@ -357,6 +358,9 @@ class ControlBar: NSView {
 
         // If quick filter is active, control the filter value; otherwise control opacity
         if state.quickFilter != nil {
+            if state.quickFilter?.isQuickFilterAdjustable == false {
+                return
+            }
             state.quickFilterValue = slider.doubleValue
         } else {
             state.opacity = slider.doubleValue
@@ -366,8 +370,21 @@ class ControlBar: NSView {
     @objc private func volumeSliderChanged(_ sender: Any?) {
         guard let slider = volumeSlider else { return }
         videoState?.volume = Float(slider.doubleValue)
-        if videoState?.isMuted == true {
-            videoState?.isMuted = false
+    }
+
+    private func handleTimelineChange(value: Double, isHighlighted: Bool) {
+        guard let state = videoState else { return }
+
+        let wasScrubbing = isScrubbing
+        isScrubbing = isHighlighted
+        if isScrubbing {
+            state.requestSeek(time: value, accurate: false)
+            return
+        }
+
+        // On release (or click), do an accurate seek
+        if wasScrubbing || !isHighlighted {
+            state.requestSeek(time: value, accurate: true)
         }
     }
 
@@ -433,6 +450,7 @@ class ControlBar: NSView {
             .sink { [weak self] value in
                 guard let self = self,
                       let filter = self.videoState?.quickFilter else { return }
+                guard filter.isQuickFilterAdjustable else { return }
                 self.opacitySlider?.doubleValue = value
                 self.opacityField?.stringValue = self.formatFilterValue(filter: filter, normalizedValue: value)
             }
@@ -507,6 +525,11 @@ class ControlBar: NSView {
                 self?.opacityField?.isEnabled = loaded
                 self?.opacitySlider?.isEnabled = loaded
                 self?.updateOpacity()
+                if let filter = self?.videoState?.quickFilter {
+                    self?.updateSliderForQuickFilter(filter)
+                } else {
+                    self?.updateSliderForQuickFilter(nil)
+                }
             }
             .store(in: &cancellables)
     }
@@ -521,14 +544,25 @@ class ControlBar: NSView {
             // But display shows actual parameter value
             opacitySlider?.minValue = 0.0
             opacitySlider?.maxValue = 1.0
-            opacitySlider?.doubleValue = state.quickFilterValue
-            opacityField?.stringValue = formatFilterValue(filter: filter, normalizedValue: state.quickFilterValue)
+            if filter.isQuickFilterAdjustable {
+                opacitySlider?.isEnabled = state.isVideoLoaded
+                opacityField?.isEnabled = state.isVideoLoaded
+                opacitySlider?.doubleValue = state.quickFilterValue
+                opacityField?.stringValue = formatFilterValue(filter: filter, normalizedValue: state.quickFilterValue)
+            } else {
+                opacitySlider?.isEnabled = false
+                opacityField?.isEnabled = false
+                opacitySlider?.doubleValue = 1.0
+                opacityField?.stringValue = "On"
+            }
         } else {
             // No quick filter: slider controls opacity (0-100%)
             opacitySlider?.minValue = 0.02  // Minimum 2%
             opacitySlider?.maxValue = 1.0
             opacitySlider?.doubleValue = state.opacity
             opacityField?.stringValue = "\(Int(state.opacity * 100))"
+            opacitySlider?.isEnabled = state.isVideoLoaded
+            opacityField?.isEnabled = state.isVideoLoaded
         }
     }
 
@@ -619,7 +653,7 @@ extension ControlBar: NSTextFieldDelegate {
 
         if textField === frameField {
             if let value = Int(textField.stringValue) {
-                NotificationCenter.default.post(name: .seekToFrame, object: value)
+                videoState?.requestSeek(frame: value)
             }
         } else if textField === zoomField {
             if let value = Double(textField.stringValue) {
@@ -629,6 +663,7 @@ extension ControlBar: NSTextFieldDelegate {
             // If quick filter active, parse as actual parameter value
             // Otherwise parse as opacity percentage
             if let filter = videoState?.quickFilter {
+                guard filter.isQuickFilterAdjustable else { return }
                 if let actualValue = Double(textField.stringValue) {
                     let range = filter.parameterRange
                     // Convert actual value to normalized 0-1
@@ -646,34 +681,33 @@ extension ControlBar: NSTextFieldDelegate {
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         guard let textField = control as? NSTextField else { return false }
 
-        // Check for all variants of up/down arrow key commands:
-        // - moveUp/moveDown: plain arrow keys
-        // - moveUpAndModifySelection/moveDownAndModifySelection: Shift+arrow
-        // - moveToBeginningOfDocument/moveToEndOfDocument: Cmd+arrow (we'll repurpose for fine stepping)
-        let stepUp = commandSelector == #selector(NSResponder.moveUp(_:)) ||
-                     commandSelector == #selector(NSResponder.moveUpAndModifySelection(_:)) ||
-                     commandSelector == #selector(NSResponder.moveToBeginningOfDocument(_:))
-        let stepDown = commandSelector == #selector(NSResponder.moveDown(_:)) ||
-                       commandSelector == #selector(NSResponder.moveDownAndModifySelection(_:)) ||
-                       commandSelector == #selector(NSResponder.moveToEndOfDocument(_:))
-
-        if stepUp || stepDown {
-            let direction: Double = stepUp ? 1 : -1
+        if let stepCommand = Self.stepCommand(for: commandSelector) {
+            let direction: Double = stepCommand == .up ? 1 : -1
             let flags = NSApp.currentEvent?.modifierFlags ?? []
             let shift = flags.contains(.shift)
             let cmd = flags.contains(.command)
+            let option = flags.contains(.option)
+            let control = flags.contains(.control)
+            let coarse = shift || option || control
 
             if textField === frameField {
-                let step = shift ? 10 : 1
+                let step = coarse ? 10 : 1
                 if let current = Int(textField.stringValue) {
                     let maxFrame = videoState?.totalFrames ?? 1
                     let newValue = max(0, min(maxFrame - 1, current + step * Int(direction)))
                     textField.stringValue = "\(newValue)"
-                    NotificationCenter.default.post(name: .seekToFrame, object: newValue)
+                    videoState?.requestSeek(frame: newValue)
                 }
                 return true
             } else if textField === zoomField {
-                let step: Double = cmd ? 0.1 : (shift ? 10 : 1)
+                let step: Double
+                if cmd {
+                    step = 0.1
+                } else if coarse {
+                    step = 10
+                } else {
+                    step = 1
+                }
                 if let current = Double(textField.stringValue) {
                     let newValue = max(10, min(1000, current + step * direction))
                     // Show decimals when using fine control (cmd), otherwise integer
@@ -689,8 +723,9 @@ extension ControlBar: NSTextFieldDelegate {
                 return true
             } else if textField === opacityField {
                 if let filter = videoState?.quickFilter {
+                    guard filter.isQuickFilterAdjustable else { return true }
                     // Quick filter active: step by 1% of range normally, 10% with shift
-                    let stepPercent = shift ? 0.1 : 0.01
+                    let stepPercent = coarse ? 0.1 : 0.01
                     let normalizedStep = stepPercent * direction
 
                     let currentNormalized = videoState?.quickFilterValue ?? 0.5
@@ -699,7 +734,7 @@ extension ControlBar: NSTextFieldDelegate {
                     textField.stringValue = formatFilterValue(filter: filter, normalizedValue: newNormalized)
                 } else {
                     // Opacity mode: step by percentage
-                    let step = shift ? 10 : 1
+                    let step = coarse ? 10 : 1
                     if let current = Int(textField.stringValue) {
                         let newValue = max(2, min(100, current + step * Int(direction)))
                         textField.stringValue = "\(newValue)"
@@ -717,5 +752,33 @@ extension ControlBar: NSTextFieldDelegate {
         }
 
         return false
+    }
+
+    static func stepCommand(for commandSelector: Selector) -> StepCommand? {
+        let stepUpSelectors: [Selector] = [
+            #selector(NSResponder.moveUp(_:)),
+            #selector(NSResponder.moveUpAndModifySelection(_:)),
+            #selector(NSResponder.moveToBeginningOfDocument(_:)),
+            #selector(NSResponder.moveToBeginningOfDocumentAndModifySelection(_:)),
+            #selector(NSResponder.moveToBeginningOfParagraph(_:)),
+            #selector(NSResponder.moveToBeginningOfParagraphAndModifySelection(_:))
+        ]
+
+        let stepDownSelectors: [Selector] = [
+            #selector(NSResponder.moveDown(_:)),
+            #selector(NSResponder.moveDownAndModifySelection(_:)),
+            #selector(NSResponder.moveToEndOfDocument(_:)),
+            #selector(NSResponder.moveToEndOfDocumentAndModifySelection(_:)),
+            #selector(NSResponder.moveToEndOfParagraph(_:)),
+            #selector(NSResponder.moveToEndOfParagraphAndModifySelection(_:))
+        ]
+
+        if stepUpSelectors.contains(commandSelector) {
+            return .up
+        }
+        if stepDownSelectors.contains(commandSelector) {
+            return .down
+        }
+        return nil
     }
 }

@@ -5,15 +5,31 @@ import XCTest
 final class VideoStateTests: XCTestCase {
 
     var videoState: VideoState!
+    private let preferenceKeys = [
+        "VideoOverlay.volume",
+        "VideoOverlay.lastVolume",
+        "VideoOverlay.muted",
+        "VideoOverlay.opacity",
+        "VideoOverlay.alwaysOnTop"
+    ]
 
     override func setUp() {
         super.setUp()
+        resetPreferences()
         videoState = VideoState()
     }
 
     override func tearDown() {
         videoState = nil
+        resetPreferences()
         super.tearDown()
+    }
+
+    private func resetPreferences() {
+        let defaults = UserDefaults.standard
+        for key in preferenceKeys {
+            defaults.removeObject(forKey: key)
+        }
     }
 
     // MARK: - F-OP-002: Opacity Minimum (via setOpacityPercentage)
@@ -141,6 +157,48 @@ final class VideoStateTests: XCTestCase {
         videoState.toggleMute()
         XCTAssertFalse(videoState.isMuted, "Should be unmuted after toggle")
         XCTAssertGreaterThan(videoState.volume, 0.0, "Volume should be > 0 when unmuted")
+    }
+
+    func testMuteRestoresPreviousVolume() {
+        videoState.volume = 0.8
+        videoState.isMuted = false
+        videoState.isMuted = true
+        XCTAssertEqual(videoState.volume, 0.0, "Volume should be 0 when muted")
+        videoState.isMuted = false
+        XCTAssertEqual(videoState.volume, 0.8, accuracy: 0.001, "Unmute should restore last volume")
+    }
+
+    func testVolumeChangeUnmutes() {
+        videoState.isMuted = true
+        videoState.volume = 0.35
+        XCTAssertFalse(videoState.isMuted, "Adjusting volume should unmute")
+        XCTAssertEqual(videoState.volume, 0.35, accuracy: 0.001, "Volume should be updated")
+    }
+
+    func testPreferencesPersistence() {
+        videoState.volume = 0.42
+        videoState.isMuted = false
+        videoState.opacity = 0.73
+        videoState.isAlwaysOnTop = false
+
+        let reloaded = VideoState()
+        XCTAssertEqual(reloaded.volume, 0.42, accuracy: 0.001, "Volume should persist")
+        XCTAssertFalse(reloaded.isMuted, "Mute state should persist")
+        XCTAssertEqual(reloaded.opacity, 0.73, accuracy: 0.001, "Opacity should persist")
+        XCTAssertFalse(reloaded.isAlwaysOnTop, "Always-on-top should persist")
+    }
+
+    func testSeekRequestsRecordLastValue() {
+        videoState.requestSeek(time: 1.5, accurate: false)
+        XCTAssertEqual(videoState.lastSeekRequest, .time(1.5, accurate: false))
+
+        videoState.requestSeek(frame: 42)
+        XCTAssertEqual(videoState.lastSeekRequest, .frame(42))
+    }
+
+    func testFrameStepRequestsRecordLastValue() {
+        videoState.requestFrameStep(direction: .forward, amount: 3)
+        XCTAssertEqual(videoState.lastFrameStepRequest, VideoState.FrameStepRequest(direction: .forward, amount: 3))
     }
 
     // MARK: - Computed Properties

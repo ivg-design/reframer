@@ -11,6 +11,7 @@ final class ReframerUITests: XCTestCase {
     override class func setUp() {
         super.setUp()
         app = XCUIApplication()
+        app.launchEnvironment["UITEST_MODE"] = "1"
         app.launch()
     }
 

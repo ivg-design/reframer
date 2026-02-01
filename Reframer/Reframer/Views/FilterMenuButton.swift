@@ -31,6 +31,7 @@ class FilterMenuButton: NSView {
 
     private func setup() {
         wantsLayer = true
+        setAccessibilityElement(true)
 
         imageView.translatesAutoresizingMaskIntoConstraints = false
         imageView.imageScaling = .scaleProportionallyDown
