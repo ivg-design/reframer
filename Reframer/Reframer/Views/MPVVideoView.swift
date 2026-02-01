@@ -35,7 +35,7 @@ final class MPVVideoView: NSOpenGLView {
         super.init(frame: frameRect)
         if let format = MPVVideoView.makePixelFormat() {
             pixelFormat = format
-            openGLContext = NSOpenGLContext(format: format, shareContext: nil)
+            openGLContext = NSOpenGLContext(format: format, share: nil)
         }
         setupView()
     }
@@ -45,7 +45,7 @@ final class MPVVideoView: NSOpenGLView {
         if let format = MPVVideoView.makePixelFormat() {
             pixelFormat = format
             if openGLContext == nil {
-                openGLContext = NSOpenGLContext(format: format, shareContext: nil)
+                openGLContext = NSOpenGLContext(format: format, share: nil)
             }
         }
         setupView()
