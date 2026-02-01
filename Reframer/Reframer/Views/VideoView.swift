@@ -17,9 +17,10 @@ class VideoView: NSView {
         didSet { bindState() }
     }
 
-    // Drag state
+    // Drag state for Ctrl+drag panning
     private var dragStart: NSPoint = .zero
     private var panStart: CGSize = .zero
+    private var isPanning: Bool = false  // Track if we started a pan operation
 
     // MARK: - Initialization
 
@@ -176,6 +177,13 @@ class VideoView: NSView {
         cleanup()
         guard let state = videoState else { return }
 
+        // Reset state for new video
+        state.currentTime = 0
+        state.currentFrame = 0
+        state.duration = 0
+        state.totalFrames = 0
+        lastSeekTime = -1  // Allow scrubbing from the start
+
         let asset = AVURLAsset(url: url)
         playerItem = AVPlayerItem(asset: asset)
         player = AVPlayer(playerItem: playerItem)
@@ -233,15 +241,18 @@ class VideoView: NSView {
     func scrub(to time: Double) {
         guard let state = videoState else { return }
 
-        // Avoid redundant seeks to the same time
-        if abs(time - lastSeekTime) < 0.01 { return }
-        lastSeekTime = time
+        // Clamp to valid range
+        let clampedTime = max(0, min(state.duration, time))
 
-        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+        // Avoid redundant seeks to the same time
+        if abs(clampedTime - lastSeekTime) < 0.01 { return }
+        lastSeekTime = clampedTime
+
+        let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 600)
         player?.currentItem?.cancelPendingSeeks()
         player?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
-        state.currentTime = time
-        state.currentFrame = Int(time * state.frameRate)
+        state.currentTime = clampedTime
+        state.currentFrame = Int(clampedTime * state.frameRate)
     }
 
     func seekToFrame(_ frame: Int) {
@@ -300,12 +311,20 @@ class VideoView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         guard let state = videoState, !state.isLocked else { return }
-        dragStart = event.locationInWindow
-        panStart = state.panOffset
+
+        // Only start panning if Ctrl is held (otherwise let window drag work)
+        if event.modifierFlags.contains(.control) {
+            isPanning = true
+            dragStart = event.locationInWindow
+            panStart = state.panOffset
+        } else {
+            isPanning = false
+        }
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let state = videoState, !state.isLocked else { return }
+        guard let state = videoState, !state.isLocked, isPanning else { return }
+
         let current = event.locationInWindow
         let dx = current.x - dragStart.x
         let dy = current.y - dragStart.y
@@ -314,6 +333,10 @@ class VideoView: NSView {
             width: panStart.width + dx,
             height: panStart.height + dy
         )
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        isPanning = false
     }
 
     override func scrollWheel(with event: NSEvent) {

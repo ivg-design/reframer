@@ -9,7 +9,9 @@ class MainViewController: NSViewController {
     let videoState: VideoState
     private var videoView: VideoView!
     private var dropZoneView: DropZoneView!
+    private var edgeIndicatorView: EdgeIndicatorView!
     private var cancellables = Set<AnyCancellable>()
+
 
     // MARK: - Initialization
 
@@ -30,6 +32,7 @@ class MainViewController: NSViewController {
         view.wantsLayer = true
         view.layer?.backgroundColor = .clear
         view.layer?.cornerRadius = 12
+        // Round ALL corners - toolbar is now BELOW the window, not overlapping
         view.layer?.masksToBounds = true
     }
 
@@ -45,11 +48,17 @@ class MainViewController: NSViewController {
         dropZoneView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(dropZoneView)
 
+        // Edge indicator view for resize hints (pulsing edges when unlocked)
+        edgeIndicatorView = EdgeIndicatorView()
+        edgeIndicatorView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(edgeIndicatorView)
+
         // Configure views
         videoView.videoState = videoState
         dropZoneView.videoState = videoState
+        edgeIndicatorView.videoState = videoState
 
-        // Add constraints
+        // Add constraints - content fills entire view (toolbar is now BELOW window)
         NSLayoutConstraint.activate([
             videoView.topAnchor.constraint(equalTo: view.topAnchor),
             videoView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -59,7 +68,12 @@ class MainViewController: NSViewController {
             dropZoneView.topAnchor.constraint(equalTo: view.topAnchor),
             dropZoneView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             dropZoneView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            dropZoneView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            dropZoneView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            edgeIndicatorView.topAnchor.constraint(equalTo: view.topAnchor),
+            edgeIndicatorView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            edgeIndicatorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            edgeIndicatorView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
         // Bind opacity

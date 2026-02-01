@@ -36,8 +36,8 @@ class DropZoneView: NSView {
         layer?.cornerRadius = 12
         layer?.masksToBounds = true
 
-        // Register for drag and drop
-        registerForDraggedTypes(VideoFormats.supportedTypes.map { NSPasteboard.PasteboardType($0.identifier) })
+        // Register for drag and drop - must register for fileURL to accept file drops
+        registerForDraggedTypes([.fileURL])
 
         // Glass background
         visualEffectView.material = .hudWindow

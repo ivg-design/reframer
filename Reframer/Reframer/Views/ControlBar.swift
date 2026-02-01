@@ -67,13 +67,26 @@ class ControlBar: NSView {
             fatalError("Could not find content view in ControlBar.xib")
         }
 
-        // Add the loaded view as a subview
-        contentView.frame = bounds
-        contentView.autoresizingMask = [.width, .height]
+        // Add the loaded view as a subview with PROPER Auto Layout constraints
+        // The XIB has hardcoded width (861px) so we must use constraints to force it to match our bounds
+        contentView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(contentView)
+        NSLayoutConstraint.activate([
+            contentView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
 
         // Find controls by their XIB identifiers
         findControls(in: contentView)
+
+        // The XIB has fixed-width constraints (priority 1000) on sliders totaling ~861px
+        // We need to lower their priority so they can compress to fit 800px
+        makeSliderWidthsFlexible()
+
+        // Apply bottom corner radius to match main window's corner radius
+        applyCornerRadius()
 
         setupActions()
         setupTextFieldDelegates()
@@ -147,6 +160,32 @@ class ControlBar: NSView {
             }
         }
         return nil
+    }
+
+    private func makeSliderWidthsFlexible() {
+        // The XIB has fixed width constraints on sliders that prevent the toolbar from resizing
+        // Lower their priority so the toolbar can compress to match the window width
+        for slider in [timelineSlider, opacitySlider, volumeSlider] {
+            guard let slider = slider else { continue }
+            for constraint in slider.constraints {
+                if constraint.firstAttribute == .width {
+                    // Lower priority from required (1000) to high (750) so it can be compressed
+                    constraint.priority = NSLayoutConstraint.Priority(rawValue: 250)
+                }
+            }
+            // Also lower compression resistance so the slider can shrink
+            slider.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
+    }
+
+    private func applyCornerRadius() {
+        // Only round BOTTOM corners - top edge aligns with main window's bottom
+        // In macOS coordinates (y=0 at bottom):
+        // .layerMinXMinYCorner = bottom-left, .layerMaxXMinYCorner = bottom-right
+        visualEffectView?.wantsLayer = true
+        visualEffectView?.layer?.cornerRadius = 12
+        visualEffectView?.layer?.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        visualEffectView?.layer?.masksToBounds = true
     }
 
     // MARK: - Actions Setup
@@ -331,12 +370,20 @@ class ControlBar: NSView {
             }
             .store(in: &cancellables)
 
-        // Update timeline slider
-        Publishers.CombineLatest(state.$currentTime, state.$duration)
+        // Update timeline slider maxValue when duration changes (ALWAYS update, even when scrubbing)
+        state.$duration
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] currentTime, duration in
-                guard let self = self, !self.isScrubbing else { return }
+            .sink { [weak self] duration in
+                guard let self = self else { return }
                 self.timelineSlider?.maxValue = max(0.1, duration)
+            }
+            .store(in: &cancellables)
+
+        // Update timeline slider position (only when not scrubbing)
+        state.$currentTime
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] currentTime in
+                guard let self = self, !self.isScrubbing else { return }
                 self.timelineSlider?.doubleValue = currentTime
             }
             .store(in: &cancellables)

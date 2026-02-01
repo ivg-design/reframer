@@ -16,6 +16,7 @@
 		6E1F01CFBCE69080FA2B16F6 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 331DF56DBDF1FEEE4E142195 /* MainMenu.xib */; };
 		7148C7DD0239873CFBA24CB6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12166D40D39C3C452F590B2E /* AppDelegate.swift */; };
 		7C580FCBE04BAD9DED666438 /* DropZoneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 205A94D5C521D2C8598E3FAA /* DropZoneView.swift */; };
+		903D85FA96F4D67AAE7D51A6 /* EdgeIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */; };
 		AAA00011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AAA10011 /* Assets.xcassets */; };
 		BBB00001 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10001 /* TestHelpers.swift */; };
 		BBB00002 /* VideoStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10002 /* VideoStateTests.swift */; };
@@ -62,7 +63,7 @@
 		AAA10013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AAA20001 /* Reframer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Reframer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE63ACD63859E708710A97D4 /* VideoState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoState.swift; sourceTree = "<group>"; };
-		B214C6692F2E459B0048F524 /* Reframer.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = Reframer.xctestplan; sourceTree = "<group>"; };
+		B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EdgeIndicatorView.swift; sourceTree = "<group>"; };
 		B972E974DDAFCDB4952DE88C /* ControlBar.xib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.xib; path = ControlBar.xib; sourceTree = "<group>"; };
 		BBB10001 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
 		BBB10002 /* VideoStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStateTests.swift; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.simpleColoring; };
@@ -82,17 +83,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B214C6102F2E40FA0048F524 /* ../docs */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = ../docs;
-			sourceTree = SOURCE_ROOT;
-		};
+		B214C6102F2E40FA0048F524 /* ../docs */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ../docs; sourceTree = SOURCE_ROOT; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -123,7 +114,6 @@
 		AAA40001 = {
 			isa = PBXGroup;
 			children = (
-				B214C6692F2E459B0048F524 /* Reframer.xctestplan */,
 				B214C6102F2E40FA0048F524 /* ../docs */,
 				AAA40002 /* Reframer */,
 				BBB40001 /* ReframerTests */,
@@ -172,6 +162,7 @@
 				242CE7E3F5EFF404409747F7 /* ControlBar.swift */,
 				8072E56EC759E00E54249624 /* MainViewController.swift */,
 				1DD11BE9E49C9FFF9BB26A6E /* HelpView.swift */,
+				B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -385,6 +376,7 @@
 				15FDF44DEF2AEB44C895443B /* VideoState.swift in Sources */,
 				0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */,
 				2491A9B249AD2563B719271A /* Notifications.swift in Sources */,
+				903D85FA96F4D67AAE7D51A6 /* EdgeIndicatorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

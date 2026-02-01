@@ -166,10 +166,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func createMainWindow() {
         // Get screen frame for proper centering
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-        let windowSize = NSSize(width: 800, height: 600)
+        // Main window is just the video canvas - toolbar will be BELOW it
+        let windowSize = NSSize(width: 800, height: 560)
         let origin = NSPoint(
             x: screenFrame.midX - windowSize.width / 2,
-            y: screenFrame.midY - windowSize.height / 2
+            y: screenFrame.midY - windowSize.height / 2 + controlWindowHeight / 2
         )
         let windowFrame = NSRect(origin: origin, size: windowSize)
 
@@ -204,9 +205,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func createControlWindow() {
         let mainFrame = mainWindow.frame
+        // Position toolbar BELOW the main window (flush against bottom edge)
         let controlFrame = NSRect(
             x: mainFrame.minX,
-            y: mainFrame.minY,
+            y: mainFrame.minY - controlWindowHeight,
             width: mainFrame.width,
             height: controlWindowHeight
         )
@@ -460,9 +462,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateControlWindowFrame() {
         guard let mainWindow = mainWindow, let controlWindow = controlWindow else { return }
         let mainFrame = mainWindow.frame
+        // Position toolbar BELOW the main window (flush against bottom edge)
         let controlFrame = NSRect(
             x: mainFrame.minX,
-            y: mainFrame.minY,
+            y: mainFrame.minY - controlWindowHeight,
             width: mainFrame.width,
             height: controlWindowHeight
         )
