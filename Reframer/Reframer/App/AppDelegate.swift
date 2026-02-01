@@ -31,7 +31,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var helpWindow: TransparentWindow?
     private var filterPanelWindow: TransparentWindow?
     private var youtubeProgressAlert: NSAlert?
+    private var youtubeProgressLabel: NSTextField?
     private var youtubeResolveToken = UUID()
+    private var youtubeLoadCancellable: AnyCancellable?
 
     let videoState = VideoState()
     private var cancellables = Set<AnyCancellable>()
@@ -60,18 +62,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Auto-load test video if specified (for UI testing)
         if let testVideoPath = ProcessInfo.processInfo.environment["TEST_VIDEO_PATH"] {
             let url = URL(fileURLWithPath: testVideoPath)
-                if FileManager.default.fileExists(atPath: testVideoPath) {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                        self?.videoState.videoAudioURL = nil
-                        self?.videoState.videoHeaders = nil
-                        self?.videoState.videoTitle = nil
-                        self?.videoState.playbackEngine = .auto
-                        self?.videoState.isVideoLoaded = false
-                        self?.videoState.videoURL = url
-                    }
+            if FileManager.default.fileExists(atPath: testVideoPath) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.videoState.videoAudioURL = nil
+                    self?.videoState.videoHeaders = nil
+                    self?.videoState.videoTitle = nil
+                    self?.videoState.playbackEngine = .auto
+                    self?.videoState.isVideoLoaded = false
+                    self?.videoState.videoURL = url
                 }
             }
         }
+
+        // Auto-load YouTube URL if specified (for testing)
+        if let testYouTubeURL = ProcessInfo.processInfo.environment["TEST_YOUTUBE_URL"],
+           let url = URL(string: testYouTubeURL) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.resolveYouTubeURL(url)
+            }
+        }
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
         if let monitor = globalShortcutMonitor {
@@ -878,21 +888,73 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let token = UUID()
         youtubeResolveToken = token
 
-        showYouTubeProgress()
+        print("YouTube: Starting resolution for \(url.absoluteString)")
+        let startTime = Date()
+        showYouTubeProgress(phase: "Fetching stream info…")
         YouTubeResolver.shared.resolve(url: url) { [weak self] result in
             guard let self = self, self.youtubeResolveToken == token else { return }
-            self.hideYouTubeProgress()
+            let resolveTime = Date().timeIntervalSince(startTime)
+            print("YouTube: yt-dlp completed in \(String(format: "%.1f", resolveTime))s")
 
             switch result {
             case .failure(let error):
+                self.hideYouTubeProgress()
                 self.showErrorAlert(title: "YouTube Playback Failed", message: error.localizedDescription)
             case .success(let selection):
                 let candidate = selection.primary
 
                 guard candidate.isAVFoundationCompatible else {
+                    self.hideYouTubeProgress()
                     self.showErrorAlert(title: "YouTube Format Not Supported",
                                         message: "No AVFoundation-compatible stream was found. YouTube playback in Reframer uses the native pipeline only.")
                     return
+                }
+
+                // Update progress to show we're now loading the stream
+                self.updateYouTubeProgress(phase: "Loading stream…")
+
+                // Update progress message after 15 seconds if still loading
+                DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
+                    guard let self = self, self.youtubeResolveToken == token else { return }
+                    if self.youtubeProgressAlert != nil && !self.videoState.isVideoLoaded {
+                        self.updateYouTubeProgress(phase: "Buffering video (this may take a moment)…")
+                    }
+                }
+
+                // Update progress message after 45 seconds if still loading
+                DispatchQueue.main.asyncAfter(deadline: .now() + 45) { [weak self] in
+                    guard let self = self, self.youtubeResolveToken == token else { return }
+                    if self.youtubeProgressAlert != nil && !self.videoState.isVideoLoaded {
+                        self.updateYouTubeProgress(phase: "Still buffering… please wait")
+                    }
+                }
+
+                // Observe video loading to hide progress when ready
+                let loadStartTime = Date()
+                self.youtubeLoadCancellable = self.videoState.$isVideoLoaded
+                    .dropFirst() // Skip initial value
+                    .first(where: { $0 }) // Wait for true
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] _ in
+                        guard let self = self, self.youtubeResolveToken == token else { return }
+                        let loadTime = Date().timeIntervalSince(loadStartTime)
+                        let totalTime = Date().timeIntervalSince(startTime)
+                        print("YouTube: Stream loaded in \(String(format: "%.1f", loadTime))s (total: \(String(format: "%.1f", totalTime))s)")
+                        self.hideYouTubeProgress()
+                        self.youtubeLoadCancellable = nil
+                    }
+
+                // Set a timeout in case loading takes too long (120 seconds)
+                // Note: YouTube streams can take 60-90+ seconds to buffer initially
+                DispatchQueue.main.asyncAfter(deadline: .now() + 120) { [weak self] in
+                    guard let self = self, self.youtubeResolveToken == token else { return }
+                    // Only show error if progress dialog is still visible and video hasn't loaded
+                    if self.youtubeProgressAlert != nil && !self.videoState.isVideoLoaded {
+                        self.hideYouTubeProgress()
+                        self.showErrorAlert(title: "YouTube Stream Timeout",
+                                            message: "The stream is taking too long to load. Try again or check your connection.")
+                        self.youtubeLoadCancellable = nil
+                    }
                 }
 
                 self.videoState.videoAudioURL = candidate.audioURL
@@ -906,10 +968,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func showYouTubeProgress() {
+    private func showYouTubeProgress(phase: String) {
         let alert = NSAlert()
-        alert.messageText = "Resolving YouTube Stream"
-        alert.informativeText = "Fetching stream information…"
+        alert.messageText = "Loading YouTube Video"
+        alert.informativeText = phase
         alert.addButton(withTitle: "Cancel")
 
         let stack = NSStackView()
@@ -918,23 +980,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let spinner = NSProgressIndicator()
         spinner.style = .spinning
         spinner.startAnimation(nil)
-        let label = NSTextField(labelWithString: "Please wait")
+        let label = NSTextField(labelWithString: phase)
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         stack.addArrangedSubview(spinner)
         stack.addArrangedSubview(label)
         alert.accessoryView = stack
 
         youtubeProgressAlert = alert
+        youtubeProgressLabel = label
 
         if let window = mainWindow {
             alert.beginSheetModal(for: window) { [weak self] response in
                 if response == .alertFirstButtonReturn {
                     self?.youtubeResolveToken = UUID()
+                    self?.youtubeLoadCancellable = nil
                     self?.hideYouTubeProgress()
                 }
             }
         } else {
             alert.runModal()
         }
+    }
+
+    private func updateYouTubeProgress(phase: String) {
+        youtubeProgressAlert?.informativeText = phase
+        youtubeProgressLabel?.stringValue = phase
     }
 
     private func hideYouTubeProgress() {
@@ -945,6 +1015,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alert.window.orderOut(nil)
         }
         youtubeProgressAlert = nil
+        youtubeProgressLabel = nil
     }
 
     // MARK: - Menu Actions (IBActions for storyboard)

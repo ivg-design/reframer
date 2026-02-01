@@ -216,8 +216,15 @@ final class ReframerIntegrationTests: XCTestCase {
         let inputField = app.textFields["youtube-url-input"]
         XCTAssertTrue(inputField.waitForExistence(timeout: 2), "YouTube URL input should appear")
 
-        if app.buttons["Cancel"].exists {
-            app.buttons["Cancel"].click()
+        let sheetCancel = app.sheets.buttons["Cancel"].firstMatch
+        if sheetCancel.exists {
+            sheetCancel.click()
+            return
+        }
+
+        let anyCancel = app.buttons.matching(identifier: "Cancel").firstMatch
+        if anyCancel.exists {
+            anyCancel.click()
         }
     }
 
