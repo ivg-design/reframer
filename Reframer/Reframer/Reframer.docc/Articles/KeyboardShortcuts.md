@@ -45,7 +45,14 @@ Zoom is controlled via scroll wheel or input field arrows when focused.
 |--------|----------|
 | Toggle lock | **L** |
 | Show help | **H** or **?** |
-| Close help | **Esc** |
+| Close help/panel | **Esc** |
+
+## Filters
+
+| Action | Shortcut |
+|--------|----------|
+| Toggle filter panel | **F** |
+| Close filter panel | **Esc** |
 
 ## Input Fields
 

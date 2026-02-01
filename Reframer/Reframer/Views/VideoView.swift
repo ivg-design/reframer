@@ -124,14 +124,14 @@ class VideoView: NSView {
             .store(in: &cancellables)
 
         // Observe filter changes
-        state.$activeFilter
+        state.$activeFilters
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applyCurrentFilter() }
+            .sink { [weak self] _ in self?.applyCurrentFilters() }
             .store(in: &cancellables)
 
         state.$filterSettings
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applyCurrentFilter() }
+            .sink { [weak self] _ in self?.applyCurrentFilters() }
             .store(in: &cancellables)
     }
 
@@ -207,8 +207,8 @@ class VideoView: NSView {
         player?.volume = state.volume
         playerLayer.player = player
 
-        // Apply current filter if any
-        applyCurrentFilter()
+        // Apply current filters if any
+        applyCurrentFilters()
 
         // Load asset properties
         Task { [weak self, weak state] in
@@ -328,19 +328,22 @@ class VideoView: NSView {
 
     // MARK: - Video Filters
 
-    private func applyCurrentFilter() {
+    private func applyCurrentFilters() {
         guard let asset = currentAsset,
               let state = videoState,
               let playerItem = playerItem else { return }
 
-        // If no filter, remove any existing composition
-        guard state.activeFilter != .none else {
+        // If no filters active, remove any existing composition
+        guard !state.activeFilters.isEmpty else {
             playerItem.videoComposition = nil
             return
         }
 
-        // Create filter
-        guard let filter = state.activeFilter.createFilter(settings: state.filterSettings) else {
+        // Create filters in order
+        let orderedFilters = state.orderedActiveFilters
+        let filters = orderedFilters.compactMap { $0.createFilter(settings: state.filterSettings) }
+
+        guard !filters.isEmpty else {
             playerItem.videoComposition = nil
             return
         }
@@ -362,7 +365,7 @@ class VideoView: NSView {
                         for: playerItem,
                         renderSize: renderSize,
                         frameRate: nominalFrameRate,
-                        filter: filter
+                        filters: filters
                     )
                 }
             } catch {
@@ -375,7 +378,7 @@ class VideoView: NSView {
         for playerItem: AVPlayerItem,
         renderSize: CGSize,
         frameRate: Float,
-        filter: CIFilter
+        filters: [CIFilter]
     ) {
         let composition = AVMutableVideoComposition(asset: playerItem.asset, applyingCIFiltersWithHandler: { [weak self] request in
             guard let self = self else {
@@ -383,20 +386,20 @@ class VideoView: NSView {
                 return
             }
 
-            // Get source image
-            let sourceImage = request.sourceImage
+            // Start with source image
+            var currentImage = request.sourceImage
 
-            // Apply filter
-            filter.setValue(sourceImage, forKey: kCIInputImageKey)
-
-            // Get output or fall back to source
-            if let outputImage = filter.outputImage {
-                // Clamp to extent to prevent infinite extent issues with some filters
-                let clampedImage = outputImage.clamped(to: sourceImage.extent)
-                request.finish(with: clampedImage, context: self.ciContext)
-            } else {
-                request.finish(with: sourceImage, context: self.ciContext)
+            // Chain all filters together
+            for filter in filters {
+                filter.setValue(currentImage, forKey: kCIInputImageKey)
+                if let outputImage = filter.outputImage {
+                    currentImage = outputImage
+                }
             }
+
+            // Clamp final output to prevent infinite extent issues
+            let clampedImage = currentImage.clamped(to: request.sourceImage.extent)
+            request.finish(with: clampedImage, context: self.ciContext)
         })
 
         composition.renderSize = renderSize

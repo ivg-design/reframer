@@ -1,7 +1,7 @@
 import Cocoa
 import Combine
 
-/// Custom button that cycles through filters on click and shows menu on hold
+/// Custom button that toggles filter panel on click and shows toggle menu on hold
 class FilterMenuButton: NSView {
 
     // MARK: - Properties
@@ -53,26 +53,32 @@ class FilterMenuButton: NSView {
         cancellables.removeAll()
         guard let state = videoState else { return }
 
-        state.$activeFilter
+        state.$activeFilters
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.updateIcon() }
             .store(in: &cancellables)
     }
 
     private func updateIcon() {
-        let filter = videoState?.activeFilter ?? .none
-        let symbolName = filter.iconName
-        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: filter.rawValue)
+        // Always show checkerboard/opacity icon
+        let image = NSImage(systemSymbolName: "rectangle.pattern.checkered", accessibilityDescription: "Filters")
         imageView.image = image
 
-        // Tint active filters differently
-        if filter == .none {
-            imageView.contentTintColor = .secondaryLabelColor
-        } else {
+        // Tint when any filters are active
+        let hasActiveFilters = !(videoState?.activeFilters.isEmpty ?? true)
+        if hasActiveFilters {
             imageView.contentTintColor = .controlAccentColor
+        } else {
+            imageView.contentTintColor = .secondaryLabelColor
         }
 
-        toolTip = filter.rawValue
+        // Build tooltip showing active filters
+        if let state = videoState, !state.activeFilters.isEmpty {
+            let filterNames = state.orderedActiveFilters.map { $0.rawValue }.joined(separator: ", ")
+            toolTip = "Filters: \(filterNames)"
+        } else {
+            toolTip = "No filters active"
+        }
     }
 
     // MARK: - Mouse Handling
@@ -90,9 +96,9 @@ class FilterMenuButton: NSView {
         holdTimer?.invalidate()
         holdTimer = nil
 
-        // If we didn't show menu, cycle filter
+        // If we didn't show menu, toggle filter panel
         if !didShowMenu {
-            videoState?.cycleFilter()
+            videoState?.showFilterPanel.toggle()
         }
     }
 
@@ -109,21 +115,35 @@ class FilterMenuButton: NSView {
 
         let menu = NSMenu()
 
-        // Add all filters
+        // Add all filters as toggleable items
         for filter in VideoFilter.allCases {
             let item = NSMenuItem()
             item.title = filter.rawValue
             item.image = NSImage(systemSymbolName: filter.iconName, accessibilityDescription: filter.rawValue)
             item.target = self
-            item.action = #selector(filterSelected(_:))
+            item.action = #selector(filterToggled(_:))
             item.representedObject = filter
 
-            if filter == videoState?.activeFilter {
+            // Show checkmark if filter is active
+            if videoState?.isFilterActive(filter) == true {
                 item.state = .on
+            } else {
+                item.state = .off
             }
 
             menu.addItem(item)
         }
+
+        menu.addItem(.separator())
+
+        // Add "Clear All Filters" option
+        let clearItem = NSMenuItem()
+        clearItem.title = "Clear All Filters"
+        clearItem.image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: "Clear")
+        clearItem.target = self
+        clearItem.action = #selector(clearAllFilters)
+        clearItem.isEnabled = !(videoState?.activeFilters.isEmpty ?? true)
+        menu.addItem(clearItem)
 
         menu.addItem(.separator())
 
@@ -140,9 +160,13 @@ class FilterMenuButton: NSView {
         menu.popUp(positioning: nil, at: location, in: self)
     }
 
-    @objc private func filterSelected(_ sender: NSMenuItem) {
+    @objc private func filterToggled(_ sender: NSMenuItem) {
         guard let filter = sender.representedObject as? VideoFilter else { return }
-        videoState?.activeFilter = filter
+        videoState?.toggleFilter(filter)
+    }
+
+    @objc private func clearAllFilters() {
+        videoState?.clearAllFilters()
     }
 
     @objc private func showFilterSettings() {
@@ -158,7 +182,11 @@ class FilterMenuButton: NSView {
     // MARK: - Accessibility
 
     override func accessibilityLabel() -> String? {
-        return "Filter: \(videoState?.activeFilter.rawValue ?? "None")"
+        if let state = videoState, !state.activeFilters.isEmpty {
+            let count = state.activeFilters.count
+            return "Filters: \(count) active"
+        }
+        return "Filters: None active"
     }
 
     override func accessibilityRole() -> NSAccessibility.Role? {

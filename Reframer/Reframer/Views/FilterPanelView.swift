@@ -1,7 +1,7 @@
 import Cocoa
 import Combine
 
-/// Floating panel view with all filter settings as sliders
+/// Floating panel view with filter toggles and parameter sliders
 class FilterPanelView: NSView {
 
     // MARK: - Properties
@@ -18,7 +18,10 @@ class FilterPanelView: NSView {
     private let titleLabel = NSTextField(labelWithString: "Filter Settings")
     private let closeButton = NSButton()
     private let resetButton = NSButton()
-    private let filterPopup = NSPopUpButton()
+    private let clearButton = NSButton()
+
+    // Filter checkboxes
+    private var filterCheckboxes: [VideoFilter: NSButton] = [:]
 
     // Sliders organized by section
     private var sliders: [String: NSSlider] = [:]
@@ -70,23 +73,21 @@ class FilterPanelView: NSView {
         resetButton.target = self
         resetButton.action = #selector(resetSettings)
 
+        clearButton.bezelStyle = .rounded
+        clearButton.title = "Clear All"
+        clearButton.font = .systemFont(ofSize: 11)
+        clearButton.target = self
+        clearButton.action = #selector(clearAllFilters)
+
         titleBar.addArrangedSubview(titleLabel)
         titleBar.addArrangedSubview(NSView()) // Spacer
+        titleBar.addArrangedSubview(clearButton)
         titleBar.addArrangedSubview(resetButton)
         titleBar.addArrangedSubview(closeButton)
 
         addSubview(titleBar)
 
-        // Filter selector
-        filterPopup.translatesAutoresizingMaskIntoConstraints = false
-        filterPopup.target = self
-        filterPopup.action = #selector(filterChanged)
-        for filter in VideoFilter.allCases {
-            filterPopup.addItem(withTitle: filter.rawValue)
-        }
-        addSubview(filterPopup)
-
-        // Scroll view for sliders
+        // Scroll view for content
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
@@ -96,7 +97,7 @@ class FilterPanelView: NSView {
 
         // Content stack
         contentStack.orientation = .vertical
-        contentStack.spacing = 16
+        contentStack.spacing = 12
         contentStack.alignment = .leading
         contentStack.translatesAutoresizingMaskIntoConstraints = false
 
@@ -116,11 +117,7 @@ class FilterPanelView: NSView {
             titleBar.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             titleBar.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
 
-            filterPopup.topAnchor.constraint(equalTo: titleBar.bottomAnchor, constant: 12),
-            filterPopup.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            filterPopup.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-
-            scrollView.topAnchor.constraint(equalTo: filterPopup.bottomAnchor, constant: 16),
+            scrollView.topAnchor.constraint(equalTo: titleBar.bottomAnchor, constant: 12),
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16),
@@ -128,53 +125,96 @@ class FilterPanelView: NSView {
             contentStack.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -20)
         ])
 
-        buildSliders()
+        buildContent()
     }
 
-    // MARK: - Slider Building
+    // MARK: - Content Building
 
-    private func buildSliders() {
+    private func buildContent() {
         contentStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        filterCheckboxes.removeAll()
         sliders.removeAll()
         valueLabels.removeAll()
 
+        // Active Filters section
+        addSection("Active Filters")
+        buildFilterCheckboxes()
+
+        // Separator
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        contentStack.addArrangedSubview(separator)
+        separator.widthAnchor.constraint(equalTo: contentStack.widthAnchor).isActive = true
+
+        // Parameter Sliders
+        addSection("Filter Parameters")
+
         // Edge Detection
-        addSection("Edge Detection")
-        addSlider(key: "edgeIntensity", label: "Intensity", min: 0, max: 10, defaultValue: 1.0)
+        addSlider(key: "edgeIntensity", label: "Edge Intensity", min: 0, max: 10, defaultValue: 1.0)
 
         // Sharpen
-        addSection("Sharpen")
         addSlider(key: "sharpness", label: "Sharpness", min: 0, max: 2, defaultValue: 0.4)
 
         // Unsharp Mask
-        addSection("Unsharp Mask")
-        addSlider(key: "unsharpRadius", label: "Radius", min: 0, max: 10, defaultValue: 2.5)
-        addSlider(key: "unsharpIntensity", label: "Intensity", min: 0, max: 2, defaultValue: 0.5)
+        addSlider(key: "unsharpRadius", label: "Unsharp Radius", min: 0, max: 10, defaultValue: 2.5)
+        addSlider(key: "unsharpIntensity", label: "Unsharp Intensity", min: 0, max: 2, defaultValue: 0.5)
 
         // Color Controls
-        addSection("Color Controls")
         addSlider(key: "brightness", label: "Brightness", min: -1, max: 1, defaultValue: 0)
         addSlider(key: "contrast", label: "Contrast", min: 0.25, max: 4, defaultValue: 1.5)
         addSlider(key: "saturation", label: "Saturation", min: 0, max: 2, defaultValue: 1.0)
 
         // Monochrome
-        addSection("Monochrome")
-        addSlider(key: "monochromeR", label: "Red", min: 0, max: 1, defaultValue: 0.6)
-        addSlider(key: "monochromeG", label: "Green", min: 0, max: 1, defaultValue: 0.45)
-        addSlider(key: "monochromeB", label: "Blue", min: 0, max: 1, defaultValue: 0.3)
-        addSlider(key: "monochromeIntensity", label: "Intensity", min: 0, max: 1, defaultValue: 1.0)
+        addSlider(key: "monochromeR", label: "Mono Red", min: 0, max: 1, defaultValue: 0.6)
+        addSlider(key: "monochromeG", label: "Mono Green", min: 0, max: 1, defaultValue: 0.45)
+        addSlider(key: "monochromeB", label: "Mono Blue", min: 0, max: 1, defaultValue: 0.3)
+        addSlider(key: "monochromeIntensity", label: "Mono Intensity", min: 0, max: 1, defaultValue: 1.0)
 
         // Line Overlay
-        addSection("Line Overlay")
-        addSlider(key: "lineOverlayNoise", label: "Noise Level", min: 0, max: 0.1, defaultValue: 0.07)
-        addSlider(key: "lineOverlaySharpness", label: "Sharpness", min: 0, max: 2, defaultValue: 0.71)
-        addSlider(key: "lineOverlayEdge", label: "Edge Intensity", min: 0, max: 200, defaultValue: 1.0)
-        addSlider(key: "lineOverlayThreshold", label: "Threshold", min: 0, max: 1, defaultValue: 0.1)
-        addSlider(key: "lineOverlayContrast", label: "Contrast", min: 0.25, max: 200, defaultValue: 50)
+        addSlider(key: "lineOverlayNoise", label: "Line Noise", min: 0, max: 0.1, defaultValue: 0.07)
+        addSlider(key: "lineOverlaySharpness", label: "Line Sharpness", min: 0, max: 2, defaultValue: 0.71)
+        addSlider(key: "lineOverlayEdge", label: "Line Edge", min: 0, max: 200, defaultValue: 1.0)
+        addSlider(key: "lineOverlayThreshold", label: "Line Threshold", min: 0, max: 1, defaultValue: 0.1)
+        addSlider(key: "lineOverlayContrast", label: "Line Contrast", min: 0.25, max: 200, defaultValue: 50)
 
         // Exposure
-        addSection("Exposure")
-        addSlider(key: "exposure", label: "EV", min: 0, max: 3, defaultValue: 1.0)
+        addSlider(key: "exposure", label: "Exposure EV", min: 0, max: 3, defaultValue: 1.0)
+    }
+
+    private func buildFilterCheckboxes() {
+        let grid = NSGridView()
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        grid.rowSpacing = 4
+        grid.columnSpacing = 8
+
+        // Create 2 columns of checkboxes
+        let filters = VideoFilter.allCases
+        let midpoint = (filters.count + 1) / 2
+
+        for i in 0..<midpoint {
+            let leftFilter = filters[i]
+            let leftCheckbox = createFilterCheckbox(for: leftFilter)
+            filterCheckboxes[leftFilter] = leftCheckbox
+
+            if i + midpoint < filters.count {
+                let rightFilter = filters[i + midpoint]
+                let rightCheckbox = createFilterCheckbox(for: rightFilter)
+                filterCheckboxes[rightFilter] = rightCheckbox
+                grid.addRow(with: [leftCheckbox, rightCheckbox])
+            } else {
+                grid.addRow(with: [leftCheckbox, NSView()])
+            }
+        }
+
+        contentStack.addArrangedSubview(grid)
+    }
+
+    private func createFilterCheckbox(for filter: VideoFilter) -> NSButton {
+        let checkbox = NSButton(checkboxWithTitle: filter.rawValue, target: self, action: #selector(filterCheckboxChanged(_:)))
+        checkbox.font = .systemFont(ofSize: 11)
+        checkbox.identifier = NSUserInterfaceItemIdentifier(filter.rawValue)
+        return checkbox
     }
 
     private func addSection(_ title: String) {
@@ -217,7 +257,7 @@ class FilterPanelView: NSView {
         row.addArrangedSubview(valueLabel)
 
         NSLayoutConstraint.activate([
-            nameLabel.widthAnchor.constraint(equalToConstant: 80),
+            nameLabel.widthAnchor.constraint(equalToConstant: 100),
             valueLabel.widthAnchor.constraint(equalToConstant: 50)
         ])
 
@@ -230,10 +270,10 @@ class FilterPanelView: NSView {
         cancellables.removeAll()
         guard let state = videoState else { return }
 
-        state.$activeFilter
+        state.$activeFilters
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] filter in
-                self?.filterPopup.selectItem(withTitle: filter.rawValue)
+            .sink { [weak self] activeFilters in
+                self?.updateFilterCheckboxes(activeFilters: activeFilters)
             }
             .store(in: &cancellables)
 
@@ -243,6 +283,12 @@ class FilterPanelView: NSView {
                 self?.updateSliders(from: settings)
             }
             .store(in: &cancellables)
+    }
+
+    private func updateFilterCheckboxes(activeFilters: Set<VideoFilter>) {
+        for (filter, checkbox) in filterCheckboxes {
+            checkbox.state = activeFilters.contains(filter) ? .on : .off
+        }
     }
 
     private func updateSliders(from settings: FilterSettings) {
@@ -271,6 +317,12 @@ class FilterPanelView: NSView {
     }
 
     // MARK: - Actions
+
+    @objc private func filterCheckboxChanged(_ sender: NSButton) {
+        guard let identifier = sender.identifier?.rawValue,
+              let filter = VideoFilter.allCases.first(where: { $0.rawValue == identifier }) else { return }
+        videoState?.toggleFilter(filter)
+    }
 
     @objc private func sliderChanged(_ sender: NSSlider) {
         guard let key = sender.identifier?.rawValue,
@@ -303,17 +355,15 @@ class FilterPanelView: NSView {
         videoState?.filterSettings = settings
     }
 
-    @objc private func filterChanged() {
-        guard let title = filterPopup.selectedItem?.title,
-              let filter = VideoFilter.allCases.first(where: { $0.rawValue == title }) else { return }
-        videoState?.activeFilter = filter
-    }
-
     @objc private func closePanel() {
         videoState?.showFilterPanel = false
     }
 
     @objc private func resetSettings() {
         videoState?.filterSettings = .defaults
+    }
+
+    @objc private func clearAllFilters() {
+        videoState?.clearAllFilters()
     }
 }
