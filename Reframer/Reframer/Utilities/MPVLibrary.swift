@@ -21,10 +21,10 @@ typealias mpv_wait_event_fn = @convention(c) (mpv_handle?, Double) -> UnsafePoin
 typealias mpv_event_name_fn = @convention(c) (Int32) -> UnsafePointer<CChar>?
 typealias mpv_error_string_fn = @convention(c) (Int32) -> UnsafePointer<CChar>?
 
-typealias mpv_render_context_create_fn = @convention(c) (UnsafeMutablePointer<mpv_render_context?>?, mpv_handle?, UnsafePointer<mpv_render_param>?) -> Int32
+typealias mpv_render_context_create_fn = @convention(c) (UnsafeMutablePointer<mpv_render_context?>?, mpv_handle?, UnsafeRawPointer?) -> Int32
 typealias mpv_render_context_free_fn = @convention(c) (mpv_render_context?) -> Void
 typealias mpv_render_context_set_update_callback_fn = @convention(c) (mpv_render_context?, (@convention(c) (UnsafeMutableRawPointer?) -> Void)?, UnsafeMutableRawPointer?) -> Void
-typealias mpv_render_context_render_fn = @convention(c) (mpv_render_context?, UnsafePointer<mpv_render_param>?) -> Void
+typealias mpv_render_context_render_fn = @convention(c) (mpv_render_context?, UnsafeRawPointer?) -> Void
 
 struct mpv_event {
     var event_id: Int32

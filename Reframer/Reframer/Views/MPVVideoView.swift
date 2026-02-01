@@ -291,7 +291,8 @@ final class MPVVideoView: NSOpenGLView {
                 mpv_render_param(type: MPVRenderParamType.invalid, data: nil)
             ]
             return params.withUnsafeBufferPointer { buffer in
-                MPVLibrary.shared.mpv_render_context_create(&ctx, handle, buffer.baseAddress)
+                let rawParams = buffer.baseAddress.map { UnsafeRawPointer($0) }
+                return MPVLibrary.shared.mpv_render_context_create(&ctx, handle, rawParams)
             }
         }
         if result < 0 {
@@ -335,7 +336,8 @@ final class MPVVideoView: NSOpenGLView {
         ]
 
         params.withUnsafeBufferPointer { buffer in
-            MPVLibrary.shared.mpv_render_context_render(renderContext, buffer.baseAddress)
+            let rawParams = buffer.baseAddress.map { UnsafeRawPointer($0) }
+            MPVLibrary.shared.mpv_render_context_render(renderContext, rawParams)
         }
         openGLContext?.flushBuffer()
     }
