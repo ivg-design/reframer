@@ -992,7 +992,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @IBAction func openReframerHelp(_ sender: Any?) {
         // Open the Reframer help book
         let helpBookName = Bundle.main.object(forInfoDictionaryKey: "CFBundleHelpBookName") as? String ?? "com.reframer.help"
-        NSHelpManager.shared.openHelpAnchor("index", inBook: helpBookName)
+        NSHelpManager.shared.openHelpAnchor("index.html", inBook: helpBookName)
     }
 
     @IBAction func toggleFilter(_ sender: NSMenuItem) {

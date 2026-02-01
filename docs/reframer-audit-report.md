@@ -97,3 +97,18 @@ Reframer is generally clean and easy to follow, but there are several correctnes
 1) Decide the desired behavior for unsupported codecs inside supported containers (e.g., MP4 w/ VP9) and define a fallback policy (MPV or error prompt).
 2) Decide how precise frame stepping and scrub positioning must be for MPV-only formats, and how to expose that in UI if precision can’t be guaranteed.
 3) Define a stable libmpv installation/update path (including handling existing MPV installs).
+
+## Resolution Status (2026-02-01)
+
+- **CIFilter thread safety**: Fixed by creating filters per-frame inside the composition handler.
+- **Async metadata/filter tasks**: Guarded by load/filter tokens to prevent stale updates.
+- **Codec fallback (MPV vs AVFoundation)**: Auto selection checks codec probes; fallback on AVFoundation failure remains.
+- **AVFoundation readiness**: `isVideoLoaded` flips only on `.readyToPlay`, with explicit failure handling.
+- **MPV metadata robustness**: Added `estimated-vf-fps`/`dwidth`/`dheight` and retry refresh after load.
+- **libmpv install validation**: Installer verifies bundle layout and surfaces clear errors when missing.
+- **Fractional FPS timing**: Uses `CMTimeMakeWithSeconds` at a stable timescale.
+- **MPV scrub accuracy**: High‑res seek enabled (`hr-seek`), frame‑drop disabled for precise scrubs.
+- **Dependency resolution**: `DYLD_LIBRARY_PATH` configured for bundled dependencies.
+- **Mute restore**: Unmute restores last non‑zero volume.
+- **Quick filter slider**: Disabled for parameterless filters (Invert/Noir).
+- **Move-to-Applications**: Uses move-first strategy with copy fallback.

@@ -15,6 +15,7 @@ ARTIFACT_DIR="$ARTIFACTS_BASE/$TIMESTAMP"
 LOG_FILE="$ARTIFACT_DIR/build.log"
 SUMMARY_FILE="$ARTIFACT_DIR/summary.txt"
 XCRESULT_PATH="$ARTIFACT_DIR/TestResults.xcresult"
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ARTIFACT_DIR/DerivedData}"
 
 mkdir -p "$ARTIFACT_DIR"
 
@@ -24,6 +25,7 @@ mkdir -p "$ARTIFACT_DIR"
     echo "Timestamp:    $TIMESTAMP"
     echo "Scheme:       $SCHEME"
     echo "Destination:  $DESTINATION"
+    echo "DerivedData:  $DERIVED_DATA_PATH"
     echo "Artifact Dir: $ARTIFACT_DIR"
     echo ""
 } | tee "$SUMMARY_FILE"
@@ -47,17 +49,42 @@ echo "=== Available Schemes ===" >> "$LOG_FILE"
 xcodebuild -list 2>&1 | tee -a "$LOG_FILE" | grep -A 20 "Schemes:" | head -10 || true
 echo "" >> "$LOG_FILE"
 
-# Run tests
-echo "=== Running Tests ===" | tee -a "$LOG_FILE"
-echo "Command: xcodebuild test -scheme $SCHEME -destination '$DESTINATION'" | tee -a "$LOG_FILE"
+# Build for testing first (allows us to remove quarantine before running UI tests)
+echo "=== Build For Testing ===" | tee -a "$LOG_FILE"
+echo "Command: xcodebuild build-for-testing -scheme $SCHEME -destination '$DESTINATION'" | tee -a "$LOG_FILE"
 echo "" | tee -a "$LOG_FILE"
 
 TEST_EXIT_CODE=0
-xcodebuild test \
+xcodebuild build-for-testing \
     -scheme "$SCHEME" \
     -destination "$DESTINATION" \
-    -resultBundlePath "$XCRESULT_PATH" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
     2>&1 | tee -a "$LOG_FILE" || TEST_EXIT_CODE=$?
+
+if [ $TEST_EXIT_CODE -eq 0 ]; then
+    # Remove quarantine if present (fixes "damaged" UI test runner app)
+    xattr -dr com.apple.quarantine "$DERIVED_DATA_PATH" 2>/dev/null || true
+
+    # Ad-hoc re-sign built apps to avoid Gatekeeper launch failures in UI tests
+    if [ -d "$DERIVED_DATA_PATH/Build/Products" ]; then
+        while IFS= read -r app; do
+            if [ -n "$app" ]; then
+                codesign --force --deep --sign - "$app" 2>/dev/null || true
+            fi
+        done < <(find "$DERIVED_DATA_PATH/Build/Products" -name "Reframer*.app" -print 2>/dev/null)
+    fi
+
+    echo "=== Running Tests ===" | tee -a "$LOG_FILE"
+    echo "Command: xcodebuild test-without-building -scheme $SCHEME -destination '$DESTINATION'" | tee -a "$LOG_FILE"
+    echo "" | tee -a "$LOG_FILE"
+
+    xcodebuild test-without-building \
+        -scheme "$SCHEME" \
+        -destination "$DESTINATION" \
+        -derivedDataPath "$DERIVED_DATA_PATH" \
+        -resultBundlePath "$XCRESULT_PATH" \
+        2>&1 | tee -a "$LOG_FILE" || TEST_EXIT_CODE=$?
+fi
 
 # Extract summary from xcresult
 {

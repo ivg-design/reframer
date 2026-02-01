@@ -249,6 +249,8 @@ final class MPVVideoView: NSOpenGLView {
         setOption("vo", "libmpv")
         setOption("hwdec", "videotoolbox")
         setOption("gpu-api", "opengl")
+        setOption("hr-seek", "yes")
+        setOption("hr-seek-framedrop", "no")
         setOption("keep-open", "yes")
         setOption("osd-level", "0")
         setOption("input-default-bindings", "no")
@@ -382,6 +384,7 @@ final class MPVVideoView: NSOpenGLView {
                 guard let self = self, let state = self.videoState else { return }
                 state.isVideoLoaded = true
                 self.updateMediaInfo()
+                self.scheduleMetadataRefresh()
                 if state.isPlaying {
                     self.play()
                 }
@@ -438,14 +441,31 @@ final class MPVVideoView: NSOpenGLView {
             state.frameRate = fps
         } else if let fps = getDoubleProperty("fps"), fps > 0 {
             state.frameRate = fps
+        } else if let fps = getDoubleProperty("estimated-vf-fps"), fps > 0 {
+            state.frameRate = fps
         }
 
         if let width = getIntProperty("width"), let height = getIntProperty("height"), width > 0, height > 0 {
             state.videoNaturalSize = CGSize(width: CGFloat(width), height: CGFloat(height))
+        } else if let dwidth = getDoubleProperty("dwidth"), let dheight = getDoubleProperty("dheight"), dwidth > 0, dheight > 0 {
+            state.videoNaturalSize = CGSize(width: dwidth, height: dheight)
         }
 
         if state.frameRate > 0 && state.duration > 0 {
-            state.totalFrames = Int(state.frameRate * state.duration)
+            let estimated = (state.frameRate * state.duration).rounded()
+            state.totalFrames = Int(max(0, estimated))
+        }
+    }
+
+    private func scheduleMetadataRefresh(retries: Int = 3) {
+        guard retries > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self = self, let state = self.videoState else { return }
+            self.updateMediaInfo()
+            let needsRefresh = state.duration <= 0 || state.frameRate <= 0 || state.videoNaturalSize == .zero
+            if needsRefresh {
+                self.scheduleMetadataRefresh(retries: retries - 1)
+            }
         }
     }
 

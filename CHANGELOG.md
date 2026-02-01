@@ -28,12 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Supported format detection checks UTType in addition to extensions
 - Mute toggle restores last volume instead of resetting
 - UI test runner now clears quarantine and re-signs before automation runs
+- MPV metadata refresh now retries and uses display-size fallback for width/height
 
 ### Changed
 - Filter pipeline now creates filters per frame to avoid thread-safety issues
 - Global frame-step shortcuts now only fire when lock mode is enabled
 - Extended format playback now uses libmpv
 - YouTube playback remains native (AVFoundation-only)
+- MPV high-precision seeking enabled for scrub accuracy
 
 ### Project Structure
 - Xcode project with proper source organization (App, Views, Models, Utilities)

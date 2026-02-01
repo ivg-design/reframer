@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Quick filter slider disables for parameterless filters (Invert/Noir)
 - Global frame-step shortcuts now only fire when lock mode is enabled
 - Extended format playback now uses libmpv
+- MPV high-precision seeking enabled for scrub accuracy
 
 ### Fixed
 - Global shortcut permission prompt handled explicitly
@@ -42,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Window dragging accidentally causing video panning
 - Timeline slider now properly updates maxValue on video load
 - UI test runner now clears quarantine and re-signs before automation runs
+- MPV metadata refresh now retries and uses display-size fallback for width/height
 
 ## [1.0.0] - 2025-01-31
 
