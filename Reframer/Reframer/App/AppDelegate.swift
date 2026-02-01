@@ -468,12 +468,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return  // Already authorized, no prompt needed
         }
 
-        // Only prompt if not already trusted and not in UI test mode
-        let shouldPrompt = ProcessInfo.processInfo.environment["UITEST_MODE"] == nil
-        if shouldPrompt {
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(options)
+        // Skip prompt for UI tests
+        if ProcessInfo.processInfo.environment["UITEST_MODE"] != nil {
+            return
         }
+
+        // Skip prompt for development builds (running from Xcode/DerivedData)
+        // These get new code signatures on each build, so prompts are annoying
+        let bundlePath = Bundle.main.bundlePath
+        if bundlePath.contains("DerivedData") || bundlePath.contains("Build/Products") {
+            print("Reframer: Skipping accessibility prompt for development build")
+            print("Reframer: Global shortcuts (Cmd+PageUp/Down) won't work without accessibility permission")
+            print("Reframer: To enable, run from /Applications or grant permission manually in System Settings")
+            return
+        }
+
+        // Only prompt for production installs (in /Applications or user-launched from elsewhere)
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
     }
 
     @discardableResult

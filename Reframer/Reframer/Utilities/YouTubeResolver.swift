@@ -77,16 +77,41 @@ final class YouTubeResolver {
             return
         }
 
-        let task = URLSession.shared.downloadTask(with: ytDlpURL) { [weak self] tempURL, _, error in
+        let task = URLSession.shared.downloadTask(with: ytDlpURL) { [weak self] tempURL, response, error in
             guard let self = self else { return }
             if let error = error {
+                print("YouTubeResolver: yt-dlp download error - \(error.localizedDescription)")
                 DispatchQueue.main.async { completion(.failure(error)) }
                 return
             }
+
+            // Validate HTTP response
+            if let httpResponse = response as? HTTPURLResponse {
+                print("YouTubeResolver: yt-dlp download HTTP status: \(httpResponse.statusCode)")
+                print("YouTubeResolver: Final URL: \(httpResponse.url?.absoluteString ?? "unknown")")
+                guard httpResponse.statusCode == 200 else {
+                    print("YouTubeResolver: yt-dlp download failed with HTTP \(httpResponse.statusCode)")
+                    DispatchQueue.main.async { completion(.failure(YouTubeResolverError.toolDownloadFailed)) }
+                    return
+                }
+            }
+
             guard let tempURL = tempURL else {
                 DispatchQueue.main.async { completion(.failure(YouTubeResolverError.toolDownloadFailed)) }
                 return
             }
+
+            // Validate downloaded file size (yt-dlp binary should be at least 1MB)
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: tempURL.path),
+               let fileSize = attrs[.size] as? Int64 {
+                print("YouTubeResolver: Downloaded yt-dlp size: \(fileSize / 1024) KB")
+                if fileSize < 1_000_000 {  // Less than 1MB is suspicious
+                    print("YouTubeResolver: Downloaded file too small")
+                    DispatchQueue.main.async { completion(.failure(YouTubeResolverError.toolDownloadFailed)) }
+                    return
+                }
+            }
+
             do {
                 if FileManager.default.fileExists(atPath: self.ytDlpPath.path) {
                     try FileManager.default.removeItem(at: self.ytDlpPath)
@@ -94,8 +119,10 @@ final class YouTubeResolver {
                 try FileManager.default.moveItem(at: tempURL, to: self.ytDlpPath)
                 try self.makeExecutable(self.ytDlpPath)
                 self.clearQuarantine(self.ytDlpPath)
+                print("YouTubeResolver: yt-dlp installed at \(self.ytDlpPath.path)")
                 DispatchQueue.main.async { completion(.success(())) }
             } catch {
+                print("YouTubeResolver: Failed to install yt-dlp - \(error)")
                 DispatchQueue.main.async { completion(.failure(error)) }
             }
         }
@@ -153,9 +180,23 @@ final class YouTubeResolver {
     }
 
     func selectionFromJSONData(_ data: Data) throws -> YouTubeStreamSelection {
-        let json = try JSONSerialization.jsonObject(with: data, options: [])
+        // Provide more detailed error for debugging
+        let json: Any
+        do {
+            json = try JSONSerialization.jsonObject(with: data, options: [])
+        } catch {
+            // If JSON parsing fails, show what yt-dlp actually returned
+            let rawOutput = String(data: data, encoding: .utf8) ?? "(unable to decode output)"
+            let preview = rawOutput.prefix(500)
+            throw YouTubeResolverError.toolExecutionFailed("Invalid JSON response: \(preview)")
+        }
+
         guard let dict = json as? [String: Any],
               let formats = dict["formats"] as? [[String: Any]] else {
+            // Check if there's an error message in the response
+            if let dict = json as? [String: Any], let error = dict["error"] as? String {
+                throw YouTubeResolverError.toolExecutionFailed(error)
+            }
             throw YouTubeResolverError.noPlayableFormats
         }
 
