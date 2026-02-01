@@ -1,5 +1,4 @@
 import Cocoa
-import SwiftUI
 import Combine
 
 // Custom window that can become key
@@ -8,22 +7,60 @@ class TransparentWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
+@main
 class AppDelegate: NSObject, NSApplicationDelegate {
+
+    override init() {
+        super.init()
+    }
+
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.run()
+    }
+
+    // MARK: - Properties
+
     private var globalShortcutMonitor: Any?
     private var localShortcutMonitor: Any?
     var mainWindow: TransparentWindow!
     private var controlWindow: TransparentWindow!
     private var helpWindow: TransparentWindow?
-    var videoState = VideoState()
+
+    let videoState = VideoState()
     private var cancellables = Set<AnyCancellable>()
-    private let controlWindowHeight: CGFloat = 64
+    private let controlWindowHeight: CGFloat = 40
+
+    private var mainViewController: MainViewController!
+    private var controlBar: ControlBar!
+
+    // MARK: - App Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        createWindow()
-        FocusReturnManager.shared.startTracking()
+        setupMainMenu()
+        createMainWindow()
+        createControlWindow()
+        observeWindowFrameChanges()
         setupGlobalShortcuts()
-        ensureInstalledInApplications()
         observeState()
+
+        // Skip move-to-Applications prompt during UI testing
+        if ProcessInfo.processInfo.environment["UITEST_MODE"] == nil {
+            ensureInstalledInApplications()
+        }
+
+        // Auto-load test video if specified (for UI testing)
+        if let testVideoPath = ProcessInfo.processInfo.environment["TEST_VIDEO_PATH"] {
+            let url = URL(fileURLWithPath: testVideoPath)
+            if FileManager.default.fileExists(atPath: testVideoPath) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.videoState.videoURL = url
+                    self?.videoState.isVideoLoaded = true
+                }
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -39,113 +76,130 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
-    private func createWindow() {
+    // MARK: - Menu Setup
+
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+
+        // App menu
+        let appMenuItem = NSMenuItem()
+        mainMenu.addItem(appMenuItem)
+        let appMenu = NSMenu()
+        appMenuItem.submenu = appMenu
+        appMenu.addItem(withTitle: "About Reframer", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+
+        let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")
+        let servicesMenu = NSMenu(title: "Services")
+        servicesItem.submenu = servicesMenu
+        NSApp.servicesMenu = servicesMenu
+        appMenu.addItem(servicesItem)
+
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Hide Reframer", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        let hideOthersItem = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthersItem.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthersItem)
+        appMenu.addItem(withTitle: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit Reframer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        // File menu
+        let fileMenuItem = NSMenuItem()
+        mainMenu.addItem(fileMenuItem)
+        let fileMenu = NSMenu(title: "File")
+        fileMenuItem.submenu = fileMenu
+        fileMenu.addItem(withTitle: "Open Video", action: #selector(openVideo(_:)), keyEquivalent: "o")
+
+        // View menu
+        let viewMenuItem = NSMenuItem()
+        mainMenu.addItem(viewMenuItem)
+        let viewMenu = NSMenu(title: "View")
+        viewMenuItem.submenu = viewMenu
+        viewMenu.addItem(withTitle: "Reset Zoom", action: #selector(resetZoom(_:)), keyEquivalent: "0")
+        viewMenu.addItem(withTitle: "Reset Position", action: #selector(resetPosition(_:)), keyEquivalent: "r")
+        viewMenu.addItem(.separator())
+        let lockItem = NSMenuItem(title: "Toggle Lock", action: #selector(toggleLock(_:)), keyEquivalent: "L")
+        lockItem.keyEquivalentModifierMask = [.command, .shift]
+        viewMenu.addItem(lockItem)
+
+        // Playback menu
+        let playbackMenuItem = NSMenuItem()
+        mainMenu.addItem(playbackMenuItem)
+        let playbackMenu = NSMenu(title: "Playback")
+        playbackMenuItem.submenu = playbackMenu
+        let playPauseItem = NSMenuItem(title: "Play/Pause", action: #selector(togglePlayPause(_:)), keyEquivalent: " ")
+        playPauseItem.keyEquivalentModifierMask = [.command, .shift]
+        playbackMenu.addItem(playPauseItem)
+        playbackMenu.addItem(.separator())
+        let stepForwardItem = NSMenuItem(title: "Step Forward", action: #selector(stepForward(_:)), keyEquivalent: "")
+        stepForwardItem.keyEquivalentModifierMask = [.command]
+        playbackMenu.addItem(stepForwardItem)
+        let stepBackwardItem = NSMenuItem(title: "Step Backward", action: #selector(stepBackward(_:)), keyEquivalent: "")
+        stepBackwardItem.keyEquivalentModifierMask = [.command]
+        playbackMenu.addItem(stepBackwardItem)
+
+        // Window menu
+        let windowMenuItem = NSMenuItem()
+        mainMenu.addItem(windowMenuItem)
+        let windowMenu = NSMenu(title: "Window")
+        windowMenuItem.submenu = windowMenu
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+        NSApp.windowsMenu = windowMenu
+
+        // Help menu - put documentation first since macOS may intercept first item
+        let helpMenuItem = NSMenuItem()
+        mainMenu.addItem(helpMenuItem)
+        let helpMenu = NSMenu(title: "Help")
+        helpMenuItem.submenu = helpMenu
+        helpMenu.addItem(withTitle: "Reframer Documentation", action: #selector(openReframerHelp(_:)), keyEquivalent: "?")
+        helpMenu.addItem(.separator())
+        helpMenu.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showHelp(_:)), keyEquivalent: "")
+
+        NSApp.mainMenu = mainMenu
+    }
+
+    // MARK: - Window Creation
+
+    private func createMainWindow() {
+        // Get screen frame for proper centering
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let windowSize = NSSize(width: 800, height: 600)
+        let origin = NSPoint(
+            x: screenFrame.midX - windowSize.width / 2,
+            y: screenFrame.midY - windowSize.height / 2
+        )
+        let windowFrame = NSRect(origin: origin, size: windowSize)
+
         let window = TransparentWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+            contentRect: windowFrame,
             styleMask: [.borderless, .resizable],
             backing: .buffered,
             defer: false
         )
+
+        // Explicitly set frame for borderless window
+        window.setFrame(windowFrame, display: false)
 
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.isMovableByWindowBackground = false
-        window.center()
+        window.isMovableByWindowBackground = true  // Enable window dragging
 
-        let contentView = ContentView().environmentObject(videoState)
-        let hostingView = NSHostingView(rootView: contentView)
-        hostingView.wantsLayer = true
-        hostingView.layer?.backgroundColor = .clear
-        hostingView.layer?.cornerRadius = 12
-        hostingView.layer?.cornerCurve = .continuous
-        hostingView.layer?.masksToBounds = true
+        mainViewController = MainViewController(videoState: videoState)
+        window.contentViewController = mainViewController
 
-        window.contentView = hostingView
+        // Set frame again after content view controller to ensure size
+        window.setFrame(windowFrame, display: true)
+
         window.makeKeyAndOrderFront(nil)
         window.makeMain()
 
         mainWindow = window
-        createControlWindow()
-        observeWindowFrameChanges()
-    }
-
-    private func observeState() {
-        videoState.$isLocked
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isLocked in
-                guard let window = self?.mainWindow else { return }
-                if isLocked {
-                    window.styleMask.remove(.resizable)
-                    window.ignoresMouseEvents = true
-                } else {
-                    window.styleMask.insert(.resizable)
-                    window.ignoresMouseEvents = false
-                }
-            }
-            .store(in: &cancellables)
-
-        videoState.$isAlwaysOnTop
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isOnTop in
-                guard let self = self else { return }
-                let level: NSWindow.Level = isOnTop ? .floating : .normal
-                self.mainWindow?.level = level
-                self.controlWindow?.level = level
-                self.helpWindow?.level = level
-            }
-            .store(in: &cancellables)
-
-        videoState.$showHelp
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] showHelp in
-                guard let self = self else { return }
-                if showHelp {
-                    self.showHelpWindow()
-                } else {
-                    self.hideHelpWindow()
-                }
-            }
-            .store(in: &cancellables)
-    }
-
-    private func setupGlobalShortcuts() {
-        globalShortcutMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleGlobalKey(event)
-        }
-
-        localShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if self?.handleGlobalKey(event) == true {
-                return nil
-            }
-            return event
-        }
-    }
-
-    @discardableResult
-    private func handleGlobalKey(_ event: NSEvent) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let hasCommand = flags.contains(.command)
-        let hasShift = flags.contains(.shift)
-
-        if hasCommand && hasShift && event.keyCode == 37 {
-            NotificationCenter.default.post(name: .toggleLock, object: nil)
-            return true
-        }
-
-        if hasCommand && event.keyCode == 116 {
-            NotificationCenter.default.post(name: .frameStepForward, object: hasShift ? 10 : 1)
-            return true
-        }
-
-        if hasCommand && event.keyCode == 121 {
-            NotificationCenter.default.post(name: .frameStepBackward, object: hasShift ? 10 : 1)
-            return true
-        }
-
-        return false
     }
 
     private func createControlWindow() {
@@ -169,18 +223,219 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.hasShadow = false
         window.level = mainWindow.level
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.isMovableByWindowBackground = false
+        // NOTE: Do NOT set isMovableByWindowBackground on control window
+        // It's a child window and will move with the main window when main is dragged
 
-        let controlView = ControlWindowView().environmentObject(videoState)
-        let hostingView = NSHostingView(rootView: controlView)
-        hostingView.wantsLayer = true
-        hostingView.layer?.backgroundColor = .clear
-        window.contentView = hostingView
+        // Create control bar
+        controlBar = ControlBar(frame: controlFrame)
+        controlBar.videoState = videoState
 
+        // Wrap in a view controller
+        let viewController = NSViewController()
+        viewController.view = NSView(frame: controlFrame)
+        viewController.view.wantsLayer = true
+        viewController.view.layer?.backgroundColor = .clear
+        viewController.view.addSubview(controlBar)
+
+        controlBar.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            controlBar.leadingAnchor.constraint(equalTo: viewController.view.leadingAnchor),
+            controlBar.trailingAnchor.constraint(equalTo: viewController.view.trailingAnchor),
+            controlBar.topAnchor.constraint(equalTo: viewController.view.topAnchor),
+            controlBar.bottomAnchor.constraint(equalTo: viewController.view.bottomAnchor)
+        ])
+
+        window.contentViewController = viewController
         controlWindow = window
         mainWindow.addChildWindow(window, ordered: .above)
         window.orderFront(nil)
+
+        // Ensure main window stays key for keyboard events
+        mainWindow.makeKeyAndOrderFront(nil)
     }
+
+    // MARK: - State Observation
+
+    private func observeState() {
+        // Lock mode
+        videoState.$isLocked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isLocked in
+                guard let window = self?.mainWindow else { return }
+                if isLocked {
+                    window.styleMask.remove(.resizable)
+                    window.ignoresMouseEvents = true
+                } else {
+                    window.styleMask.insert(.resizable)
+                    window.ignoresMouseEvents = false
+                }
+            }
+            .store(in: &cancellables)
+
+        // Always on top
+        videoState.$isAlwaysOnTop
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isOnTop in
+                guard let self = self else { return }
+                let level: NSWindow.Level = isOnTop ? .floating : .normal
+                self.mainWindow?.level = level
+                self.controlWindow?.level = level
+                self.helpWindow?.level = level
+            }
+            .store(in: &cancellables)
+
+        // Help modal
+        videoState.$showHelp
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] showHelp in
+                guard let self = self else { return }
+                if showHelp {
+                    self.showHelpWindow()
+                } else {
+                    self.hideHelpWindow()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Open video notification
+        NotificationCenter.default.publisher(for: .openVideo)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.openVideoFile()
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Global Shortcuts
+
+    private func setupGlobalShortcuts() {
+        globalShortcutMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleGlobalKey(event)
+        }
+
+        localShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if self?.handleGlobalKey(event) == true {
+                return nil
+            }
+            if self?.handleLocalKey(event) == true {
+                return nil
+            }
+            return event
+        }
+    }
+
+    @discardableResult
+    private func handleGlobalKey(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let hasCommand = flags.contains(.command)
+        let hasShift = flags.contains(.shift)
+
+        // Cmd+Shift+L - Toggle lock (global)
+        if hasCommand && hasShift && event.keyCode == 37 {
+            videoState.isLocked.toggle()
+            return true
+        }
+
+        // Cmd+PageUp - Step frame forward (global)
+        if hasCommand && event.keyCode == 116 {
+            NotificationCenter.default.post(name: .frameStepForward, object: hasShift ? 10 : 1)
+            return true
+        }
+
+        // Cmd+PageDown - Step frame backward (global)
+        if hasCommand && event.keyCode == 121 {
+            NotificationCenter.default.post(name: .frameStepBackward, object: hasShift ? 10 : 1)
+            return true
+        }
+
+        return false
+    }
+
+    /// Handle app-local keyboard shortcuts that should work from any window
+    @discardableResult
+    private func handleLocalKey(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let noModifiers = flags.isEmpty
+
+        // Don't handle if a text field is first responder (check all windows)
+        // Check ALL windows, not just key window, since control bar is in separate window
+        for window in NSApp.windows {
+            if let firstResponder = window.firstResponder,
+               firstResponder is NSTextView {
+                return false
+            }
+        }
+
+        // Also check specific field editor state
+        if let keyWindow = NSApp.keyWindow,
+           let firstResponder = keyWindow.firstResponder,
+           firstResponder is NSTextField {
+            return false
+        }
+
+        switch event.keyCode {
+        // Space - Play/Pause
+        case 49 where noModifiers && videoState.isVideoLoaded:
+            videoState.isPlaying.toggle()
+            return true
+
+        // L - Toggle lock
+        case 37 where noModifiers:
+            videoState.isLocked.toggle()
+            return true
+
+        // H - Toggle help
+        case 4 where noModifiers:
+            videoState.showHelp.toggle()
+            return true
+
+        // 0 - Reset zoom to 100%
+        case 29 where noModifiers && videoState.isVideoLoaded && !videoState.isLocked:
+            videoState.zoomScale = 1.0
+            return true
+
+        // R - Reset view
+        case 15 where noModifiers && !videoState.isLocked:
+            videoState.resetView()
+            return true
+
+        // ? (Shift+/) - Toggle help
+        case 44 where flags.contains(.shift):
+            videoState.showHelp.toggle()
+            return true
+
+        // Escape - Close help
+        case 53 where videoState.showHelp:
+            videoState.showHelp = false
+            return true
+
+        // Arrow keys for pan (when unlocked and video loaded)
+        case 123 where videoState.isVideoLoaded && !videoState.isLocked: // Left
+            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
+            videoState.panOffset.width -= amount
+            return true
+
+        case 124 where videoState.isVideoLoaded && !videoState.isLocked: // Right
+            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
+            videoState.panOffset.width += amount
+            return true
+
+        case 126 where videoState.isVideoLoaded && !videoState.isLocked: // Up
+            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
+            videoState.panOffset.height += amount
+            return true
+
+        case 125 where videoState.isVideoLoaded && !videoState.isLocked: // Down
+            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
+            videoState.panOffset.height -= amount
+            return true
+
+        default:
+            return false
+        }
+    }
+
+    // MARK: - Window Frame Updates
 
     private func observeWindowFrameChanges() {
         NotificationCenter.default.addObserver(
@@ -214,6 +469,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         controlWindow.setFrame(controlFrame, display: true)
     }
 
+    // MARK: - Help Window
+
     private func showHelpWindow() {
         if helpWindow == nil {
             let mainFrame = mainWindow.frame
@@ -237,11 +494,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isMovableByWindowBackground = true
 
-            let helpView = HelpModalView().environmentObject(videoState)
-            let hostingView = NSHostingView(rootView: helpView)
-            hostingView.wantsLayer = true
-            hostingView.layer?.backgroundColor = .clear
-            panel.contentView = hostingView
+            let helpView = HelpView(videoState: videoState)
+            let viewController = NSViewController()
+            viewController.view = helpView
+            panel.contentViewController = viewController
+
+            // Set accessibility on both window and view for XCUITest discovery
+            panel.setAccessibilityIdentifier("window-help")
+            helpView.setAccessibilityIdentifier("modal-help")
 
             helpWindow = panel
             mainWindow.addChildWindow(panel, ordered: .above)
@@ -265,6 +525,68 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         helpWindow.setFrameOrigin(origin)
     }
 
+    // MARK: - File Operations
+
+    private func openVideoFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = VideoFormats.supportedTypes
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Select a video file"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            videoState.videoURL = url
+            videoState.isVideoLoaded = true
+        }
+    }
+
+    // MARK: - Menu Actions (IBActions for storyboard)
+
+    @IBAction func openVideo(_ sender: Any?) {
+        openVideoFile()
+    }
+
+    @IBAction func resetZoom(_ sender: Any?) {
+        videoState.zoomScale = 1.0
+    }
+
+    @IBAction func resetPosition(_ sender: Any?) {
+        videoState.resetView()
+    }
+
+    @IBAction func toggleLock(_ sender: Any?) {
+        videoState.isLocked.toggle()
+    }
+
+    @IBAction func toggleAlwaysOnTop(_ sender: Any?) {
+        videoState.isAlwaysOnTop.toggle()
+    }
+
+    @IBAction func togglePlayPause(_ sender: Any?) {
+        videoState.isPlaying.toggle()
+    }
+
+    @IBAction func stepForward(_ sender: Any?) {
+        NotificationCenter.default.post(name: .frameStepForward, object: 1)
+    }
+
+    @IBAction func stepBackward(_ sender: Any?) {
+        NotificationCenter.default.post(name: .frameStepBackward, object: 1)
+    }
+
+    @IBAction func showHelp(_ sender: Any?) {
+        videoState.showHelp = true
+    }
+
+    @IBAction func openReframerHelp(_ sender: Any?) {
+        // Open the Reframer help book
+        let helpBookName = Bundle.main.object(forInfoDictionaryKey: "CFBundleHelpBookName") as? String ?? "com.reframer.help"
+        NSHelpManager.shared.openHelpAnchor("index", inBook: helpBookName)
+    }
+
+
+    // MARK: - Installation
+
     private func ensureInstalledInApplications() {
         let bundleURL = Bundle.main.bundleURL.standardizedFileURL
         let applicationsURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
@@ -276,7 +598,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alert.informativeText = "Video Overlay should be installed in /Applications."
         alert.addButton(withTitle: "Move")
         alert.addButton(withTitle: "Cancel")
-
         let response = alert.runModal()
         guard response == .alertFirstButtonReturn else { return }
 

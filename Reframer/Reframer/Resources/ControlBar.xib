@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="24506" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" customObjectInstantitationMethod="direct">
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="24506"/>
+        <capability name="Image references" minToolsVersion="12.0"/>
+        <capability name="Named colors" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <customObject id="-2" userLabel="File's Owner"/>
+        <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
+        <customObject id="-3" userLabel="Application" customClass="NSObject"/>
+        <customView id="c22-O7-iKe" userLabel="Control Bar View">
+            <rect key="frame" x="0.0" y="0.0" width="861" height="40"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+            <subviews>
+                <visualEffectView identifier="glass-bg" blendingMode="behindWindow" material="contentBackground" state="active" translatesAutoresizingMaskIntoConstraints="NO" id="glass-bg">
+                    <rect key="frame" x="0.0" y="0.0" width="861" height="40"/>
+                </visualEffectView>
+                <stackView identifier="main-stack" distribution="fill" orientation="horizontal" alignment="centerY" spacing="5" horizontalStackHuggingPriority="250" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="main-stack">
+                    <rect key="frame" x="0.0" y="0.0" width="861" height="40"/>
+                    <subviews>
+                        <button identifier="btn-open" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-open">
+                            <rect key="frame" x="5" y="8" width="24" height="24"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" borderStyle="border" imageScaling="proportionallyDown" id="btn-open-cell">
+                                <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                <font key="font" metaFont="system"/>
+                                <imageReference key="image" image="folder.fill" catalog="system" symbolScale="large"/>
+                            </buttonCell>
+                            <color key="bezelColor" name="AccentColor"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="24" id="open-h"/>
+                                <constraint firstAttribute="width" constant="24" id="open-w"/>
+                            </constraints>
+                        </button>
+                        <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="div-1">
+                            <rect key="frame" x="32" y="0.0" width="5" height="40"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="40" id="FcZ-n5-nSr"/>
+                            </constraints>
+                        </box>
+                        <button identifier="btn-step-back" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-step-back">
+                            <rect key="frame" x="40" y="8" width="24" height="24"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" borderStyle="border" imageScaling="proportionallyDown" id="btn-step-back-cell">
+                                <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                <font key="font" metaFont="system"/>
+                                <imageReference key="image" image="backward.frame.fill" catalog="system" symbolScale="large" variableValue="1"/>
+                            </buttonCell>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="24" id="stepback-h"/>
+                                <constraint firstAttribute="width" constant="24" id="stepback-w"/>
+                            </constraints>
+                        </button>
+                        <button identifier="btn-play" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-play">
+                            <rect key="frame" x="69" y="8" width="24" height="24"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" alternateImage="pause.fill" catalog="system" borderStyle="border" imageScaling="proportionallyDown" id="btn-play-cell">
+                                <behavior key="behavior" pushIn="YES" changeContents="YES" lightByContents="YES"/>
+                                <font key="font" metaFont="system"/>
+                                <imageReference key="image" image="play.fill" catalog="system" symbolScale="large"/>
+                            </buttonCell>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="24" id="play-h"/>
+                                <constraint firstAttribute="width" constant="24" id="play-w"/>
+                            </constraints>
+                        </button>
+                        <button identifier="btn-step-forward" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-step-forward">
+                            <rect key="frame" x="98" y="8" width="24" height="24"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" borderStyle="border" imageScaling="proportionallyDown" id="btn-step-forward-cell">
+                                <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                <font key="font" metaFont="system"/>
+                                <imageReference key="image" image="forward.frame.fill" catalog="system" symbolScale="large"/>
+                            </buttonCell>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="24" id="stepfwd-h"/>
+                                <constraint firstAttribute="width" constant="24" id="stepfwd-w"/>
+                            </constraints>
+                        </button>
+                        <slider identifier="slider-timeline" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="slider-timeline">
+                            <rect key="frame" x="127" y="14" width="200" height="12"/>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="200" id="yb9-Nt-6gb"/>
+                            </constraints>
+                            <sliderCell key="cell" controlSize="mini" continuous="YES" alignment="left" maxValue="1" tickMarkPosition="below" sliderType="linear" id="slider-timeline-cell"/>
+                        </slider>
+                        <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="div-2">
+                            <rect key="frame" x="330" y="0.0" width="5" height="40"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="40" id="CYt-bQ-ncr"/>
+                            </constraints>
+                        </box>
+                        <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="jEj-nH-TYI">
+                            <rect key="frame" x="338" y="3.5" width="24.5" height="33"/>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="24" id="05c-bg-Dv2"/>
+                                <constraint firstAttribute="height" constant="24" id="yHH-m5-4de"/>
+                            </constraints>
+                            <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="VQt-oC-MsR">
+                                <imageReference key="image" image="film" catalog="system" symbolScale="large"/>
+                            </imageCell>
+                        </imageView>
+                        <textField identifier="field-frame" focusRingType="none" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="field-frame">
+                            <rect key="frame" x="367" y="8" width="50" height="24"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="24" id="QDh-Jv-pVT"/>
+                                <constraint firstAttribute="width" constant="50" id="frame-w"/>
+                            </constraints>
+                            <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" borderStyle="bezel" alignment="right" placeholderString="0" bezelStyle="round" id="field-frame-cell">
+                                <font key="font" metaFont="system"/>
+                                <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                                <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                            </textFieldCell>
+                        </textField>
+                        <textField identifier="label-frame-total" clipsToBounds="YES" focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="label-frame-total">
+                            <rect key="frame" x="420" y="12" width="54" height="16"/>
+                            <constraints>
+                                <constraint firstAttribute="width" relation="lessThanOrEqual" constant="50" id="jds-Ub-DMa"/>
+                            </constraints>
+                            <textFieldCell key="cell" lineBreakMode="clipping" allowsUndo="NO" alignment="left" title="/ 0" id="label-frame-total-cell">
+                                <font key="font" metaFont="system"/>
+                                <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
+                                <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                            </textFieldCell>
+                        </textField>
+                        <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="div-3">
+                            <rect key="frame" x="475" y="0.0" width="5" height="40"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="40" id="jlf-0o-mEl"/>
+                            </constraints>
+                        </box>
+                        <imageView translatesAutoresizingMaskIntoConstraints="NO" id="FN8-If-vwn">
+                            <rect key="frame" x="483" y="3" width="24" height="35"/>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="24" id="Jjw-9p-J5t"/>
+                                <constraint firstAttribute="height" constant="24" id="qlS-Ho-PNq"/>
+                            </constraints>
+                            <imageCell key="cell" refusesFirstResponder="YES" alignment="left" animates="YES" imageScaling="proportionallyDown" id="0lK-0Z-uVF">
+                                <imageReference key="image" image="plus.magnifyingglass" catalog="system" symbolScale="large"/>
+                            </imageCell>
+                        </imageView>
+                        <textField identifier="field-zoom" focusRingType="none" verticalHuggingPriority="750" preferredMaxLayoutWidth="50" translatesAutoresizingMaskIntoConstraints="NO" id="field-zoom">
+                            <rect key="frame" x="512" y="8" width="50" height="24"/>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="50" id="4wd-gH-ASz"/>
+                            </constraints>
+                            <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" borderStyle="bezel" alignment="right" placeholderString="100" bezelStyle="round" id="field-zoom-cell">
+                                <font key="font" metaFont="system"/>
+                                <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                                <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                            </textFieldCell>
+                        </textField>
+                        <textField identifier="label-zoom-pct" focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="label-zoom-pct">
+                            <rect key="frame" x="565" y="12" width="17" height="16"/>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="13" id="SYF-9X-AjE"/>
+                            </constraints>
+                            <textFieldCell key="cell" lineBreakMode="clipping" title="%" id="label-zoom-pct-cell">
+                                <font key="font" metaFont="system"/>
+                                <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
+                                <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                            </textFieldCell>
+                        </textField>
+                        <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="KPZ-yf-Z39">
+                            <rect key="frame" x="583" y="0.0" width="5" height="40"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="40" id="RMW-Mx-dEC"/>
+                                <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="40" id="kca-rl-ysp"/>
+                            </constraints>
+                        </box>
+                        <imageView translatesAutoresizingMaskIntoConstraints="NO" id="NIn-fL-tqi">
+                            <rect key="frame" x="591" y="3.5" width="24.5" height="33"/>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="24" id="GSr-nR-haA"/>
+                                <constraint firstAttribute="height" constant="24" id="Try-ec-ukK"/>
+                            </constraints>
+                            <imageCell key="cell" refusesFirstResponder="YES" alignment="left" animates="YES" imageScaling="proportionallyDown" id="44g-Km-8UB">
+                                <imageReference key="image" image="rectangle.pattern.checkered" catalog="system" symbolScale="large"/>
+                            </imageCell>
+                        </imageView>
+                        <slider identifier="slider-opacity" verticalHuggingPriority="750" horizontalCompressionResistancePriority="751" translatesAutoresizingMaskIntoConstraints="NO" id="slider-opacity">
+                            <rect key="frame" x="620" y="14" width="100" height="12"/>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="100" id="opacity-slider-w"/>
+                            </constraints>
+                            <sliderCell key="cell" controlSize="mini" continuous="YES" alignment="left" minValue="0.02" maxValue="1" doubleValue="1" tickMarkPosition="below" sliderType="linear" id="slider-opacity-cell"/>
+                        </slider>
+                        <textField identifier="field-opacity" focusRingType="none" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="field-opacity">
+                            <rect key="frame" x="725" y="8" width="32" height="24"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="24" id="5YC-vi-w7L"/>
+                                <constraint firstAttribute="width" constant="32" id="opacity-w"/>
+                            </constraints>
+                            <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" borderStyle="bezel" alignment="right" placeholderString="100" bezelStyle="round" id="field-opacity-cell">
+                                <font key="font" metaFont="system"/>
+                                <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                                <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                            </textFieldCell>
+                        </textField>
+                        <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="div-5">
+                            <rect key="frame" x="760" y="0.0" width="5" height="40"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="40" id="7Wq-yy-PXq"/>
+                            </constraints>
+                        </box>
+                        <button identifier="btn-mute" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-mute">
+                            <rect key="frame" x="768" y="2" width="24.5" height="35"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" imageScaling="proportionallyDown" id="btn-mute-cell">
+                                <behavior key="behavior" pushIn="YES" changeContents="YES" lightByContents="YES"/>
+                                <font key="font" metaFont="system"/>
+                                <imageReference key="image" image="speaker.wave.2.fill" catalog="system" symbolScale="large"/>
+                                <imageReference key="alternateImage" image="speaker.slash.fill" catalog="system" symbolScale="large"/>
+                            </buttonCell>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="24" id="mute-h"/>
+                                <constraint firstAttribute="width" constant="24" id="mute-w"/>
+                            </constraints>
+                        </button>
+                        <slider identifier="slider-volume" hidden="YES" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="slider-volume">
+                            <rect key="frame" x="0.0" y="28" width="100" height="12"/>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="100" id="volume-slider-w"/>
+                            </constraints>
+                            <sliderCell key="cell" controlSize="mini" continuous="YES" alignment="left" maxValue="1" doubleValue="0.5" tickMarkPosition="below" sliderType="linear" id="slider-volume-cell"/>
+                        </slider>
+                        <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="div-6">
+                            <rect key="frame" x="795" y="0.0" width="5" height="40"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="40" id="wcn-VM-M31"/>
+                            </constraints>
+                        </box>
+                        <button identifier="btn-lock" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-lock">
+                            <rect key="frame" x="803" y="3.5" width="24" height="34"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" imageScaling="proportionallyDown" id="btn-lock-cell">
+                                <behavior key="behavior" pushIn="YES" changeContents="YES" lightByContents="YES"/>
+                                <font key="font" metaFont="system"/>
+                                <imageReference key="image" image="lock.open.fill" catalog="system" symbolScale="large"/>
+                                <imageReference key="alternateImage" image="lock.fill" catalog="system" symbolScale="large"/>
+                            </buttonCell>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="24" id="lock-h"/>
+                                <constraint firstAttribute="width" constant="24" id="lock-w"/>
+                            </constraints>
+                        </button>
+                        <button identifier="btn-reset" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-reset">
+                            <rect key="frame" x="832" y="3.5" width="24" height="33"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" imageScaling="proportionallyDown" id="btn-reset-cell">
+                                <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                <font key="font" metaFont="system"/>
+                                <imageReference key="image" image="arrow.uturn.left.square" catalog="system" symbolScale="large"/>
+                            </buttonCell>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="24" id="fQh-MF-Rey"/>
+                                <constraint firstAttribute="height" constant="24" id="reset-h"/>
+                            </constraints>
+                        </button>
+                    </subviews>
+                    <edgeInsets key="edgeInsets" left="5" right="5" top="5" bottom="0.0"/>
+                    <constraints>
+                        <constraint firstAttribute="height" constant="40" id="i18-Xw-Gak"/>
+                    </constraints>
+                    <visibilityPriorities>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                        <integer value="1000"/>
+                    </visibilityPriorities>
+                    <customSpacing>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                        <real value="3.4028234663852886e+38"/>
+                    </customSpacing>
+                </stackView>
+            </subviews>
+            <constraints>
+                <constraint firstAttribute="bottom" secondItem="glass-bg" secondAttribute="bottom" id="glass-bottom"/>
+                <constraint firstItem="glass-bg" firstAttribute="leading" secondItem="c22-O7-iKe" secondAttribute="leading" id="glass-leading"/>
+                <constraint firstItem="glass-bg" firstAttribute="top" secondItem="c22-O7-iKe" secondAttribute="top" id="glass-top"/>
+                <constraint firstAttribute="trailing" secondItem="glass-bg" secondAttribute="trailing" id="glass-trailing"/>
+                <constraint firstAttribute="bottom" secondItem="main-stack" secondAttribute="bottom" id="stack-bottom"/>
+                <constraint firstItem="main-stack" firstAttribute="leading" secondItem="c22-O7-iKe" secondAttribute="leading" id="stack-leading"/>
+                <constraint firstItem="main-stack" firstAttribute="top" secondItem="c22-O7-iKe" secondAttribute="top" id="stack-top"/>
+                <constraint firstAttribute="trailing" secondItem="main-stack" secondAttribute="trailing" id="stack-trailing"/>
+            </constraints>
+            <point key="canvasLocation" x="244" y="-3"/>
+        </customView>
+    </objects>
+    <resources>
+        <image name="arrow.uturn.left.square" catalog="system" width="19" height="18"/>
+        <image name="backward.frame.fill" catalog="system" width="22" height="16"/>
+        <image name="film" catalog="system" width="24" height="18"/>
+        <image name="folder.fill" catalog="system" width="23" height="18"/>
+        <image name="forward.frame.fill" catalog="system" width="22" height="16"/>
+        <image name="lock.fill" catalog="system" width="17" height="19"/>
+        <image name="lock.open.fill" catalog="system" width="21" height="19"/>
+        <image name="pause.fill" catalog="system" width="11" height="13"/>
+        <image name="play.fill" catalog="system" width="15" height="17"/>
+        <image name="plus.magnifyingglass" catalog="system" width="20" height="20"/>
+        <image name="rectangle.pattern.checkered" catalog="system" width="24" height="18"/>
+        <image name="speaker.slash.fill" catalog="system" width="17" height="20"/>
+        <image name="speaker.wave.2.fill" catalog="system" width="24" height="18"/>
+        <namedColor name="AccentColor">
+            <color red="0.2669999897480011" green="0.58399999141693115" blue="0.98400002717971802" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </namedColor>
+    </resources>
+</document>

@@ -1,97 +1,188 @@
-import SwiftUI
+import Cocoa
 import UniformTypeIdentifiers
 
-struct DropZoneView: View {
-    @EnvironmentObject var videoState: VideoState
-    @State private var isTargeted: Bool = false
+/// Pure AppKit drop zone view for video files
+class DropZoneView: NSView {
 
-    var body: some View {
-        ZStack {
-            // macOS glass background
-            GlassBackgroundShape(cornerRadius: 12)
+    // MARK: - Properties
 
-            // Drop target highlight
-            if isTargeted {
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.accentColor, lineWidth: 2)
-            }
-
-            // Content
-            VStack(spacing: 16) {
-                Image(systemName: "play.rectangle.on.rectangle")
-                    .font(.system(size: 48, weight: .light))
-                    .foregroundStyle(.secondary)
-
-                Text("Drop video here")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.primary)
-
-                Text("or press ⌘O to open")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-
-                // Supported formats hint
-                Text(VideoFormats.displayString)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 8)
-            }
-        }
-        .onDrop(of: VideoFormats.supportedTypes, isTargeted: $isTargeted) { providers in
-            handleDrop(providers: providers)
-        }
-        .onTapGesture {
-            openVideoFile()
-        }
-        .contentShape(Rectangle())
+    weak var videoState: VideoState?
+    private var isTargeted = false {
+        didSet { needsDisplay = true }
     }
 
-    private func handleDrop(providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first else { return false }
+    private let visualEffectView = NSVisualEffectView()
+    private let iconImageView = NSImageView()
+    private let titleLabel = NSTextField(labelWithString: "Drop video here")
+    private let subtitleLabel = NSTextField(labelWithString: "or press ⌘O to open")
+    private let formatsLabel = NSTextField(labelWithString: VideoFormats.displayString)
 
-        for type in VideoFormats.supportedTypes {
-            if provider.hasItemConformingToTypeIdentifier(type.identifier) {
-                provider.loadItem(forTypeIdentifier: type.identifier, options: nil) { item, error in
-                    if let url = item as? URL {
-                        DispatchQueue.main.async {
-                            videoState.videoURL = url
-                            videoState.isVideoLoaded = true
-                        }
-                    } else if let data = item as? Data,
-                              let url = URL(dataRepresentation: data, relativeTo: nil) {
-                        DispatchQueue.main.async {
-                            videoState.videoURL = url
-                            videoState.isVideoLoaded = true
-                        }
-                    }
+    // MARK: - Initialization
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+
+    // MARK: - Setup
+
+    private func setup() {
+        wantsLayer = true
+        layer?.cornerRadius = 12
+        layer?.masksToBounds = true
+
+        // Register for drag and drop
+        registerForDraggedTypes(VideoFormats.supportedTypes.map { NSPasteboard.PasteboardType($0.identifier) })
+
+        // Glass background
+        visualEffectView.material = .hudWindow
+        visualEffectView.blendingMode = .behindWindow
+        visualEffectView.state = .active
+        visualEffectView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(visualEffectView)
+
+        // Icon
+        let icon = NSImage(systemSymbolName: "play.rectangle.on.rectangle", accessibilityDescription: "Video")
+        iconImageView.image = icon
+        iconImageView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 48, weight: .light)
+        iconImageView.contentTintColor = .secondaryLabelColor
+        iconImageView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(iconImageView)
+
+        // Title
+        titleLabel.font = NSFont.systemFont(ofSize: 17, weight: .medium)
+        titleLabel.textColor = .labelColor
+        titleLabel.alignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+
+        // Subtitle
+        subtitleLabel.font = NSFont.systemFont(ofSize: 13)
+        subtitleLabel.textColor = .secondaryLabelColor
+        subtitleLabel.alignment = .center
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(subtitleLabel)
+
+        // Formats
+        formatsLabel.font = NSFont.systemFont(ofSize: 11)
+        formatsLabel.textColor = .tertiaryLabelColor
+        formatsLabel.alignment = .center
+        formatsLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(formatsLabel)
+
+        // Layout
+        NSLayoutConstraint.activate([
+            visualEffectView.topAnchor.constraint(equalTo: topAnchor),
+            visualEffectView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            visualEffectView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            visualEffectView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            iconImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            iconImageView.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -40),
+
+            titleLabel.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 16),
+            titleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+            subtitleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+
+            formatsLabel.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 16),
+            formatsLabel.centerXAnchor.constraint(equalTo: centerXAnchor)
+        ])
+
+        // Click gesture
+        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleClick))
+        addGestureRecognizer(clickGesture)
+    }
+
+    // MARK: - Drawing
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        if isTargeted {
+            let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 12, yRadius: 12)
+            NSColor.controlAccentColor.setStroke()
+            path.lineWidth = 2
+            path.stroke()
+        }
+    }
+
+    // MARK: - Click Handling
+
+    @objc private func handleClick() {
+        NotificationCenter.default.post(name: .openVideo, object: nil)
+    }
+
+    // MARK: - Drag and Drop
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if hasValidVideoFile(sender) {
+            isTargeted = true
+            return .copy
+        }
+        return []
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        return hasValidVideoFile(sender) ? .copy : []
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        isTargeted = false
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        return hasValidVideoFile(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        isTargeted = false
+
+        guard let pasteboard = sender.draggingPasteboard.propertyList(forType: .fileURL) as? String,
+              let url = URL(string: pasteboard) else {
+            // Try alternative method
+            if let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+               let url = urls.first {
+                return loadVideo(from: url)
+            }
+            return false
+        }
+
+        return loadVideo(from: url)
+    }
+
+    override func concludeDragOperation(_ sender: NSDraggingInfo?) {
+        isTargeted = false
+    }
+
+    // MARK: - Helpers
+
+    private func hasValidVideoFile(_ sender: NSDraggingInfo) -> Bool {
+        let pasteboard = sender.draggingPasteboard
+
+        // Check for file URLs
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            for url in urls {
+                if VideoFormats.isSupported(url) {
+                    return true
                 }
-                return true
             }
         }
+
         return false
     }
 
-    private func openVideoFile() {
-        NotificationCenter.default.post(name: .openVideo, object: nil)
-    }
-}
+    private func loadVideo(from url: URL) -> Bool {
+        guard VideoFormats.isSupported(url) else { return false }
 
-// MARK: - Preview
-
-struct DropZoneView_Previews: PreviewProvider {
-    static var previews: some View {
-        ZStack {
-            // Simulate desktop background
-            LinearGradient(
-                colors: [Color.blue.opacity(0.3), Color.purple.opacity(0.3)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            DropZoneView()
-                .environmentObject(VideoState())
-                .padding(40)
-        }
-        .frame(width: 600, height: 400)
+        videoState?.videoURL = url
+        videoState?.isVideoLoaded = true
+        return true
     }
 }
