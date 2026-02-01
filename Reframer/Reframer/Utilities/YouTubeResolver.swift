@@ -150,25 +150,39 @@ final class YouTubeResolver {
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
             process.executableURL = self.ytDlpPath
-            process.arguments = ["--no-playlist", "--dump-single-json", url.absoluteString]
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = pipe
+            // Add --no-warnings to suppress warning messages that could corrupt JSON output
+            process.arguments = ["--no-warnings", "--no-playlist", "--dump-single-json", url.absoluteString]
+
+            // Separate stdout (JSON) from stderr (errors/warnings)
+            let stdoutPipe = Pipe()
+            let stderrPipe = Pipe()
+            process.standardOutput = stdoutPipe
+            process.standardError = stderrPipe
 
             do {
                 try process.run()
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
 
+                // Log stderr for debugging
+                if !stderrData.isEmpty {
+                    let stderrStr = String(data: stderrData, encoding: .utf8) ?? ""
+                    print("YouTubeResolver: yt-dlp stderr: \(stderrStr.prefix(500))")
+                }
+
                 guard process.terminationStatus == 0 else {
-                    let message = String(data: data, encoding: .utf8) ?? "Unknown error"
+                    // On failure, show stderr (errors) or stdout if stderr is empty
+                    let errorData = stderrData.isEmpty ? stdoutData : stderrData
+                    let message = String(data: errorData, encoding: .utf8) ?? "Unknown error"
                     DispatchQueue.main.async {
                         completion(.failure(YouTubeResolverError.toolExecutionFailed(message)))
                     }
                     return
                 }
 
-                let selection = try self.selectionFromJSONData(data)
+                // Parse stdout as JSON (should be clean JSON without warnings)
+                let selection = try self.selectionFromJSONData(stdoutData)
                 DispatchQueue.main.async {
                     completion(.success(selection))
                 }
