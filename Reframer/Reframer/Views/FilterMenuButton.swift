@@ -60,23 +60,29 @@ class FilterMenuButton: NSView {
     }
 
     private func updateIcon() {
-        // Always show checkerboard/opacity icon
-        let image = NSImage(systemSymbolName: "rectangle.pattern.checkered", accessibilityDescription: "Filters")
-        imageView.image = image
-
-        // Tint when any filters are active
-        let hasActiveFilters = !(videoState?.activeFilters.isEmpty ?? true)
-        if hasActiveFilters {
-            imageView.contentTintColor = .controlAccentColor
-        } else {
+        guard let state = videoState else {
+            imageView.image = NSImage(systemSymbolName: "rectangle.pattern.checkered", accessibilityDescription: "Filters")
             imageView.contentTintColor = .secondaryLabelColor
+            return
         }
 
-        // Build tooltip showing active filters
-        if let state = videoState, !state.activeFilters.isEmpty {
+        let activeFilters = state.activeFilters
+
+        if activeFilters.count == 1, let filter = activeFilters.first {
+            // Single filter active - show that filter's icon (cycling mode)
+            imageView.image = NSImage(systemSymbolName: filter.iconName, accessibilityDescription: filter.rawValue)
+            imageView.contentTintColor = .controlAccentColor
+            toolTip = filter.rawValue
+        } else if activeFilters.count > 1 {
+            // Multiple filters - show stacked icon
+            imageView.image = NSImage(systemSymbolName: "square.3.layers.3d", accessibilityDescription: "Multiple Filters")
+            imageView.contentTintColor = .controlAccentColor
             let filterNames = state.orderedActiveFilters.map { $0.rawValue }.joined(separator: ", ")
             toolTip = "Filters: \(filterNames)"
         } else {
+            // No filters - show default checkerboard
+            imageView.image = NSImage(systemSymbolName: "rectangle.pattern.checkered", accessibilityDescription: "Filters")
+            imageView.contentTintColor = .secondaryLabelColor
             toolTip = "No filters active"
         }
     }
