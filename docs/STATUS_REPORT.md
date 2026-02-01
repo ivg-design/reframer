@@ -1,8 +1,35 @@
-# Status Report (2026-02-01 - Updated)
+# Status Report (2026-02-01 - Session 2)
 
-## Current Status: ✅ All Major Items Complete
+## Current Status: 🔧 Testing VLCKit & YouTube Fixes
 
-## What’s Done
+## Recent Changes (This Session)
+
+### VLCKit Installation Fixes
+- Fixed DMG mounting race condition - was reading hdiutil output before process completed
+- Switched to async readability handlers for reliable pipe data capture
+- Added DMG file size validation before mounting
+- Added detailed logging for debugging
+
+### YouTube Playback Fixes
+- Switched yt-dlp from Python zipapp to standalone macOS binary
+- Python zipapp required Python 3.10+ but macOS ships with 3.9
+- Added HTTP status and file size validation for yt-dlp download
+- Improved error messages when yt-dlp returns invalid JSON
+
+### App Transport Security (ATS)
+- Changed from domain-specific exception to `NSAllowsArbitraryLoads`
+- VLC DMG downloads redirect to various mirror domains that can't be enumerated
+
+### Accessibility Prompt
+- Skip accessibility prompt for development builds (DerivedData/Build/Products)
+- Debug builds get new signatures on each build, causing repeated prompts
+- Production installs in /Applications will still get the prompt
+
+### Edit Menu Added
+- Added standard Edit menu (Cut/Copy/Paste/Select All)
+- Enables Cmd+V paste in NSAlert text fields (YouTube URL input)
+
+## What's Done
 
 ### App behavior & fixes
 - Added `KeyCodes` helper and removed magic key codes from input handling.
