@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0631DC8CF1CB9806E1F13AE0 /* ControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242CE7E3F5EFF404409747F7 /* ControlBar.swift */; };
 		0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19D82333A5671C5FB146764 /* VideoFormats.swift */; };
+		889027EB0A16468DA6E73FD3 /* MPVLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDFBBC73F2B1449DB52FD707 /* MPVLibrary.swift */; };
 		15FDF44DEF2AEB44C895443B /* VideoState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE63ACD63859E708710A97D4 /* VideoState.swift */; };
 		2491A9B249AD2563B719271A /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C014B4F5CB12CD15A1A186 /* Notifications.swift */; };
 		370628C9CD00AD6AA6DF0707 /* ControlBar.xib in Resources */ = {isa = PBXBuildFile; fileRef = B972E974DDAFCDB4952DE88C /* ControlBar.xib */; };
@@ -18,8 +19,8 @@
 		7C580FCBE04BAD9DED666438 /* DropZoneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 205A94D5C521D2C8598E3FAA /* DropZoneView.swift */; };
 		903D85FA96F4D67AAE7D51A6 /* EdgeIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */; };
 		AAA00011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AAA10011 /* Assets.xcassets */; };
-		B8CFABAEDE33931C8E299E81 /* VLCKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2502FE4461DC2B65CC2AD0F1 /* VLCKitManager.swift */; };
-		BA0EBAA4561101336A2CB3CF /* VLCVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82AA3D89B4B8C208795E63C8 /* VLCVideoView.swift */; };
+		B8CFABAEDE33931C8E299E81 /* MPVManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2502FE4461DC2B65CC2AD0F1 /* MPVManager.swift */; };
+		BA0EBAA4561101336A2CB3CF /* MPVVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82AA3D89B4B8C208795E63C8 /* MPVVideoView.swift */; };
 		BBB00001 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10001 /* TestHelpers.swift */; };
 		BBB00002 /* VideoStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10002 /* VideoStateTests.swift */; };
 		BBB00003 /* VideoFormatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10003 /* VideoFormatsTests.swift */; };
@@ -69,12 +70,12 @@
 		1DD11BE9E49C9FFF9BB26A6E /* HelpView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		205A94D5C521D2C8598E3FAA /* DropZoneView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DropZoneView.swift; sourceTree = "<group>"; };
 		242CE7E3F5EFF404409747F7 /* ControlBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlBar.swift; sourceTree = "<group>"; };
-		2502FE4461DC2B65CC2AD0F1 /* VLCKitManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VLCKitManager.swift; sourceTree = "<group>"; };
+		2502FE4461DC2B65CC2AD0F1 /* MPVManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MPVManager.swift; sourceTree = "<group>"; };
 		331DF56DBDF1FEEE4E142195 /* MainMenu.xib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.xib; path = MainMenu.xib; sourceTree = "<group>"; };
 		5F1E904417161A398ABD5FE0 /* VideoView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		70C014B4F5CB12CD15A1A186 /* Notifications.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		8072E56EC759E00E54249624 /* MainViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
-		82AA3D89B4B8C208795E63C8 /* VLCVideoView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VLCVideoView.swift; sourceTree = "<group>"; };
+		82AA3D89B4B8C208795E63C8 /* MPVVideoView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MPVVideoView.swift; sourceTree = "<group>"; };
 		8E4B5700799E838C1B840355 /* PreferencesWindowController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PreferencesWindowController.swift; sourceTree = "<group>"; };
 		AAA10011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AAA10012 /* Reframer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Reframer.entitlements; sourceTree = "<group>"; };
@@ -93,6 +94,7 @@
 		CCC10003 /* ReframerIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerIntegrationTests.swift; sourceTree = "<group>"; };
 		CCC20002 /* ReframerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ReframerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D19D82333A5671C5FB146764 /* VideoFormats.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFormats.swift; sourceTree = "<group>"; };
+		FDFBBC73F2B1449DB52FD707 /* MPVLibrary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MPVLibrary.swift; sourceTree = "<group>"; };
 		DDD10001 /* test_30fps_2s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_30fps_2s.mp4; sourceTree = "<group>"; };
 		DDD10002 /* test_60fps_5s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_60fps_5s.mp4; sourceTree = "<group>"; };
 		DDD10003 /* test_4x3_1s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_4x3_1s.mp4; sourceTree = "<group>"; };
@@ -195,7 +197,7 @@
 				B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */,
 				FM001001 /* FilterMenuButton.swift */,
 				FP001001 /* FilterPanelView.swift */,
-				82AA3D89B4B8C208795E63C8 /* VLCVideoView.swift */,
+				82AA3D89B4B8C208795E63C8 /* MPVVideoView.swift */,
 				8E4B5700799E838C1B840355 /* PreferencesWindowController.swift */,
 			);
 			path = Views;
@@ -218,7 +220,8 @@
 				70C014B4F5CB12CD15A1A186 /* Notifications.swift */,
 				KC001001 /* KeyCodes.swift */,
 				SS001001 /* ScrollStepAccumulator.swift */,
-				2502FE4461DC2B65CC2AD0F1 /* VLCKitManager.swift */,
+				2502FE4461DC2B65CC2AD0F1 /* MPVManager.swift */,
+				FDFBBC73F2B1449DB52FD707 /* MPVLibrary.swift */,
 				YT001001 /* YouTubeResolver.swift */,
 			);
 			path = Utilities;
@@ -437,6 +440,7 @@
 				F1BD590341D153225E413522 /* HelpView.swift in Sources */,
 				15FDF44DEF2AEB44C895443B /* VideoState.swift in Sources */,
 				0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */,
+				889027EB0A16468DA6E73FD3 /* MPVLibrary.swift in Sources */,
 				2491A9B249AD2563B719271A /* Notifications.swift in Sources */,
 				KC001002 /* KeyCodes.swift in Sources */,
 				SS001002 /* ScrollStepAccumulator.swift in Sources */,
@@ -446,9 +450,9 @@
 				FS001002 /* FilterSettings.swift in Sources */,
 				FM001002 /* FilterMenuButton.swift in Sources */,
 				FP001002 /* FilterPanelView.swift in Sources */,
-				BA0EBAA4561101336A2CB3CF /* VLCVideoView.swift in Sources */,
+				BA0EBAA4561101336A2CB3CF /* MPVVideoView.swift in Sources */,
 				ED8A2C8BB3058B6D41186E0D /* PreferencesWindowController.swift in Sources */,
-				B8CFABAEDE33931C8E299E81 /* VLCKitManager.swift in Sources */,
+				B8CFABAEDE33931C8E299E81 /* MPVManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

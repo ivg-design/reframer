@@ -1,10 +1,10 @@
 # Reframer Codebase Audit Report
 
 Date: 2026-02-01
-Scope: `Reframer-filters/Reframer` (feature branch worktree), focusing on playback pipeline (AVFoundation + VLCKit), filter rendering, UI state flow, install/update paths, and usage behavior.
+Scope: `Reframer-filters/Reframer` (feature branch worktree), focusing on playback pipeline (AVFoundation + libmpv), filter rendering, UI state flow, install/update paths, and usage behavior.
 
 ## Summary
-Reframer is generally clean and easy to follow, but there are several correctness and stability risks tied to playback state management, filter rendering, and the VLCKit install/usage path. The highest-impact issues are around stale async updates (metadata and filter composition), thread-unsafe CIFilter reuse, codec detection/fallback, and incomplete VLC metadata integration. Several UX states report “loaded” before playback is verified, which makes failures hard to diagnose for users.
+Reframer is generally clean and easy to follow, but there are several correctness and stability risks tied to playback state management, filter rendering, and the libmpv install/usage path. The highest-impact issues are around stale async updates (metadata and filter composition), thread-unsafe CIFilter reuse, codec detection/fallback, and incomplete MPV metadata integration. Several UX states report “loaded” before playback is verified, which makes failures hard to diagnose for users.
 
 ## Findings (ordered by severity)
 
@@ -20,25 +20,25 @@ Reframer is generally clean and easy to follow, but there are several correctnes
 - Impact: Rapidly loading multiple videos can apply duration/size/filters from a previous asset, leading to wrong frame counts, render size, or composition on a different video.
 - Fix: Track a load token or compare `currentAsset === asset` before mutating state. Cancel in-flight Tasks when a new video is loaded.
 
-3) **VLC vs AVFoundation selection only uses file extension**
-- Evidence: `MainViewController.handleVideoURLChange` uses `vlcOnlyExtensions` only (`MainViewController.swift:122-139`). `VideoFormats.isSupported` also uses extension only (`VideoFormats.swift:62-74`).
-- Impact: Files with unsupported codecs inside “supported” containers (e.g., VP9/AV1 in MP4) will still go through AVFoundation and fail silently. Users see a blank player with controls enabled.
-- Fix: Detect codec support via `AVURLAsset`/`AVAssetTrack` (`isPlayable`, format descriptions) and fall back to VLC if AVFoundation can’t decode.
+3) **MPV vs AVFoundation selection must account for codecs inside supported containers**
+- Evidence: Selection uses a fast path (`requiresMPV` by extension) plus async codec probing (`VideoFormats.canAVFoundationPlay`).
+- Impact: If codec probing regresses or is removed, unsupported codecs inside MP4/MOV could still attempt AVFoundation and fail silently.
+- Fix: Keep codec probing in place and ensure fallback to MPV when AVFoundation can’t decode.
 
 4) **AVFoundation success/failure is not observed; UI marks video as loaded before playback is verified**
 - Evidence: `DropZoneView` and `AppDelegate.application(_:open:)` set `isVideoLoaded = true` immediately (`DropZoneView.swift:181-186`, `AppDelegate.swift:84-90`). `VideoView` doesn’t observe `AVPlayerItem.status` or `AVPlayerItemFailedToPlayToEndTime` (`VideoView.swift:214-268`).
 - Impact: Controls and timeline become active even when the media fails to load or decode. Users get no error feedback for unsupported codecs or corrupt media.
 - Fix: Set `isVideoLoaded` only after `AVPlayerItem.status == .readyToPlay`; on `.failed` show an error and reset state.
 
-5) **VLC playback does not derive actual FPS/size and uses defaults**
-- Evidence: `VLCVideoView.updateMediaInfo` sets duration but not fps; uses `state.frameRate` (default 30) to compute total frames and uses a hard-coded 1920x1080 size (`VLCVideoView.swift:358-377`).
-- Impact: Frame stepping, timeline, zoom/fit, and frame count are wrong for VLC-only formats. This undermines scrubbing accuracy and UI correctness.
-- Fix: Query VLC’s video track info (e.g., `media.tracksInformation` or `VLCMediaTracksInformation`) for real FPS/size, and update `VideoState` accordingly.
+5) **MPV metadata mapping should be verified on real files**
+- Evidence: `MPVVideoView.updateMediaInfo` uses mpv properties (`duration`, `container-fps`, `width`, `height`) to populate `VideoState`.
+- Impact: If any property is missing or inaccurate for a codec/container, frame stepping and zoom calculations will be wrong.
+- Fix: Validate `duration/fps/size` against known fixtures (WebM/VP9, AV1, MKV) and adjust property names if needed.
 
-6) **VLCKit install depends on a fixed DMG mount point**
-- Evidence: `extractPluginsFromDMG` assumes `/Volumes/VLC media player` (`VLCKitManager.swift:293-316`).
-- Impact: Installation can fail if the volume name differs, is localized, or already mounted (mount point may become `VLC media player 1`). Failures are hard to diagnose.
-- Fix: Use `hdiutil attach -plist` and parse the actual mount point, or pass a custom mount directory.
+6) **libmpv installer assumes mpv bundle layout**
+- Evidence: Installer extracts a tarball and searches for `mpv.app` and `libmpv.dylib` within it.
+- Impact: If mpv bundle layout changes, install may fail silently or the library may not load.
+- Fix: Validate the extracted layout, and surface actionable errors when `libmpv.dylib` isn’t found.
 
 ### Medium
 
@@ -47,20 +47,20 @@ Reframer is generally clean and easy to follow, but there are several correctnes
 - Impact: 29.97/23.976 fps content gets incorrect timing, causing drift and inaccurate frame display.
 - Fix: Use `CMTimeMakeWithSeconds(1.0 / Double(frameRate), preferredTimescale: 600)` or track’s `minFrameDuration`/`nominalFrameRate` with a rational timescale.
 
-8) **VLC scrubbing uses position-based seeking, not frame-accurate**
-- Evidence: `seek(to:)` calls `setPosition:` with a 0..1 float (`VLCVideoView.swift:259-263`).
-- Impact: Scrubbing jumps to keyframes or coarse positions, especially on long GOP encodes.
-- Fix: Use `setTime:` with milliseconds, and update frame stepping with actual frame duration.
+8) **MPV scrubbing accuracy depends on seek mode**
+- Evidence: `MPVVideoView` issues `seek` with `absolute` or `absolute+exact`.
+- Impact: If `absolute+exact` isn’t honored for a format, scrubbing may be coarse.
+- Fix: Add tests that compare requested frame/time to observed output for long‑GOP formats.
 
-9) **VLC media parsing occurs synchronously on the main thread**
-- Evidence: `media.perform(parse)` happens during `loadVideo` on the main thread (`VLCVideoView.swift:213-217`).
-- Impact: UI stalls on large or remote files, potentially causing “stuck” perception.
-- Fix: Use async parse APIs or dispatch parsing to a background queue, then update UI.
+9) **MPV event handling must stay off the main thread**
+- Evidence: `MPVVideoView` drains events on a background queue, then dispatches UI updates to main.
+- Impact: If event handling moves onto the main thread, UI stalls are likely on large files.
+- Fix: Keep event drain on a background queue and limit work done on the main thread.
 
-10) **VLCKit and VLC plugins are version-mismatched**
-- Evidence: VLCKit tarball 3.7.2 with VLC.app 3.0.21 plugins (`VLCKitManager.swift:11-18`).
-- Impact: ABI or plugin compatibility issues can cause playback failure or unstable behavior with certain codecs.
-- Fix: Align VLCKit and VLC versions (same major/minor), or bundle a known-good VLC build that matches VLCKit.
+10) **libmpv dependency resolution relies on dynamic loader paths**
+- Evidence: Loader sets `DYLD_LIBRARY_PATH` to locate bundled dependencies alongside `libmpv.dylib`.
+- Impact: If the environment is locked down or paths change, libmpv may fail to load.
+- Fix: Verify dependency resolution on clean machines and surface a clear install error when dlopen fails.
 
 ### Low
 
@@ -82,19 +82,18 @@ Reframer is generally clean and easy to follow, but there are several correctnes
 ## Usage / UX Observations
 
 - **Failure states are hard to see**: When AVFoundation fails (unsupported codec), the UI still shows a loaded state due to early `isVideoLoaded` toggles. There is no on-screen error or fallback hint.
-- **VLC-only formats**: There is no indication in the open/drag UI that some formats require VLCKit; users only see an install prompt when they try to open.
-- **Scrubbing accuracy for VLC**: Without real FPS and size, frame stepping and timeline values for WebM/MKV are not reliable.
+- **MPV-only formats**: There is no indication in the open/drag UI that some formats require libmpv; users only see an install prompt when they try to open.
+- **Scrubbing accuracy for MPV**: Validate FPS and size for WebM/MKV to ensure frame stepping stays accurate.
 
 ## Test / Observability Gaps
 
 - **Unit tests focus on constants** (extensions and lists) rather than runtime playback or error handling (`ReframerTests/VideoFormatsTests.swift`).
 - **No tests for AVFoundation failure paths** (unsupported codec, corrupted media, missing tracks).
-- **No tests for VLC install / plugin validation** or for WebM/MKV playback correctness.
+- **No tests for MPV install / validation** or for WebM/MKV playback correctness.
 - **Logging** is mostly `print` statements; there’s no structured logging or user-visible diagnostics for playback failure.
 
 ## Suggested Next Steps (non-code)
 
-1) Decide the desired behavior for unsupported codecs inside supported containers (e.g., MP4 w/ VP9) and define a fallback policy (VLC or error prompt).
-2) Decide how precise frame stepping and scrub positioning must be for VLC-only formats, and how to expose that in UI if precision can’t be guaranteed.
-3) Align VLCKit/VLC versions and define a stable installation/update path (including handling existing VLC installs).
-
+1) Decide the desired behavior for unsupported codecs inside supported containers (e.g., MP4 w/ VP9) and define a fallback policy (MPV or error prompt).
+2) Decide how precise frame stepping and scrub positioning must be for MPV-only formats, and how to expose that in UI if precision can’t be guaranteed.
+3) Define a stable libmpv installation/update path (including handling existing MPV installs).

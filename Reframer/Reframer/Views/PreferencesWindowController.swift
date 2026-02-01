@@ -8,9 +8,9 @@ class PreferencesWindowController: NSWindowController {
 
     // MARK: - UI Elements
 
-    private let vlcKitCheckbox = NSButton(checkboxWithTitle: "Enable extended format support (WebM, MKV, OGV, FLV)",
+    private let mpvCheckbox = NSButton(checkboxWithTitle: "Enable extended format support (WebM, MKV, OGV, FLV)",
                                           target: nil, action: nil)
-    private let installButton = NSButton(title: "Install VLCKit", target: nil, action: nil)
+    private let installButton = NSButton(title: "Install MPV", target: nil, action: nil)
     private let uninstallButton = NSButton(title: "Uninstall", target: nil, action: nil)
     private let statusLabel = NSTextField(labelWithString: "")
     private let progressIndicator = NSProgressIndicator()
@@ -67,15 +67,15 @@ class PreferencesWindowController: NSWindowController {
         container.addArrangedSubview(headerLabel)
 
         // Description
-        let descLabel = NSTextField(wrappingLabelWithString: "AVFoundation doesn't support WebM, MKV, and other formats. Install VLC libraries (~140MB) to enable playback of these formats.")
+        let descLabel = NSTextField(wrappingLabelWithString: "AVFoundation doesn't support WebM, MKV, and other formats. Install libmpv to enable playback of these formats.")
         descLabel.textColor = .secondaryLabelColor
         descLabel.font = .systemFont(ofSize: 12)
         container.addArrangedSubview(descLabel)
 
         // Checkbox
-        vlcKitCheckbox.target = self
-        vlcKitCheckbox.action = #selector(vlcKitToggled(_:))
-        container.addArrangedSubview(vlcKitCheckbox)
+        mpvCheckbox.target = self
+        mpvCheckbox.action = #selector(mpvToggled(_:))
+        container.addArrangedSubview(mpvCheckbox)
 
         // Button row
         let buttonRow = NSStackView()
@@ -113,38 +113,38 @@ class PreferencesWindowController: NSWindowController {
     // MARK: - State
 
     private func updateState() {
-        let manager = VLCKitManager.shared
+        let manager = MPVManager.shared
 
-        vlcKitCheckbox.state = manager.isEnabled ? .on : .off
-        vlcKitCheckbox.isEnabled = manager.isInstalled
+        mpvCheckbox.state = manager.isEnabled ? .on : .off
+        mpvCheckbox.isEnabled = manager.isInstalled
 
         installButton.isHidden = manager.isInstalled
         uninstallButton.isHidden = !manager.isInstalled
 
         if manager.isInstalled {
-            statusLabel.stringValue = "VLCKit is installed"
+            statusLabel.stringValue = "libmpv is installed"
             statusLabel.textColor = .systemGreen
 
             // Get installed size
-            if let size = try? FileManager.default.allocatedSizeOfDirectory(at: manager.vlcDirectory) {
+            if let size = try? FileManager.default.allocatedSizeOfDirectory(at: manager.installDirectory) {
                 let formatter = ByteCountFormatter()
                 formatter.countStyle = .file
                 sizeLabel.stringValue = "Size: \(formatter.string(fromByteCount: Int64(size)))"
             }
         } else {
-            statusLabel.stringValue = "VLCKit is not installed"
+            statusLabel.stringValue = "libmpv is not installed"
             statusLabel.textColor = .secondaryLabelColor
-            sizeLabel.stringValue = "Download size: ~140MB (VLC plugins + VLCKit)"
+            sizeLabel.stringValue = "Download size: ~35MB (mpv bundle)"
         }
     }
 
     // MARK: - Actions
 
-    @objc private func vlcKitToggled(_ sender: NSButton) {
-        VLCKitManager.shared.isEnabled = sender.state == .on
+    @objc private func mpvToggled(_ sender: NSButton) {
+        MPVManager.shared.isEnabled = sender.state == .on
 
-        if sender.state == .on && !VLCKitManager.shared.isLoaded {
-            VLCKitManager.shared.loadFramework()
+        if sender.state == .on && !MPVManager.shared.isLoaded {
+            MPVManager.shared.loadLibrary()
         }
     }
 
@@ -153,7 +153,7 @@ class PreferencesWindowController: NSWindowController {
         progressIndicator.isHidden = false
         progressIndicator.startAnimation(nil)
 
-        VLCKitManager.shared.install { [weak self] progress, status in
+        MPVManager.shared.install { [weak self] progress, status in
             self?.statusLabel.stringValue = status
         } completion: { [weak self] result in
             self?.progressIndicator.stopAnimation(nil)
@@ -162,7 +162,8 @@ class PreferencesWindowController: NSWindowController {
 
             switch result {
             case .success:
-                VLCKitManager.shared.isEnabled = true
+                MPVManager.shared.isEnabled = true
+                MPVManager.shared.loadLibrary()
                 self?.updateState()
 
             case .failure(let error):
@@ -180,7 +181,7 @@ class PreferencesWindowController: NSWindowController {
 
     @objc private func uninstallClicked(_ sender: NSButton) {
         let alert = NSAlert()
-        alert.messageText = "Uninstall VLCKit?"
+        alert.messageText = "Uninstall MPV?"
         alert.informativeText = "WebM, MKV, and other extended formats will no longer be playable."
         alert.addButton(withTitle: "Uninstall")
         alert.addButton(withTitle: "Cancel")
@@ -190,7 +191,7 @@ class PreferencesWindowController: NSWindowController {
         alert.beginSheetModal(for: window) { [weak self] response in
             if response == .alertFirstButtonReturn {
                 do {
-                    try VLCKitManager.shared.uninstall()
+                    try MPVManager.shared.uninstall()
                     self?.updateState()
                 } catch {
                     let errorAlert = NSAlert(error: error)

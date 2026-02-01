@@ -36,7 +36,7 @@ struct VideoFormats {
         addType(&types, "public.av1")
         addType(&types, "org.aomedia.av1")
 
-        // WebM and Matroska (require VLCKit for playback)
+        // WebM and Matroska (require libmpv for playback)
         addType(&types, "org.webmproject.webm")
         addType(&types, "org.matroska.mkv")
 
@@ -105,7 +105,7 @@ struct VideoFormats {
     static let displayString = "MP4 • MOV • ProRes • H.264 • H.265 • AV1 • WebM • MKV • AVI"
 
     /// Check if AVFoundation can play this URL by probing asset tracks
-    /// Returns true if playable by AVFoundation, false if VLC should be used
+    /// Returns true if playable by AVFoundation, false if MPV should be used
     static func canAVFoundationPlay(_ url: URL) async -> Bool {
         let asset = AVURLAsset(url: url)
 
@@ -129,12 +129,13 @@ struct VideoFormats {
                 for format in formats {
                     let mediaSubType = CMFormatDescriptionGetMediaSubType(format)
 
-                    // VP8, VP9, and some other codecs are not supported by AVFoundation
-                    // FourCC codes: 'vp08' = VP8, 'vp09' = VP9
+                    // VP8/VP9/AV1 are not supported by AVFoundation on most systems
+                    // FourCC codes: 'vp08' = VP8, 'vp09' = VP9, 'av01' = AV1
                     let vp8Code = fourCC("vp08")
                     let vp9Code = fourCC("vp09")
+                    let av1Code = fourCC("av01")
 
-                    if mediaSubType == vp8Code || mediaSubType == vp9Code {
+                    if mediaSubType == vp8Code || mediaSubType == vp9Code || mediaSubType == av1Code {
                         return false
                     }
                 }

@@ -18,7 +18,7 @@ A lightweight macOS video overlay app for frame-accurate video reference. Design
 
 - macOS 15.0 (Sequoia) or later
 - macOS 26.0 (Tahoe) recommended for Liquid Glass visual effects
-- WebM/MKV playback requires VLCKit (prompted on first use)
+- WebM/MKV playback requires libmpv (prompted on first use)
 
 ## Keyboard Shortcuts
 

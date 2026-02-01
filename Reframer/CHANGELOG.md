@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scroll step accumulator for precise trackpad stepping
 - Expanded unit + UI automation coverage for scrubbing, input modifiers, filters, and persistence
 - Cmd+A select-all support in numeric input fields
+- On-demand libmpv installer for extended formats (WebM/MKV/VPx/AV1)
 
 ### Changed
 - Toolbar now positioned below video canvas instead of overlapping
@@ -27,12 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Control bar height increased to 80pt to avoid clipping
 - Quick filter slider disables for parameterless filters (Invert/Noir)
 - Global frame-step shortcuts now only fire when lock mode is enabled
+- Extended format playback now uses libmpv
 
 ### Fixed
 - Global shortcut permission prompt handled explicitly
 - Frame/zoom/opacity inputs capture Cmd+Shift/Option/Ctrl arrow selectors
 - Scroll wheel discrete stepping triggers on any tick
-- VLC seek accuracy improved and VLC version alignment updated
 - Supported format detection checks UTType in addition to extensions
 - Mute toggle restores last volume instead of resetting
 - Toolbar and canvas width mismatch (was 861px vs 800px)

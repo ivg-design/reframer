@@ -32,7 +32,7 @@ The app window is completely transparent and frameless, showing only the video c
 
 ## Supported Formats
 
-MP4, MOV, ProRes, H.264, H.265, AV1, WebM, MKV, AVI (WebM/MKV require VLCKit)
+MP4, MOV, ProRes, H.264, H.265, AV1, WebM, MKV, AVI (WebM/MKV require libmpv)
 
 ## Keyboard Shortcuts
 

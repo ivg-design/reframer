@@ -17,15 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scroll step accumulator for precise trackpad stepping
 - Expanded unit + UI automation coverage for scrubbing, input modifiers, filters, and persistence
 - Cmd+A select-all support in numeric input fields
+- On-demand libmpv installer for extended formats (WebM/MKV/VPx/AV1)
 
 ### Fixed
 - Help book documentation link now opens the correct help index
 - AVFoundation load state now reflects real readiness before enabling controls
-- VLCKit plugin install now mounts DMG robustly and validates plugins recursively
 - Global shortcut permission prompt handled explicitly
 - Frame/zoom/opacity inputs capture Cmd+Shift/Option/Ctrl arrow selectors
 - Scroll wheel discrete stepping triggers on any tick
-- VLC seek accuracy improved and VLC version alignment updated
 - Supported format detection checks UTType in addition to extensions
 - Mute toggle restores last volume instead of resetting
 - UI test runner now clears quarantine and re-signs before automation runs
@@ -33,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Filter pipeline now creates filters per frame to avoid thread-safety issues
 - Global frame-step shortcuts now only fire when lock mode is enabled
+- Extended format playback now uses libmpv
+- YouTube playback remains native (AVFoundation-only)
 
 ### Project Structure
 - Xcode project with proper source organization (App, Views, Models, Utilities)

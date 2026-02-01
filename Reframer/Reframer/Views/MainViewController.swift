@@ -8,11 +8,11 @@ class MainViewController: NSViewController {
 
     let videoState: VideoState
     private var videoView: VideoView!
-    private var vlcVideoView: VLCVideoView?  // Lazy-created when needed
+    private var mpvVideoView: MPVVideoView?  // Lazy-created when needed
     private var dropZoneView: DropZoneView!
     private var edgeIndicatorView: EdgeIndicatorView!
     private var cancellables = Set<AnyCancellable>()
-    private var isUsingVLC = false  // Track which player is active
+    private var isUsingMPV = false  // Track which player is active
 
 
     // MARK: - Initialization
@@ -40,6 +40,9 @@ class MainViewController: NSViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+
+        // Preload libmpv if enabled
+        MPVManager.shared.loadLibrary()
 
         // Create views programmatically
         videoView = VideoView()
@@ -94,12 +97,12 @@ class MainViewController: NSViewController {
             .sink { [weak self] isLoaded in
                 guard let self = self else { return }
                 self.dropZoneView?.isHidden = isLoaded
-                if self.isUsingVLC {
+                if self.isUsingMPV {
                     self.videoView?.isHidden = true
-                    self.vlcVideoView?.isHidden = !isLoaded
+                    self.mpvVideoView?.isHidden = !isLoaded
                 } else {
                     self.videoView?.isHidden = !isLoaded
-                    self.vlcVideoView?.isHidden = true
+                    self.mpvVideoView?.isHidden = true
                 }
             }
             .store(in: &cancellables)
@@ -117,18 +120,19 @@ class MainViewController: NSViewController {
         // Fallback if AVFoundation fails (unsupported codec in supported container)
         NotificationCenter.default.publisher(for: .avFoundationPlaybackFailed)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
+            .sink { [weak self] _ in
                 guard let self = self, let url = self.videoState.videoURL else { return }
                 guard self.videoState.playbackEngine == .auto else { return }
+                // YouTube streaming stays native; no MPV fallback.
                 if self.videoState.videoAudioURL != nil {
                     return
                 }
-                if VLCKitManager.shared.isReady {
-                    self.switchToVLCPlayer(url: url)
-                } else if VLCKitManager.shared.isInstalled && !VLCKitManager.shared.isEnabled {
-                    self.showEnableVLCKitPrompt(url: url)
+                if MPVManager.shared.isReady {
+                    self.switchToMPVPlayer(url: url)
+                } else if MPVManager.shared.isInstalled && !MPVManager.shared.isEnabled {
+                    self.showEnableMPVPrompt(url: url)
                 } else {
-                    self.showInstallVLCKitPrompt(url: url)
+                    self.showInstallMPVPrompt(url: url)
                 }
             }
             .store(in: &cancellables)
@@ -141,36 +145,42 @@ class MainViewController: NSViewController {
     // MARK: - Video Player Selection
 
     private func handleVideoURLChange(_ url: URL) {
-        let manager = VLCKitManager.shared
+        let manager = MPVManager.shared
 
         print("MainViewController: === handleVideoURLChange ===")
         print("MainViewController: URL = \(url.lastPathComponent)")
         print("MainViewController: Full URL = \(url.absoluteString.prefix(100))...")
         print("MainViewController: playbackEngine = \(videoState.playbackEngine)")
         print("MainViewController: videoAudioURL = \(videoState.videoAudioURL?.absoluteString.prefix(50) ?? "nil")")
-        print("MainViewController: VLCKitManager.isReady = \(manager.isReady)")
-        print("MainViewController: requiresVLCKit = \(manager.requiresVLCKit(url: url))")
+        print("MainViewController: MPVManager.isReady = \(manager.isReady)")
+        print("MainViewController: requiresMPV = \(manager.requiresMPV(url: url))")
+
+        // YouTube streaming stays native; no MPV fallback.
+        if videoState.videoAudioURL != nil {
+            switchToAVPlayer()
+            return
+        }
 
         switch videoState.playbackEngine {
-        case .vlc:
+        case .mpv:
             if manager.isReady {
-                switchToVLCPlayer(url: url)
+                switchToMPVPlayer(url: url)
             } else if manager.isInstalled && !manager.isEnabled {
-                showEnableVLCKitPrompt(url: url)
+                showEnableMPVPrompt(url: url)
             } else {
-                showInstallVLCKitPrompt(url: url)
+                showInstallMPVPrompt(url: url)
             }
         case .avFoundation:
             switchToAVPlayer()
         case .auto:
-            // First check by extension (fast path for known VLC-only formats)
-            if manager.requiresVLCKit(url: url) {
+            // Fast path for known MPV-only formats
+            if manager.requiresMPV(url: url) {
                 if manager.isReady {
-                    switchToVLCPlayer(url: url)
+                    switchToMPVPlayer(url: url)
                 } else if manager.isInstalled && !manager.isEnabled {
-                    showEnableVLCKitPrompt(url: url)
+                    showEnableMPVPrompt(url: url)
                 } else {
-                    showInstallVLCKitPrompt(url: url)
+                    showInstallMPVPrompt(url: url)
                 }
             } else {
                 // Proactive codec detection: check if AVFoundation can actually decode
@@ -181,11 +191,11 @@ class MainViewController: NSViewController {
                             self.switchToAVPlayer()
                         } else if manager.isReady {
                             // AVFoundation can't play this (e.g., VP9 in MP4)
-                            self.switchToVLCPlayer(url: url)
+                            self.switchToMPVPlayer(url: url)
                         } else if manager.isInstalled && !manager.isEnabled {
-                            self.showEnableVLCKitPrompt(url: url)
+                            self.showEnableMPVPrompt(url: url)
                         } else {
-                            // No VLC available, try AVFoundation anyway (will show error if it fails)
+                            // No MPV available, try AVFoundation anyway (will show error if it fails)
                             self.switchToAVPlayer()
                         }
                     }
@@ -196,42 +206,46 @@ class MainViewController: NSViewController {
 
     private func switchToAVPlayer() {
         print("MainViewController: Switching to AVFoundation player")
-        isUsingVLC = false
-        vlcVideoView?.isHidden = true
+        isUsingMPV = false
+
+        // Stop any MPV playback to prevent stale errors from appearing
+        mpvVideoView?.stop()
+        mpvVideoView?.isHidden = true
+
         videoView?.isHidden = false
     }
 
-    private func switchToVLCPlayer(url: URL) {
-        print("MainViewController: Switching to VLC player for \(url.lastPathComponent)")
-        isUsingVLC = true
+    private func switchToMPVPlayer(url: URL) {
+        print("MainViewController: Switching to MPV player for \(url.lastPathComponent)")
+        isUsingMPV = true
         videoView?.isHidden = true
 
-        // Create VLC view if needed
-        if vlcVideoView == nil {
-            let vlcView = VLCVideoView()
-            vlcView.translatesAutoresizingMaskIntoConstraints = false
-            vlcView.videoState = videoState
-            view.addSubview(vlcView, positioned: .below, relativeTo: dropZoneView)
+        // Create MPV view if needed
+        if mpvVideoView == nil {
+            let mpvView = MPVVideoView()
+            mpvView.translatesAutoresizingMaskIntoConstraints = false
+            mpvView.videoState = videoState
+            view.addSubview(mpvView, positioned: .below, relativeTo: dropZoneView)
 
             NSLayoutConstraint.activate([
-                vlcView.topAnchor.constraint(equalTo: view.topAnchor),
-                vlcView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                vlcView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-                vlcView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+                mpvView.topAnchor.constraint(equalTo: view.topAnchor),
+                mpvView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                mpvView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                mpvView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
             ])
 
-            vlcVideoView = vlcView
+            mpvVideoView = mpvView
         }
 
-        vlcVideoView?.isHidden = false
-        vlcVideoView?.loadVideo(url: url)
+        mpvVideoView?.isHidden = false
+        mpvVideoView?.loadVideo(url: url)
     }
 
-    private func showInstallVLCKitPrompt(url: URL) {
+    private func showInstallMPVPrompt(url: URL) {
         let alert = NSAlert()
         alert.messageText = "Extended Format Support Required"
-        alert.informativeText = "\(url.pathExtension.uppercased()) files require VLC for playback. Would you like to install it now (~140MB download)?"
-        alert.addButton(withTitle: "Install VLCKit")
+        alert.informativeText = "\(url.pathExtension.uppercased()) files require libmpv for playback. Would you like to install it now?"
+        alert.addButton(withTitle: "Install MPV")
         alert.addButton(withTitle: "Open Preferences")
         alert.addButton(withTitle: "Cancel")
 
@@ -241,7 +255,7 @@ class MainViewController: NSViewController {
             switch response {
             case .alertFirstButtonReturn:
                 // Install directly
-                self?.installVLCKitAndPlay(url: url)
+                self?.installMPVAndPlay(url: url)
             case .alertSecondButtonReturn:
                 // Open preferences
                 PreferencesWindowController.shared.showWindow()
@@ -251,10 +265,10 @@ class MainViewController: NSViewController {
         }
     }
 
-    private func showEnableVLCKitPrompt(url: URL) {
+    private func showEnableMPVPrompt(url: URL) {
         let alert = NSAlert()
         alert.messageText = "Enable Extended Format Support?"
-        alert.informativeText = "\(url.pathExtension.uppercased()) files require VLCKit. VLCKit is installed but disabled. Enable it?"
+        alert.informativeText = "\(url.pathExtension.uppercased()) files require libmpv. libmpv is installed but disabled. Enable it?"
         alert.addButton(withTitle: "Enable")
         alert.addButton(withTitle: "Cancel")
 
@@ -262,16 +276,16 @@ class MainViewController: NSViewController {
 
         alert.beginSheetModal(for: window) { [weak self] response in
             if response == .alertFirstButtonReturn {
-                VLCKitManager.shared.isEnabled = true
-                VLCKitManager.shared.loadFramework()
-                self?.switchToVLCPlayer(url: url)
+                MPVManager.shared.isEnabled = true
+                MPVManager.shared.loadLibrary()
+                self?.switchToMPVPlayer(url: url)
             }
         }
     }
 
-    private func installVLCKitAndPlay(url: URL) {
+    private func installMPVAndPlay(url: URL) {
         let progressAlert = NSAlert()
-        progressAlert.messageText = "Installing VLCKit..."
+        progressAlert.messageText = "Installing MPV..."
         progressAlert.informativeText = "Downloading..."
         progressAlert.addButton(withTitle: "Cancel")
 
@@ -287,7 +301,7 @@ class MainViewController: NSViewController {
 
         progressAlert.beginSheetModal(for: window) { _ in }
 
-        VLCKitManager.shared.install { progress, status in
+        MPVManager.shared.install { progress, status in
             progressIndicator.doubleValue = progress
             progressAlert.informativeText = status
         } completion: { [weak self] result in
@@ -295,8 +309,9 @@ class MainViewController: NSViewController {
 
             switch result {
             case .success:
-                VLCKitManager.shared.isEnabled = true
-                self?.switchToVLCPlayer(url: url)
+                MPVManager.shared.isEnabled = true
+                MPVManager.shared.loadLibrary()
+                self?.switchToMPVPlayer(url: url)
             case .failure(let error):
                 let errorAlert = NSAlert()
                 errorAlert.messageText = "Installation Failed"

@@ -1,133 +1,59 @@
-# Status Report (2026-02-01 - Session 3)
+# Status Report (2026-02-01 - Session 5)
 
-## Current Status: ⏳ Ready for Remote Testing
+## Current Status: 🟡 MPV Integration In Progress (Not Yet Validated)
 
-## Recent Changes (Session 3)
+## Session 5 Summary
 
-### Remote Test Runner Setup
-- Created `scripts/driver.sh` - Main Mac driver to trigger remote tests
-- Created `scripts/runner_test.sh` - Runs xcodebuild tests on runner Mac
-- Created `scripts/runner_bootstrap.sh` - One-time runner setup
-- Created `scripts/runner_watch_or_pull.sh` - Git sync on runner
-- Added comprehensive documentation in `docs/REMOTE_TEST_RUNNER_SETUP.md`
+This session replaces the previous extended‑format integration with libmpv and keeps YouTube streaming native via AVFoundation. Core player selection logic, preferences UI, and YouTube resolution logic were updated accordingly. Automated validation has not yet been run via the remote test runner.
 
-### YouTubeResolver Fallback Fix
-- Fixed VLC fallback selection to specifically select VP9/VP8 WebM (not H.264)
-- Previously `isVLCCompatible` included H.264 which was redundant with AVFoundation
-- Now fallback is truly VLC-only formats that require VLC
+### What’s Implemented
+1. **libmpv Integration**
+   - Added `MPVManager` with on‑demand install and dynamic loading
+   - Added `MPVVideoView` with libmpv render API (OpenGL)
+   - Updated player selection and fallback logic to use MPV
 
-### VLCKitManager Simplification
-- Removed `--codec=` restriction that may have been limiting decoder selection
-- Added `--no-plugins-cache` to force plugin rescans
-- VLC now auto-selects best decoder for each format
+2. **YouTube Playback (Native Only)**
+   - Removed external fallback for YouTube streams
+   - Resolver now selects only AVFoundation‑compatible streams
 
-### VLCVideoView Error Logging
-- Added media state and parsed status to error messages
-- Helps diagnose VLC decoding failures
+3. **Preferences UI**
+   - Replaced legacy settings with libmpv install/enable flow
 
-### MainViewController Logging
-- Enhanced URL change logging to trace player selection decisions
+4. **Documentation Updates (In Progress)**
+   - Help + README + changelog updates started
 
-## Recent Changes (Session 2)
+### What’s Still Pending
+1. **Run remote runner build + UI tests** (not yet executed)
+2. **Verify MPV rendering on target hardware**
 
-### VLCKit Installation Fixes
-- Fixed DMG mounting race condition - was reading hdiutil output before process completed
-- Switched to async readability handlers for reliable pipe data capture
-- Added DMG file size validation before mounting
-- Added detailed logging for debugging
+---
 
-### YouTube Playback Fixes
-- Switched yt-dlp from Python zipapp to standalone macOS binary
-- Python zipapp required Python 3.10+ but macOS ships with 3.9
-- Added HTTP status and file size validation for yt-dlp download
-- Improved error messages when yt-dlp returns invalid JSON
+## Remote Test Runner Quick Reference
 
-### App Transport Security (ATS)
-- Changed from domain-specific exception to `NSAllowsArbitraryLoads`
-- VLC DMG downloads redirect to various mirror domains that can't be enumerated
+```bash
+# SSH to laptop
+ssh laptop
 
-### Accessibility Prompt
-- Skip accessibility prompt for development builds (DerivedData/Build/Products)
-- Debug builds get new signatures on each build, causing repeated prompts
-- Production installs in /Applications will still get the prompt
+# Sync project
+rsync -av --delete /Users/ivg/github/video-overlay/Reframer-filters/Reframer/ laptop:/Users/ivg/github/video-overlay/Reframer-filters/Reframer/
 
-### Edit Menu Added
-- Added standard Edit menu (Cut/Copy/Paste/Select All)
-- Enables Cmd+V paste in NSAlert text fields (YouTube URL input)
+# Build on laptop
+ssh laptop "cd /Users/ivg/github/video-overlay/Reframer-filters/Reframer && xcodebuild -scheme Reframer -configuration Debug -derivedDataPath /Users/ivg/Library/Developer/Xcode/DerivedData/Reframer-cebowbmqraqaagamgsiumfdnhoto -destination 'platform=macOS' build 2>&1 | tail -10"
 
-## What's Done
+# Run with test mode (no "move to apps" dialog)
+ssh laptop "export UITEST_MODE=1 && /Users/ivg/Library/Developer/Xcode/DerivedData/Reframer-*/Build/Products/Debug/Reframer.app/Contents/MacOS/Reframer"
 
-### App behavior & fixes
-- Added `KeyCodes` helper and removed magic key codes from input handling.
-- Added `ScrollStepAccumulator` and wired it into `VideoView.scrollWheel` for consistent discrete trackpad steps.
-- `VideoState` now supports `seekRequests` / `frameStepRequests`, tracks last requests for tests, and persists preferences (opacity/volume/mute/always-on-top/window position) with mute restore.
-- `ControlBar` now issues seek/step through `VideoState`, uses fast vs accurate scrubbing, and supports Cmd/Shift/Option/Ctrl modifiers for step controls.
-- `VideoView` and `VLCVideoView` subscribe to seek/frame-step requests; VLC path uses accurate seek via `VLCTime` and includes an error alert.
-- `AppDelegate` updated for async open panel, window frame persistence, accessibility prompt, and lock-aware behavior.
-- Global frame-step shortcuts are now gated to **lock mode** (Cmd+PageUp/Down and Shift+Cmd+PageUp/Down).
-- Added Cmd+A select-all for numeric inputs (frame/zoom/opacity) across windows (field editor aware).
-- Help + DocC docs updated to reflect new shortcuts and lock-only global steps.
-- Help modal text updated to show global steps are lock-mode only and Cmd+A in inputs.
+# Kill and cleanup
+ssh laptop "pkill Reframer"
+```
 
-### Tests added/expanded
-- Unit tests: `ControlBarStepTests`, `ScrollStepAccumulatorTests`, `DropZoneViewTests`, plus updates to `VideoStateTests` and `VideoFormatsTests`.
-- UI tests: expanded `ReframerIntegrationTests` (scrub, input modifiers, quick filter slider disable, mute restore, Cmd+A select-all, lock-mode Cmd+PageDown stepping).
-- UI tests configured for `UITEST_MODE=1` and `UITEST_SCREENSHOTS=1` gating.
+---
 
-### Project/config updates
-- Added new source/test files to the Xcode project.
-- Added a **UITest build phase** (`Unquarantine UITest Runner`) to remove quarantine/provenance/macl and re-sign the UITest runner and app before running.
-- Added a **TestAction pre-action** in `Reframer.xcscheme` to remove quarantine/provenance/macl and re-sign as well.
+## Known Risks
 
-### Docs updated
-- `docs/FEATURE_TESTS.md` to track implemented tests.
-- `CHANGELOG.md` (root and `Reframer/CHANGELOG.md`).
-- DocC + Help Book shortcut listings.
+1. **MPV render pipeline not yet validated** - needs build + UI/functional verification on the runner.
+2. **libmpv dependency discovery** - installer relies on mpv bundle layout; verify on target mac.
 
-## Audit Findings Status (from `/Users/ivg/github/video-overlay/docs/reframer-audit-report.md`)
+---
 
-1. CIFilter reused across frames (thread safety) — **Done** (filters now created per frame).
-2. Async metadata/filter tasks can apply stale state — **Done** (load token checks added for metadata + composition).
-3. AVFoundation vs VLC selection uses extension only — **Done** (proactive codec detection via `VideoFormats.canAVFoundationPlay()` checks track format descriptions for VP8/VP9).
-4. UI marks video loaded before playback is verified — **Done** (observe `AVPlayerItem.status` + failure notifications; set `isVideoLoaded` on ready only).
-5. VLC FPS/size metadata missing — **Done** (extract fps/size from VLC track info).
-6. VLCKit install assumes fixed DMG mount point — **Done** (hdiutil attach -plist + mount-point parsing).
-7. Fractional FPS truncated — **Done** (composition `frameDuration` uses `CMTimeMakeWithSeconds`).
-8. VLC scrubbing uses position (not accurate) — **Done** (accurate seek via `setTime:`).
-9. VLC media parsing sync on main thread — **Done** (parsing now dispatched to background queue).
-10. VLCKit/VLC version mismatch — **Partial** (VLC updated to 3.0.23; VLCKit still 3.7.2).
-11. Mute toggle resets volume to 0.5 — **Done** (restore last non‑zero volume).
-12. Quick filter slider active for parameterless filters — **Done** (disabled for Invert/Noir).
-13. Move‑to‑Applications copies instead of moves — **Done** (now uses `moveItem`, falls back to copy+delete).
-
-## Blockers
-
-### ~~UITest runner "damaged" error~~ **RESOLVED**
-- **Fix**: Disabled `ENABLE_USER_SCRIPT_SANDBOXING` in project settings so the xattr removal script can run.
-- Tests now run successfully: 82 passed, 3 skipped, 4 expected failures out of 86 total.
-
-## Outstanding Items
-
-1. ~~**Resolve UITest runner gatekeeper rejection**~~ **Done** - Fixed by disabling user script sandboxing.
-
-2. ~~**Re-run all tests**~~ **Done**:
-   - Unit tests: 26/26 pass
-   - UI tests: 56 pass, 3 skipped (global shortcuts need accessibility), 4 expected failures
-
-3. **Address remaining audit items**:
-   - ~~Move VLC media parsing off the main thread.~~ **Done**
-   - ~~Add proactive codec capability detection for AVFoundation vs VLC selection.~~ **Done**
-   - Align VLCKit and VLC versions fully (remove mismatch). **Partial - VLC 3.0.23, VLCKit 3.7.2** (compatible within 3.0.x)
-   - ~~Change Move-to-Applications to move (or delete original after copy).~~ **Done**
-
-4. ~~**Verify global lock-mode shortcuts**~~ - Tested manually; Cmd+PageUp/Down work when locked. Global test skipped in automation due to accessibility requirements.
-
-## Known Issues
-
-- **Accessibility prompt on rebuild**: Debug builds with ad-hoc signing are treated as new apps by macOS, triggering accessibility prompt. This is expected for development - use proper Developer ID signing for releases.
-
-## Files Touched (high-level)
-- App logic: `Reframer/Reframer/App/AppDelegate.swift`, `.../Views/ControlBar.swift`, `.../Views/VideoView.swift`, `.../Views/VLCVideoView.swift`, `.../Models/VideoState.swift`, `.../Utilities/KeyCodes.swift`
-- Tests: `Reframer/ReframerUITests/ReframerIntegrationTests.swift`, `Reframer/ReframerTests/*`
-- Project: `Reframer/Reframer.xcodeproj/project.pbxproj`, `Reframer/Reframer.xcodeproj/xcshareddata/xcschemes/Reframer.xcscheme`
-- Docs: `docs/FEATURE_TESTS.md`, `Reframer/Reframer.help/.../shortcuts.html`, `Reframer/Reframer.docc/Articles/KeyboardShortcuts.md`, changelogs.
+*Last Updated: 2026-02-01 12:30*

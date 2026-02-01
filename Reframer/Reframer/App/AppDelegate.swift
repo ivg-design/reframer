@@ -887,27 +887,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .failure(let error):
                 self.showErrorAlert(title: "YouTube Playback Failed", message: error.localizedDescription)
             case .success(let selection):
-                var candidate = selection.primary
-                var engine: VideoState.PlaybackEngine = .avFoundation
+                let candidate = selection.primary
 
-                if !candidate.isAVFoundationCompatible {
-                    if VLCKitManager.shared.isReady {
-                        engine = .vlc
-                    } else if let fallback = selection.fallbackCombined,
-                              fallback.isAVFoundationCompatible {
-                        candidate = fallback
-                        engine = .avFoundation
-                    } else {
-                        self.showErrorAlert(title: "YouTube Format Not Supported",
-                                            message: "The highest-quality stream requires VLC. Install and enable VLCKit to play this video.")
-                        return
-                    }
+                guard candidate.isAVFoundationCompatible else {
+                    self.showErrorAlert(title: "YouTube Format Not Supported",
+                                        message: "No AVFoundation-compatible stream was found. YouTube playback in Reframer uses the native pipeline only.")
+                    return
                 }
 
                 self.videoState.videoAudioURL = candidate.audioURL
                 self.videoState.videoHeaders = selection.headers
                 self.videoState.videoTitle = selection.title
-                self.videoState.playbackEngine = engine
+                self.videoState.playbackEngine = .avFoundation
                 self.videoState.isVideoLoaded = false
                 self.videoState.videoURL = candidate.videoURL
                 self.videoState.isPlaying = true

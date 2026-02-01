@@ -100,12 +100,12 @@ class VideoView: NSView {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] url in
                 guard let self = self, let url = url else { return }
-                // Skip VLC-only formats - VLCVideoView handles those
-                if VLCKitManager.shared.requiresVLCKit(url: url) {
+                // Skip MPV-only formats - MPVVideoView handles those
+                if MPVManager.shared.requiresMPV(url: url) {
                     return
                 }
-                // Skip if playback engine is explicitly set to VLC
-                if self.videoState?.playbackEngine == .vlc {
+                // Skip if playback engine is explicitly set to MPV
+                if self.videoState?.playbackEngine == .mpv {
                     return
                 }
                 self.loadVideo(url: url)

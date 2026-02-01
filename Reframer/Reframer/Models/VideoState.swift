@@ -6,7 +6,7 @@ class VideoState: ObservableObject {
     enum PlaybackEngine {
         case auto
         case avFoundation
-        case vlc
+        case mpv
     }
 
     enum SeekRequest: Equatable {

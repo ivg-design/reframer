@@ -11,7 +11,6 @@ struct YouTubeStreamSelection {
     let title: String?
     let headers: [String: String]?
     let primary: YouTubeStreamCandidate
-    let fallbackCombined: YouTubeStreamCandidate?
 }
 
 enum YouTubeResolverError: LocalizedError {
@@ -231,7 +230,7 @@ final class YouTubeResolver {
         let videoOnly = formats.filter { $0.hasVideo && !$0.hasAudio }
         let audioOnly = formats.filter { $0.hasAudio && !$0.hasVideo }
 
-        // Filter out AV1 formats - VLC 3.0.x can't decode them reliably
+        // Filter out AV1 formats - AVFoundation won't decode them reliably
         let combinedNoAV1 = combined.filter { !$0.isAV1 }
         let videoOnlyNoAV1 = videoOnly.filter { !$0.isAV1 }
 
@@ -240,16 +239,10 @@ final class YouTubeResolver {
         let bestAVVideo = videoOnlyNoAV1.filter { $0.isAVFoundationCompatibleVideo }.max(by: formatSort)
         let bestAVAudio = audioOnly.filter { $0.isAVFoundationCompatibleAudio }.max(by: formatSort)
 
-        // VLC-only: VP8/VP9 WebM that are NOT playable by AVFoundation
-        // These are specifically for VLC fallback when AVFoundation can't play
-        let bestVLCOnlyCombined = combinedNoAV1.filter { $0.isVPx && $0.ext == "webm" }.max(by: formatSort)
-        let bestVLCOnlyVideo = videoOnlyNoAV1.filter { $0.isVPx && $0.ext == "webm" }.max(by: formatSort)
-
         // Log available formats for debugging
         print("YouTubeResolver: Found \(formats.count) formats total")
         print("YouTubeResolver: AV1 formats: \(formats.filter { $0.isAV1 }.count) (excluded)")
         print("YouTubeResolver: AVFoundation-compatible: \(videoOnlyNoAV1.filter { $0.isAVFoundationCompatibleVideo }.count) video, \(audioOnly.filter { $0.isAVFoundationCompatibleAudio }.count) audio")
-        print("YouTubeResolver: VLC-only (VP8/VP9 WebM): \(combinedNoAV1.filter { $0.isVPx && $0.ext == "webm" }.count) combined, \(videoOnlyNoAV1.filter { $0.isVPx && $0.ext == "webm" }.count) video")
 
         // Primary: AVFoundation compatible
         let avCandidate: YouTubeStreamCandidate? = {
@@ -272,47 +265,13 @@ final class YouTubeResolver {
             return nil
         }()
 
-        // Fallback: VLC-only (VP8/VP9 WebM) - formats that require VLC
-        let vlcCandidate: YouTubeStreamCandidate? = {
-            // Prefer VP9 video-only + m4a audio (better quality separation)
-            if let video = bestVLCOnlyVideo, let audio = bestAVAudio {
-                return YouTubeStreamCandidate(
-                    videoURL: video.url,
-                    audioURL: audio.url,
-                    qualityDescription: "\(video.height)p \(video.vcodec)",
-                    isAVFoundationCompatible: false
-                )
-            }
-            // Fall back to combined VP9 WebM if no separate tracks
-            if let combined = bestVLCOnlyCombined {
-                return YouTubeStreamCandidate(
-                    videoURL: combined.url,
-                    audioURL: nil,
-                    qualityDescription: "\(combined.height)p \(combined.vcodec)",
-                    isAVFoundationCompatible: false
-                )
-            }
-            return nil
-        }()
-
         // Return best available option
         if let avCandidate = avCandidate {
             print("YouTubeResolver: Selected AVFoundation-compatible stream: \(avCandidate.qualityDescription)")
             return YouTubeStreamSelection(
                 title: title,
                 headers: headers,
-                primary: avCandidate,
-                fallbackCombined: vlcCandidate  // VLC fallback (VP8/VP9, no AV1)
-            )
-        }
-
-        if let vlcCandidate = vlcCandidate {
-            print("YouTubeResolver: Selected VLC-compatible stream (VP8/VP9): \(vlcCandidate.qualityDescription)")
-            return YouTubeStreamSelection(
-                title: title,
-                headers: headers,
-                primary: vlcCandidate,
-                fallbackCombined: nil
+                primary: avCandidate
             )
         }
 
@@ -340,25 +299,10 @@ private struct FormatInfo {
     var hasVideo: Bool { vcodec != "none" }
     var hasAudio: Bool { acodec != "none" }
 
-    /// AV1 codec - VLC 3.0.x has unreliable AV1 support
+    /// AV1 codec - not supported by AVFoundation
     var isAV1: Bool {
         let codec = vcodec.lowercased()
         return codec.contains("av01") || codec.contains("av1")
-    }
-
-    /// VP8/VP9 codec - well supported by VLC
-    var isVPx: Bool {
-        let codec = vcodec.lowercased()
-        return codec.contains("vp8") || codec.contains("vp9") || codec.contains("vp08") || codec.contains("vp09")
-    }
-
-    /// VLC can play this format (VP8/VP9 WebM, but NOT AV1)
-    var isVLCCompatible: Bool {
-        // VLC handles VP8/VP9 in WebM well, but AV1 is unreliable
-        if isAV1 { return false }
-        if ext == "webm" && isVPx { return true }
-        // VLC can also play H.264/HEVC
-        return isAVFoundationCompatibleVideo
     }
 
     var isAVFoundationCompatibleVideo: Bool {

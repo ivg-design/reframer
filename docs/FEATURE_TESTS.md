@@ -91,9 +91,9 @@ These are prerequisites that many tests depend on.
 - **Method**: Long‑press **Open**, paste `UITEST_YOUTUBE_URL`, click **Open**, wait for timeline slider to enable.
 - **Pass**: Video loads and playback controls respond.
 
-### V-001c: VLC fallback for WebM (conditional)
+### V-001c: MPV fallback for WebM (conditional)
 - **Type**: Integration/UI test (optional)
-- **Method**: Provide a `.webm` path and enable VLCKit; load via drag‑drop and verify playback/metadata updates.
+- **Method**: Provide a `.webm` path and enable libmpv; load via drag‑drop and verify playback/metadata updates.
 - **Pass**: Video renders with correct duration and frame counts.
 
 ### V-002: Play / pause toggle

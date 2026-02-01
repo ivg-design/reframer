@@ -14,6 +14,5 @@ final class YouTubeResolverTests: XCTestCase {
         XCTAssertEqual(selection.primary.videoURL.absoluteString, "https://example.com/video1080.mp4")
         XCTAssertEqual(selection.primary.audioURL?.absoluteString, "https://example.com/audio.m4a")
         XCTAssertTrue(selection.primary.isAVFoundationCompatible)
-        XCTAssertEqual(selection.fallbackCombined?.videoURL.absoluteString, "https://example.com/combined4k.webm")
     }
 }
