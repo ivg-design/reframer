@@ -12,66 +12,119 @@
     <p class="subtitle">Apply real-time effects to enhance your reference material</p>
 
     <h2>Overview</h2>
-    <p>Reframer includes a variety of video filters that can be applied in real-time. Unlike traditional single-filter applications, Reframer allows you to <strong>combine multiple filters</strong> to create exactly the effect you need.</p>
+    <p>Reframer includes a variety of video filters that can be applied in real-time. The filter system has two tiers:</p>
+    <ul>
+        <li><strong>Quick Filter</strong>: A single filter selected from the toolbar dropdown, controlled by the toolbar slider</li>
+        <li><strong>Advanced Filters</strong>: Multiple filters that can be stacked together in the Advanced Filters panel</li>
+    </ul>
+
+    <h2>Two-Tier Filter System</h2>
+
+    <h3>Quick Filter (Toolbar)</h3>
+    <p>The quick filter provides fast access to simple, single-parameter filters:</p>
+    <ol>
+        <li><strong>Hold</strong> the filter button for 300ms (or right-click)</li>
+        <li>A menu appears with simple filters</li>
+        <li>Select <strong>one</strong> filter &mdash; this becomes your quick filter</li>
+        <li>The toolbar slider now controls that filter's intensity</li>
+        <li>The filter icon changes to match the selected filter</li>
+    </ol>
+    <p>Quick filters are mutually exclusive &mdash; selecting a new one replaces the previous. Select "None" to clear.</p>
+    <p><strong>Simple filters in quick menu:</strong> Brightness, Contrast, Saturation, Exposure, Edges, Sharpen, Invert, Noir</p>
+
+    <h3>Advanced Filters (Panel)</h3>
+    <p>For complex filters and filter stacking:</p>
+    <ol>
+        <li><strong>Click</strong> the filter button to open the Advanced Filters panel</li>
+        <li>Toggle multiple filters on/off using the switches</li>
+        <li>Adjust each filter's parameters with dedicated sliders</li>
+        <li>Filters are applied in a consistent order when stacked</li>
+    </ol>
+    <p>Keyboard: Press <kbd>F</kbd> to toggle the panel, <kbd>Esc</kbd> to close.</p>
 
     <h2>Available Filters</h2>
+
+    <h3>Simple Filters (Single Parameter)</h3>
     <table>
-        <tr><th>Filter</th><th>Description</th></tr>
-        <tr><td>Brightness</td><td>Adjust image brightness</td></tr>
-        <tr><td>Contrast</td><td>Adjust image contrast</td></tr>
-        <tr><td>Saturation</td><td>Adjust color intensity (0 = grayscale)</td></tr>
-        <tr><td>Exposure</td><td>Adjust exposure in EV stops</td></tr>
-        <tr><td>Edges</td><td>Edge detection for tracing</td></tr>
-        <tr><td>Sharpen</td><td>Increases image sharpness</td></tr>
-        <tr><td>Unsharp Mask</td><td>Professional sharpening</td></tr>
-        <tr><td>Monochrome</td><td>Sepia/tinted tones</td></tr>
-        <tr><td>Invert</td><td>Inverts all colors</td></tr>
-        <tr><td>Line Art</td><td>Line drawing effect (can overlay on original)</td></tr>
-        <tr><td>Noir</td><td>Black and white film effect</td></tr>
+        <tr><th>Filter</th><th>Range</th><th>Description</th></tr>
+        <tr><td>Brightness</td><td>-1 to +1</td><td>Lightens or darkens the image</td></tr>
+        <tr><td>Contrast</td><td>0.25 to 4</td><td>Increases or decreases tonal range</td></tr>
+        <tr><td>Saturation</td><td>0 to 2</td><td>0 = grayscale, 1 = normal, 2 = vibrant</td></tr>
+        <tr><td>Exposure</td><td>-3 to +3 EV</td><td>Simulates camera exposure adjustment</td></tr>
+        <tr><td>Edges</td><td>0 to 10</td><td>Edge detection intensity for tracing</td></tr>
+        <tr><td>Sharpen</td><td>0 to 2</td><td>Enhances edge sharpness</td></tr>
+        <tr><td>Invert</td><td>On/Off</td><td>Inverts all colors</td></tr>
+        <tr><td>Noir</td><td>On/Off</td><td>Black and white film effect</td></tr>
     </table>
 
-    <h2>Using Filters</h2>
+    <h3>Multi-Parameter Filters</h3>
+    <p>These filters have multiple adjustable parameters and are only available in the Advanced Filters panel.</p>
 
-    <h3>Quick Access Menu</h3>
-    <ol>
-        <li><strong>Hold</strong> the filter button (checkerboard icon) for 300ms</li>
-        <li>A menu appears with all available filters</li>
-        <li><strong>Toggle</strong> individual filters using the checkmarks</li>
-        <li>Multiple filters can be active simultaneously</li>
-    </ol>
+    <h4>Unsharp Mask</h4>
+    <p>Professional-grade sharpening used in photo editing.</p>
+    <table>
+        <tr><th>Parameter</th><th>Range</th><th>Description</th></tr>
+        <tr><td>Radius</td><td>0 to 10</td><td>Size of the area used to calculate sharpness. Higher values affect larger details.</td></tr>
+        <tr><td>Intensity</td><td>0 to 2</td><td>Strength of the sharpening effect. Start low (0.5) and increase as needed.</td></tr>
+    </table>
 
-    <h3>Filter Settings Panel</h3>
-    <ol>
-        <li><strong>Click</strong> the filter button to open the settings panel</li>
-        <li>Use checkboxes to enable/disable filters</li>
-        <li>Adjust filter parameters using the sliders</li>
-    </ol>
-    <p>Keyboard: Press <kbd>F</kbd> to toggle the filter panel, <kbd>Esc</kbd> to close.</p>
-
-    <h3>Menu Bar</h3>
-    <p>Access filters through the <strong>Filter</strong> menu:</p>
+    <h4>Monochrome</h4>
+    <p>Converts the image to a single color tone (sepia, tinted effects).</p>
+    <table>
+        <tr><th>Parameter</th><th>Range</th><th>Description</th></tr>
+        <tr><td>Red</td><td>0 to 1</td><td>Red component of the tint color</td></tr>
+        <tr><td>Green</td><td>0 to 1</td><td>Green component of the tint color</td></tr>
+        <tr><td>Blue</td><td>0 to 1</td><td>Blue component of the tint color</td></tr>
+        <tr><td>Intensity</td><td>0 to 1</td><td>How much of the color effect to apply (0 = original, 1 = full effect)</td></tr>
+    </table>
+    <p><strong>Preset ideas:</strong></p>
     <ul>
-        <li>Toggle individual filters</li>
-        <li>Clear All Filters</li>
-        <li>Open Filter Settings panel</li>
-        <li>Reset filter parameters to defaults</li>
+        <li>Sepia: R=0.6, G=0.45, B=0.3</li>
+        <li>Cold blue: R=0.2, G=0.4, B=0.7</li>
+        <li>Warm gold: R=0.8, G=0.6, B=0.2</li>
+    </ul>
+
+    <h4>Line Art</h4>
+    <p>Creates a line drawing effect from the video. <strong>Note:</strong> This replaces the video with line art (it does not overlay lines on the original).</p>
+    <table>
+        <tr><th>Parameter</th><th>Range</th><th>Description</th></tr>
+        <tr><td>Sensitivity</td><td>0.1 to 200</td><td>Edge detection sensitivity. Higher values detect more edges.</td></tr>
+        <tr><td>Threshold</td><td>0 to 1</td><td>Minimum brightness difference to detect as an edge. Lower = more lines.</td></tr>
+        <tr><td>Darkness</td><td>1 to 200</td><td>Line darkness/contrast. Higher values create bolder lines.</td></tr>
+    </table>
+    <p><strong>Tips for Line Art:</strong></p>
+    <ul>
+        <li>For clean, strong lines: Sensitivity=50, Threshold=0.1, Darkness=50</li>
+        <li>For subtle sketchy lines: Sensitivity=100, Threshold=0.3, Darkness=25</li>
+        <li>Experiment with small threshold changes &mdash; the effect is sensitive</li>
     </ul>
 
     <h2>Combining Filters</h2>
-    <p>Filters are applied in a consistent order when combined. Useful combinations:</p>
+    <p>Both quick filter and advanced filters can be active simultaneously. The quick filter is applied first, then advanced filters in order.</p>
+    <p>Useful combinations using Advanced Filters:</p>
     <ul>
         <li><strong>Edges + High Contrast</strong> &mdash; Creates bold, visible outlines</li>
         <li><strong>Sharpen + Saturation (0)</strong> &mdash; Crisp grayscale reference</li>
         <li><strong>Unsharp Mask + Exposure (+1)</strong> &mdash; Enhances detail in dark footage</li>
-        <li><strong>Noir + Exposure (−0.5)</strong> &mdash; Dramatic dark B&W</li>
+        <li><strong>Noir + Exposure (-0.5)</strong> &mdash; Dramatic dark B&W</li>
+    </ul>
+
+    <h2>Menu Bar</h2>
+    <p>Access filters through the <strong>Filter</strong> menu:</p>
+    <ul>
+        <li>Toggle individual advanced filters</li>
+        <li>Clear All Filters (clears advanced filters only)</li>
+        <li>Open Advanced Filters panel</li>
+        <li>Reset filter parameters to defaults</li>
     </ul>
 
     <h2>Tips</h2>
     <ul>
-        <li>The filter button turns <strong>blue</strong> when any filter is active</li>
-        <li>Hover over the filter button to see which filters are applied</li>
-        <li>Use <strong>Clear All</strong> to quickly disable all filters</li>
-        <li>Filter parameter settings are independent of which filters are active</li>
+        <li>The filter button turns <strong>blue</strong> when a quick filter is active</li>
+        <li>The toolbar slider label shows the percentage (0-100%) of the filter effect</li>
+        <li>Use <strong>Clear All</strong> in the panel to quickly disable all advanced filters</li>
+        <li>Quick filter and advanced filters are independent &mdash; clearing one doesn't affect the other</li>
+        <li>Filter settings are preserved even when filters are toggled off</li>
     </ul>
 
     <div class="nav-links">

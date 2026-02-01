@@ -335,8 +335,14 @@ class ControlBar: NSView {
     }
 
     @objc private func opacitySliderChanged(_ sender: Any?) {
-        guard let slider = opacitySlider else { return }
-        videoState?.opacity = slider.doubleValue
+        guard let slider = opacitySlider, let state = videoState else { return }
+
+        // If quick filter is active, control the filter value; otherwise control opacity
+        if state.quickFilter != nil {
+            state.quickFilterValue = slider.doubleValue
+        } else {
+            state.opacity = slider.doubleValue
+        }
     }
 
     @objc private func volumeSliderChanged(_ sender: Any?) {
@@ -393,12 +399,33 @@ class ControlBar: NSView {
             }
             .store(in: &cancellables)
 
-        // Update opacity field and slider
+        // Update opacity/filter slider based on whether quick filter is active
+        // When quick filter is active: slider controls filter value (0-1)
+        // When no quick filter: slider controls opacity
+
+        state.$quickFilter
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] filter in
+                self?.updateSliderForQuickFilter(filter)
+            }
+            .store(in: &cancellables)
+
+        state.$quickFilterValue
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in
+                guard let self = self,
+                      let filter = self.videoState?.quickFilter else { return }
+                self.opacitySlider?.doubleValue = value
+                self.opacityField?.stringValue = self.formatFilterValue(filter: filter, normalizedValue: value)
+            }
+            .store(in: &cancellables)
+
         state.$opacity
             .receive(on: DispatchQueue.main)
             .sink { [weak self] opacity in
-                self?.opacityField?.stringValue = "\(Int(opacity * 100))"
-                self?.opacitySlider?.doubleValue = opacity
+                guard let self = self, self.videoState?.quickFilter == nil else { return }
+                self.opacityField?.stringValue = "\(Int(opacity * 100))"
+                self.opacitySlider?.doubleValue = opacity
             }
             .store(in: &cancellables)
 
@@ -464,6 +491,49 @@ class ControlBar: NSView {
                 self?.updateOpacity()
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Quick Filter Slider
+
+    private func updateSliderForQuickFilter(_ filter: VideoFilter?) {
+        guard let state = videoState else { return }
+
+        if let filter = filter {
+            // Quick filter active: slider controls filter value (0-1 normalized)
+            // But display shows actual parameter value
+            opacitySlider?.minValue = 0.0
+            opacitySlider?.maxValue = 1.0
+            opacitySlider?.doubleValue = state.quickFilterValue
+            opacityField?.stringValue = formatFilterValue(filter: filter, normalizedValue: state.quickFilterValue)
+        } else {
+            // No quick filter: slider controls opacity (0-100%)
+            opacitySlider?.minValue = 0.02  // Minimum 2%
+            opacitySlider?.maxValue = 1.0
+            opacitySlider?.doubleValue = state.opacity
+            opacityField?.stringValue = "\(Int(state.opacity * 100))"
+        }
+    }
+
+    /// Format filter value for display based on filter's actual parameter range
+    private func formatFilterValue(filter: VideoFilter, normalizedValue: Double) -> String {
+        let range = filter.parameterRange
+        let actualValue = range.min + (normalizedValue * (range.max - range.min))
+
+        // Format based on the range
+        if range.min < 0 {
+            // Signed value (e.g., -1 to +1, -3 to +3)
+            if actualValue >= 0 {
+                return String(format: "+%.1f", actualValue)
+            } else {
+                return String(format: "%.1f", actualValue)
+            }
+        } else if range.max <= 2 {
+            // Small range, show one decimal
+            return String(format: "%.1f", actualValue)
+        } else {
+            // Larger range, show integer
+            return "\(Int(actualValue.rounded()))"
+        }
     }
 
     // MARK: - Hover
@@ -538,8 +608,19 @@ extension ControlBar: NSTextFieldDelegate {
                 videoState?.setZoomPercentage(value)
             }
         } else if textField === opacityField {
-            if let value = Int(textField.stringValue) {
-                videoState?.setOpacityPercentage(value)
+            // If quick filter active, parse as actual parameter value
+            // Otherwise parse as opacity percentage
+            if let filter = videoState?.quickFilter {
+                if let actualValue = Double(textField.stringValue) {
+                    let range = filter.parameterRange
+                    // Convert actual value to normalized 0-1
+                    let normalized = (actualValue - range.min) / (range.max - range.min)
+                    videoState?.quickFilterValue = max(0, min(1, normalized))
+                }
+            } else {
+                if let value = Int(textField.stringValue) {
+                    videoState?.setOpacityPercentage(value)
+                }
             }
         }
     }
@@ -589,11 +670,23 @@ extension ControlBar: NSTextFieldDelegate {
                 }
                 return true
             } else if textField === opacityField {
-                let step = shift ? 10 : 1
-                if let current = Int(textField.stringValue) {
-                    let newValue = max(2, min(100, current + step * Int(direction)))
-                    textField.stringValue = "\(newValue)"
-                    videoState?.setOpacityPercentage(newValue)
+                if let filter = videoState?.quickFilter {
+                    // Quick filter active: step by 1% of range normally, 10% with shift
+                    let stepPercent = shift ? 0.1 : 0.01
+                    let normalizedStep = stepPercent * direction
+
+                    let currentNormalized = videoState?.quickFilterValue ?? 0.5
+                    let newNormalized = max(0, min(1, currentNormalized + normalizedStep))
+                    videoState?.quickFilterValue = newNormalized
+                    textField.stringValue = formatFilterValue(filter: filter, normalizedValue: newNormalized)
+                } else {
+                    // Opacity mode: step by percentage
+                    let step = shift ? 10 : 1
+                    if let current = Int(textField.stringValue) {
+                        let newValue = max(2, min(100, current + step * Int(direction)))
+                        textField.stringValue = "\(newValue)"
+                        videoState?.setOpacityPercentage(newValue)
+                    }
                 }
                 return true
             }

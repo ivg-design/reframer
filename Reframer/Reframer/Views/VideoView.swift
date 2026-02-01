@@ -123,8 +123,19 @@ class VideoView: NSView {
             .sink { [weak self] amount in self?.stepFrame(forward: false, amount: amount) }
             .store(in: &cancellables)
 
-        // Observe filter changes
-        state.$activeFilters
+        // Observe quick filter changes
+        state.$quickFilter
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyCurrentFilters() }
+            .store(in: &cancellables)
+
+        state.$quickFilterValue
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyCurrentFilters() }
+            .store(in: &cancellables)
+
+        // Observe advanced filter changes
+        state.$advancedFilters
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyCurrentFilters() }
             .store(in: &cancellables)
@@ -333,15 +344,25 @@ class VideoView: NSView {
               let state = videoState,
               let playerItem = playerItem else { return }
 
-        // If no filters active, remove any existing composition
-        guard !state.activeFilters.isEmpty else {
+        // If no filters active (neither quick nor advanced), remove any existing composition
+        guard state.quickFilter != nil || !state.advancedFilters.isEmpty else {
             playerItem.videoComposition = nil
             return
         }
 
-        // Create filters in order
-        let orderedFilters = state.orderedActiveFilters
-        let filters = orderedFilters.compactMap { $0.createFilter(settings: state.filterSettings) }
+        // Build list of CIFilters to apply
+        var filters: [CIFilter] = []
+
+        // First apply quick filter (if any)
+        if let quickFilter = state.quickFilter,
+           let ciFilter = quickFilter.createQuickFilter(normalizedValue: state.quickFilterValue) {
+            filters.append(ciFilter)
+        }
+
+        // Then apply advanced filters in order
+        let orderedAdvanced = state.orderedAdvancedFilters
+        let advancedCIFilters = orderedAdvanced.compactMap { $0.createFilter(settings: state.filterSettings) }
+        filters.append(contentsOf: advancedCIFilters)
 
         guard !filters.isEmpty else {
             playerItem.videoComposition = nil

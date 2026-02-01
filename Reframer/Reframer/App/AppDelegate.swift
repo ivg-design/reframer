@@ -77,6 +77,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
+    /// Handle files opened via "Open With" from Finder
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let url = urls.first else { return }
+
+        // Check if it's a supported video format
+        if VideoFormats.isSupported(url) {
+            // Delay slightly to ensure windows are ready
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.videoState.videoURL = url
+                self?.videoState.isVideoLoaded = true
+            }
+        } else {
+            // Show error for unsupported formats
+            let alert = NSAlert()
+            alert.messageText = "Unsupported Format"
+            alert.informativeText = "The file '\(url.lastPathComponent)' is not a supported video format.\n\nSupported formats: \(VideoFormats.displayString)"
+            alert.alertStyle = .warning
+            alert.runModal()
+        }
+    }
+
     // MARK: - Menu Setup
 
     private func setupMainMenu() {
@@ -96,6 +117,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.servicesMenu = servicesMenu
         appMenu.addItem(servicesItem)
 
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Preferences...", action: #selector(showPreferences(_:)), keyEquivalent: ",")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide Reframer", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let hideOthersItem = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
@@ -682,6 +705,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         videoState.showHelp = true
     }
 
+    @IBAction func showPreferences(_ sender: Any?) {
+        PreferencesWindowController.shared.showWindow()
+    }
+
     @IBAction func openReframerHelp(_ sender: Any?) {
         // Open the Reframer help book
         let helpBookName = Bundle.main.object(forInfoDictionaryKey: "CFBundleHelpBookName") as? String ?? "com.reframer.help"
@@ -690,11 +717,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @IBAction func toggleFilter(_ sender: NSMenuItem) {
         guard let filter = sender.representedObject as? VideoFilter else { return }
-        videoState.toggleFilter(filter)
+        videoState.toggleAdvancedFilter(filter)
     }
 
     @IBAction func clearAllFilters(_ sender: Any?) {
-        videoState.clearAllFilters()
+        videoState.clearAdvancedFilters()
     }
 
     @IBAction func showFilterSettings(_ sender: Any?) {
@@ -768,7 +795,7 @@ extension AppDelegate: NSMenuDelegate {
             item.target = self
             item.action = #selector(toggleFilter(_:))
             item.representedObject = filter
-            item.state = videoState.isFilterActive(filter) ? .on : .off
+            item.state = videoState.isAdvancedFilterActive(filter) ? .on : .off
             menu.insertItem(item, at: index)
         }
     }

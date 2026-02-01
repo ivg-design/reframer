@@ -8,9 +8,11 @@ class MainViewController: NSViewController {
 
     let videoState: VideoState
     private var videoView: VideoView!
+    private var vlcVideoView: VLCVideoView?  // Lazy-created when needed
     private var dropZoneView: DropZoneView!
     private var edgeIndicatorView: EdgeIndicatorView!
     private var cancellables = Set<AnyCancellable>()
+    private var isUsingVLC = false  // Track which player is active
 
 
     // MARK: - Initialization
@@ -88,14 +90,164 @@ class MainViewController: NSViewController {
         videoState.$isVideoLoaded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isLoaded in
-                self?.dropZoneView?.isHidden = isLoaded
-                self?.videoView?.isHidden = !isLoaded
+                guard let self = self else { return }
+                self.dropZoneView?.isHidden = isLoaded
+                if self.isUsingVLC {
+                    self.videoView?.isHidden = true
+                    self.vlcVideoView?.isHidden = !isLoaded
+                } else {
+                    self.videoView?.isHidden = !isLoaded
+                    self.vlcVideoView?.isHidden = true
+                }
+            }
+            .store(in: &cancellables)
+
+        // Observe video URL changes to decide which player to use
+        videoState.$videoURL
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] url in
+                if let url = url {
+                    self?.handleVideoURLChange(url)
+                }
             }
             .store(in: &cancellables)
 
         // Initial state
         dropZoneView?.isHidden = videoState.isVideoLoaded
         videoView?.isHidden = !videoState.isVideoLoaded
+    }
+
+    // MARK: - Video Player Selection
+
+    private func handleVideoURLChange(_ url: URL) {
+        let manager = VLCKitManager.shared
+
+        if manager.requiresVLCKit(url: url) {
+            // This format requires VLCKit
+            if manager.isReady {
+                switchToVLCPlayer(url: url)
+            } else if manager.isInstalled && !manager.isEnabled {
+                // VLCKit installed but disabled - ask to enable
+                showEnableVLCKitPrompt(url: url)
+            } else {
+                // VLCKit not installed - show install prompt
+                showInstallVLCKitPrompt(url: url)
+            }
+        } else {
+            // Use AVFoundation
+            switchToAVPlayer()
+        }
+    }
+
+    private func switchToAVPlayer() {
+        isUsingVLC = false
+        vlcVideoView?.isHidden = true
+        videoView?.isHidden = false
+    }
+
+    private func switchToVLCPlayer(url: URL) {
+        isUsingVLC = true
+        videoView?.isHidden = true
+
+        // Create VLC view if needed
+        if vlcVideoView == nil {
+            let vlcView = VLCVideoView()
+            vlcView.translatesAutoresizingMaskIntoConstraints = false
+            vlcView.videoState = videoState
+            view.addSubview(vlcView, positioned: .below, relativeTo: dropZoneView)
+
+            NSLayoutConstraint.activate([
+                vlcView.topAnchor.constraint(equalTo: view.topAnchor),
+                vlcView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                vlcView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                vlcView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            ])
+
+            vlcVideoView = vlcView
+        }
+
+        vlcVideoView?.isHidden = false
+        vlcVideoView?.loadVideo(url: url)
+    }
+
+    private func showInstallVLCKitPrompt(url: URL) {
+        let alert = NSAlert()
+        alert.messageText = "Extended Format Support Required"
+        alert.informativeText = "\(url.pathExtension.uppercased()) files require VLC for playback. Would you like to install it now (~140MB download)?"
+        alert.addButton(withTitle: "Install VLCKit")
+        alert.addButton(withTitle: "Open Preferences")
+        alert.addButton(withTitle: "Cancel")
+
+        guard let window = view.window else { return }
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            switch response {
+            case .alertFirstButtonReturn:
+                // Install directly
+                self?.installVLCKitAndPlay(url: url)
+            case .alertSecondButtonReturn:
+                // Open preferences
+                PreferencesWindowController.shared.showWindow()
+            default:
+                break
+            }
+        }
+    }
+
+    private func showEnableVLCKitPrompt(url: URL) {
+        let alert = NSAlert()
+        alert.messageText = "Enable Extended Format Support?"
+        alert.informativeText = "\(url.pathExtension.uppercased()) files require VLCKit. VLCKit is installed but disabled. Enable it?"
+        alert.addButton(withTitle: "Enable")
+        alert.addButton(withTitle: "Cancel")
+
+        guard let window = view.window else { return }
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            if response == .alertFirstButtonReturn {
+                VLCKitManager.shared.isEnabled = true
+                VLCKitManager.shared.loadFramework()
+                self?.switchToVLCPlayer(url: url)
+            }
+        }
+    }
+
+    private func installVLCKitAndPlay(url: URL) {
+        let progressAlert = NSAlert()
+        progressAlert.messageText = "Installing VLCKit..."
+        progressAlert.informativeText = "Downloading..."
+        progressAlert.addButton(withTitle: "Cancel")
+
+        let progressIndicator = NSProgressIndicator()
+        progressIndicator.style = .bar
+        progressIndicator.isIndeterminate = false
+        progressIndicator.minValue = 0
+        progressIndicator.maxValue = 1
+        progressIndicator.frame = NSRect(x: 0, y: 0, width: 250, height: 20)
+        progressAlert.accessoryView = progressIndicator
+
+        guard let window = view.window else { return }
+
+        progressAlert.beginSheetModal(for: window) { _ in }
+
+        VLCKitManager.shared.install { progress, status in
+            progressIndicator.doubleValue = progress
+            progressAlert.informativeText = status
+        } completion: { [weak self] result in
+            window.endSheet(window.attachedSheet!)
+
+            switch result {
+            case .success:
+                VLCKitManager.shared.isEnabled = true
+                self?.switchToVLCPlayer(url: url)
+            case .failure(let error):
+                let errorAlert = NSAlert()
+                errorAlert.messageText = "Installation Failed"
+                errorAlert.informativeText = error.localizedDescription
+                errorAlert.alertStyle = .critical
+                errorAlert.beginSheetModal(for: window)
+            }
+        }
     }
 
     override func viewDidAppear() {

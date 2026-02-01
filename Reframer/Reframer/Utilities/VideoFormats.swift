@@ -32,11 +32,11 @@ struct VideoFormats {
         // H.265/HEVC
         addType(&types, "public.hevc")
 
-        // AV1
+        // AV1 (macOS 13+ with hardware support)
         addType(&types, "public.av1")
         addType(&types, "org.aomedia.av1")
 
-        // WebM and Matroska
+        // WebM and Matroska (require VLCKit for playback)
         addType(&types, "org.webmproject.webm")
         addType(&types, "org.matroska.mkv")
 

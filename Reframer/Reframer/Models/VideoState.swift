@@ -27,8 +27,12 @@ class VideoState: ObservableObject {
     // Opacity
     @Published var opacity: Double = 1.0
 
-    // Video Filters
-    @Published var activeFilters: Set<VideoFilter> = []
+    // Quick Filter (single filter from dropdown, controls toolbar slider)
+    @Published var quickFilter: VideoFilter? = nil
+    @Published var quickFilterValue: Double = 0.5  // 0-1 normalized value for toolbar slider
+
+    // Advanced Filters (multiple filters from panel, stackable)
+    @Published var advancedFilters: Set<VideoFilter> = []
     @Published var filterSettings: FilterSettings = .defaults
     @Published var showFilterPanel: Bool = false
 
@@ -97,35 +101,69 @@ class VideoState: ObservableObject {
         volume = isMuted ? 0.0 : 0.5
     }
 
-    // MARK: - Filter Methods
+    // MARK: - Quick Filter Methods (dropdown - single select)
 
-    /// Toggle a specific filter on/off
-    func toggleFilter(_ filter: VideoFilter) {
-        if activeFilters.contains(filter) {
-            activeFilters.remove(filter)
-        } else {
-            activeFilters.insert(filter)
+    /// Set the quick filter (replaces any existing)
+    func setQuickFilter(_ filter: VideoFilter?) {
+        quickFilter = filter
+        // Reset slider to middle when changing filters
+        if filter != nil {
+            quickFilterValue = 0.5
         }
     }
 
-    /// Check if a filter is active
-    func isFilterActive(_ filter: VideoFilter) -> Bool {
-        activeFilters.contains(filter)
+    /// Get the actual parameter value for the quick filter based on slider position
+    func quickFilterParameterValue() -> Double {
+        guard let filter = quickFilter else { return 0 }
+        let range = filter.parameterRange
+        return range.min + (quickFilterValue * (range.max - range.min))
     }
 
-    /// Clear all active filters
-    func clearAllFilters() {
-        activeFilters.removeAll()
+    // MARK: - Advanced Filter Methods (panel - multi select)
+
+    /// Toggle an advanced filter on/off
+    func toggleAdvancedFilter(_ filter: VideoFilter) {
+        if advancedFilters.contains(filter) {
+            advancedFilters.remove(filter)
+        } else {
+            advancedFilters.insert(filter)
+        }
     }
 
-    /// Get active filters in a consistent order for chaining
-    var orderedActiveFilters: [VideoFilter] {
-        VideoFilter.allCases.filter { activeFilters.contains($0) }
+    /// Check if an advanced filter is active
+    func isAdvancedFilterActive(_ filter: VideoFilter) -> Bool {
+        advancedFilters.contains(filter)
+    }
+
+    /// Clear all advanced filters
+    func clearAdvancedFilters() {
+        advancedFilters.removeAll()
+    }
+
+    /// Get advanced filters in a consistent order for chaining
+    var orderedAdvancedFilters: [VideoFilter] {
+        VideoFilter.allCases.filter { advancedFilters.contains($0) }
+    }
+
+    /// Get all active filters (quick + advanced) in order
+    var allActiveFilters: [VideoFilter] {
+        var filters: [VideoFilter] = []
+        if let quick = quickFilter {
+            filters.append(quick)
+        }
+        filters.append(contentsOf: orderedAdvancedFilters)
+        return filters
     }
 
     /// Reset filter settings to defaults
     func resetFilterSettings() {
         filterSettings = .defaults
+    }
+
+    /// Clear everything (quick filter and advanced filters)
+    func clearAllFilters() {
+        quickFilter = nil
+        advancedFilters.removeAll()
     }
 
     private func formatTime(_ time: Double) -> String {
