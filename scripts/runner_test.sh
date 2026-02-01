@@ -95,7 +95,7 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
             if [ -n "$req" ]; then
                 local tmp_req
                 tmp_req=$(mktemp)
-                /usr/bin/csreq -r "$req" -b "$tmp_req" 2>/dev/null || true
+                /usr/bin/csreq -r "=$req" -b "$tmp_req" 2>/dev/null || true
                 if [ -s "$tmp_req" ]; then
                     xxd -p "$tmp_req" | tr -d '\n'
                 fi
