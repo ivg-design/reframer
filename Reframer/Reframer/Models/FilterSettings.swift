@@ -2,6 +2,12 @@ import Foundation
 
 /// Settings for all video filters
 struct FilterSettings: Codable, Equatable {
+    // MARK: - Basic Adjustments
+    var brightnessLevel: Double = 0.0  // -1.0 to 1.0 (0 = no change)
+    var contrastLevel: Double = 1.0    // 0.25 to 4.0 (1 = no change)
+    var saturationLevel: Double = 1.0  // 0.0 to 2.0 (0 = grayscale, 1 = normal)
+    var exposure: Double = 0.0         // -3.0 to +3.0 EV stops
+
     // MARK: - Edge Detection
     var edgeIntensity: Double = 1.0  // 0.0 - 10.0
 
@@ -11,11 +17,6 @@ struct FilterSettings: Codable, Equatable {
     // MARK: - Unsharp Mask
     var unsharpRadius: Double = 2.5  // 0.0 - 10.0
     var unsharpIntensity: Double = 0.5  // 0.0 - 2.0
-
-    // MARK: - Color Controls (Contrast filter)
-    var brightness: Double = 0.0  // -1.0 - 1.0
-    var contrast: Double = 1.5  // 0.25 - 4.0
-    var saturation: Double = 1.0  // 0.0 - 2.0
 
     // MARK: - Monochrome
     var monochromeR: Double = 0.6  // 0.0 - 1.0
@@ -29,12 +30,6 @@ struct FilterSettings: Codable, Equatable {
     var lineOverlayEdge: Double = 1.0  // 0.0 - 200.0
     var lineOverlayThreshold: Double = 0.1  // 0.0 - 1.0
     var lineOverlayContrast: Double = 50.0  // 0.25 - 200.0
-
-    // MARK: - Saturation (standalone)
-    var saturationLevel: Double = 1.0  // 0.0 = grayscale, 1.0 = normal, 2.0 = vibrant
-
-    // MARK: - Exposure
-    var exposure: Double = 0.0  // -3.0 to +3.0 (negative = darker, positive = brighter)
 
     // MARK: - Factory Methods
 
@@ -53,8 +48,8 @@ struct FilterSettings: Codable, Equatable {
     /// Preset for high contrast viewing
     static var highContrast: FilterSettings {
         var settings = FilterSettings()
-        settings.contrast = 2.5
-        settings.saturation = 0.5
+        settings.contrastLevel = 2.5
+        settings.saturationLevel = 0.5
         return settings
     }
 

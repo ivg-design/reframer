@@ -10,16 +10,17 @@ Reframer includes a variety of video filters that can be applied in real-time. U
 
 | Filter | Description |
 |--------|-------------|
-| **Edges** | Highlights edges in the video, useful for tracing outlines |
+| **Brightness** | Adjust image brightness (-1 to +1) |
+| **Contrast** | Adjust image contrast (0.25 to 4) |
+| **Saturation** | Adjust color intensity (0 = grayscale, 2 = vibrant) |
+| **Exposure** | Adjust exposure in EV stops (-3 to +3) |
+| **Edges** | Edge detection, useful for tracing outlines |
 | **Sharpen** | Increases image sharpness and detail |
-| **Unsharp Mask** | Professional sharpening with radius and intensity control |
-| **High Contrast** | Increases contrast for better visibility |
-| **Saturation** | Adjust color intensity (0 = grayscale, 1 = normal, 2 = vibrant) |
-| **Monochrome** | Converts to sepia/monochrome tones |
+| **Unsharp Mask** | Professional sharpening with radius control |
+| **Monochrome** | Converts to sepia/tinted tones |
 | **Invert** | Inverts all colors |
 | **Line Overlay** | Creates a line-art effect |
 | **Noir** | Black and white film effect |
-| **Exposure** | Adjust brightness (negative = darker, positive = brighter) |
 
 ## Using Filters
 
