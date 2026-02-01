@@ -28,7 +28,7 @@ class VideoState: ObservableObject {
     @Published var opacity: Double = 1.0
 
     // Video Filters
-    @Published var activeFilter: VideoFilter = .none
+    @Published var activeFilters: Set<VideoFilter> = []
     @Published var filterSettings: FilterSettings = .defaults
     @Published var showFilterPanel: Bool = false
 
@@ -99,26 +99,28 @@ class VideoState: ObservableObject {
 
     // MARK: - Filter Methods
 
-    /// Cycle to the next filter
-    func cycleFilter() {
-        let allFilters = VideoFilter.allCases
-        guard let currentIndex = allFilters.firstIndex(of: activeFilter) else {
-            activeFilter = allFilters.first ?? .none
-            return
+    /// Toggle a specific filter on/off
+    func toggleFilter(_ filter: VideoFilter) {
+        if activeFilters.contains(filter) {
+            activeFilters.remove(filter)
+        } else {
+            activeFilters.insert(filter)
         }
-        let nextIndex = (currentIndex + 1) % allFilters.count
-        activeFilter = allFilters[nextIndex]
     }
 
-    /// Cycle to the previous filter
-    func cyclePreviousFilter() {
-        let allFilters = VideoFilter.allCases
-        guard let currentIndex = allFilters.firstIndex(of: activeFilter) else {
-            activeFilter = allFilters.first ?? .none
-            return
-        }
-        let prevIndex = currentIndex == 0 ? allFilters.count - 1 : currentIndex - 1
-        activeFilter = allFilters[prevIndex]
+    /// Check if a filter is active
+    func isFilterActive(_ filter: VideoFilter) -> Bool {
+        activeFilters.contains(filter)
+    }
+
+    /// Clear all active filters
+    func clearAllFilters() {
+        activeFilters.removeAll()
+    }
+
+    /// Get active filters in a consistent order for chaining
+    var orderedActiveFilters: [VideoFilter] {
+        VideoFilter.allCases.filter { activeFilters.contains($0) }
     }
 
     /// Reset filter settings to defaults

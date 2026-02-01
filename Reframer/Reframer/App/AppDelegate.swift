@@ -129,14 +129,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(filterMenuItem)
         let filterMenu = NSMenu(title: "Filter")
         filterMenuItem.submenu = filterMenu
-        filterMenu.addItem(withTitle: "Next Filter", action: #selector(nextFilter(_:)), keyEquivalent: "f")
-        let prevFilterItem = NSMenuItem(title: "Previous Filter", action: #selector(previousFilter(_:)), keyEquivalent: "F")
-        prevFilterItem.keyEquivalentModifierMask = [.shift]
-        filterMenu.addItem(prevFilterItem)
+        filterMenu.delegate = self
+
+        // Filter items will be populated dynamically via menu delegate
+        filterMenu.addItem(withTitle: "Placeholder", action: nil, keyEquivalent: "")
+        filterMenu.addItem(.separator())
+        filterMenu.addItem(withTitle: "Clear All Filters", action: #selector(clearAllFilters(_:)), keyEquivalent: "")
         filterMenu.addItem(.separator())
         filterMenu.addItem(withTitle: "Filter Settings...", action: #selector(showFilterSettings(_:)), keyEquivalent: "")
         filterMenu.addItem(.separator())
-        filterMenu.addItem(withTitle: "Reset Filter Settings", action: #selector(resetFilterSettings(_:)), keyEquivalent: "")
+        filterMenu.addItem(withTitle: "Reset Filter Parameters", action: #selector(resetFilterSettings(_:)), keyEquivalent: "")
 
         // Playback menu
         let playbackMenuItem = NSMenuItem()
@@ -446,13 +448,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return false
 
-        // F - Cycle filters forward, Shift+F - Cycle filters backward
-        case 3 where videoState.isVideoLoaded:
-            if flags.contains(.shift) {
-                videoState.cyclePreviousFilter()
-            } else if noModifiers {
-                videoState.cycleFilter()
-            }
+        // F - Toggle filter panel
+        case 3 where videoState.isVideoLoaded && noModifiers:
+            videoState.showFilterPanel.toggle()
             return true
 
         // Arrow keys for pan (when unlocked and video loaded)
@@ -690,12 +688,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSHelpManager.shared.openHelpAnchor("index", inBook: helpBookName)
     }
 
-    @IBAction func nextFilter(_ sender: Any?) {
-        videoState.cycleFilter()
+    @IBAction func toggleFilter(_ sender: NSMenuItem) {
+        guard let filter = sender.representedObject as? VideoFilter else { return }
+        videoState.toggleFilter(filter)
     }
 
-    @IBAction func previousFilter(_ sender: Any?) {
-        videoState.cyclePreviousFilter()
+    @IBAction func clearAllFilters(_ sender: Any?) {
+        videoState.clearAllFilters()
     }
 
     @IBAction func showFilterSettings(_ sender: Any?) {
@@ -705,7 +704,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @IBAction func resetFilterSettings(_ sender: Any?) {
         videoState.resetFilterSettings()
     }
-
 
     // MARK: - Installation
 
@@ -740,6 +738,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             errorAlert.messageText = "Could not move app"
             errorAlert.informativeText = "Please drag Video Overlay into /Applications manually."
             errorAlert.runModal()
+        }
+    }
+}
+
+// MARK: - NSMenuDelegate
+
+extension AppDelegate: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        // Only handle the Filter menu
+        guard menu.title == "Filter" else { return }
+
+        // Remove existing filter items (keep separators and other items)
+        let itemsToRemove = menu.items.filter { item in
+            item.representedObject is VideoFilter
+        }
+        itemsToRemove.forEach { menu.removeItem($0) }
+
+        // Remove placeholder if present
+        if let placeholder = menu.items.first(where: { $0.title == "Placeholder" }) {
+            menu.removeItem(placeholder)
+        }
+
+        // Insert filter items at the beginning
+        for (index, filter) in VideoFilter.allCases.enumerated() {
+            let item = NSMenuItem()
+            item.title = filter.rawValue
+            item.image = NSImage(systemSymbolName: filter.iconName, accessibilityDescription: filter.rawValue)
+            item.target = self
+            item.action = #selector(toggleFilter(_:))
+            item.representedObject = filter
+            item.state = videoState.isFilterActive(filter) ? .on : .off
+            menu.insertItem(item, at: index)
         }
     }
 }
