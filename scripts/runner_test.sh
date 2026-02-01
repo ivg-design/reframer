@@ -74,24 +74,60 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
         done < <(find "$DERIVED_DATA_PATH/Build/Products" -name "Reframer*.app" -print 2>/dev/null)
     fi
 
-    # Ensure Accessibility permission for UI test runner (prevents automation prompt hang)
-    if command -v sqlite3 >/dev/null 2>&1 && [ -f "$HOME/Library/Application Support/com.apple.TCC/TCC.db" ]; then
-        RUNNER_APP=$(find "$DERIVED_DATA_PATH/Build/Products" -name "ReframerUITests-Runner.app" -print -quit 2>/dev/null || true)
-        if [ -n "$RUNNER_APP" ] && command -v csreq >/dev/null 2>&1; then
-            REQ=$(codesign -dr - "$RUNNER_APP" 2>/dev/null | sed -n 's/^# designated => //p')
-            if [ -n "$REQ" ]; then
-                TMP_REQ=$(mktemp)
-                /usr/bin/csreq -r "$REQ" -b "$TMP_REQ" 2>/dev/null || true
-                if [ -s "$TMP_REQ" ]; then
-                    CSREQ_BLOB=$(xxd -p "$TMP_REQ" | tr -d '\n')
-                    sqlite3 "$HOME/Library/Application Support/com.apple.TCC/TCC.db" \
-                        "INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, indirect_object_identifier) VALUES ('kTCCServiceAccessibility', 'com.reframer.app.ReframerUITests.xctrunner', 0, 2, 1, 1, X'$CSREQ_BLOB', 'UNUSED');" \
-                        2>/dev/null || true
-                    killall tccd >/dev/null 2>&1 || true
+    # Ensure Accessibility/Input Monitoring permissions for UI test runner (prevents automation prompt hang)
+    if command -v sqlite3 >/dev/null 2>&1 && [ -f "$HOME/Library/Application Support/com.apple.TCC/TCC.db" ] && command -v csreq >/dev/null 2>&1; then
+        TCC_DB="$HOME/Library/Application Support/com.apple.TCC/TCC.db"
+
+        tcc_insert() {
+            local service="$1"
+            local client="$2"
+            local client_type="$3"
+            local csreq_blob="$4"
+            sqlite3 "$TCC_DB" \
+                "INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, indirect_object_identifier) VALUES ('$service', '$client', $client_type, 2, 1, 1, X'$csreq_blob', 'UNUSED');" \
+                2>/dev/null || true
+        }
+
+        tcc_csreq_for() {
+            local target="$1"
+            local req
+            req=$(codesign -dr - "$target" 2>/dev/null | sed -n 's/^# designated => //p')
+            if [ -n "$req" ]; then
+                local tmp_req
+                tmp_req=$(mktemp)
+                /usr/bin/csreq -r "$req" -b "$tmp_req" 2>/dev/null || true
+                if [ -s "$tmp_req" ]; then
+                    xxd -p "$tmp_req" | tr -d '\n'
                 fi
-                rm -f "$TMP_REQ"
+                rm -f "$tmp_req"
+            fi
+        }
+
+        RUNNER_APP=$(find "$DERIVED_DATA_PATH/Build/Products" -name "ReframerUITests-Runner.app" -print -quit 2>/dev/null || true)
+        if [ -n "$RUNNER_APP" ]; then
+            CSREQ_BLOB=$(tcc_csreq_for "$RUNNER_APP")
+            if [ -n "$CSREQ_BLOB" ]; then
+                tcc_insert "kTCCServiceAccessibility" "com.reframer.app.ReframerUITests.xctrunner" 0 "$CSREQ_BLOB"
             fi
         fi
+
+        XCODE_APP="/Applications/Xcode.app/Contents/MacOS/Xcode"
+        DTSERVICEHUB="/Applications/Xcode.app/Contents/SharedFrameworks/DVTInstrumentsFoundation.framework/Versions/A/Resources/DTServiceHub"
+        if [ -x "$XCODE_APP" ]; then
+            CSREQ_BLOB=$(tcc_csreq_for "$XCODE_APP")
+            if [ -n "$CSREQ_BLOB" ]; then
+                tcc_insert "kTCCServiceListenEvent" "com.apple.dt.Xcode" 0 "$CSREQ_BLOB"
+                tcc_insert "kTCCServiceAccessibility" "com.apple.dt.Xcode" 0 "$CSREQ_BLOB"
+            fi
+        fi
+        if [ -x "$DTSERVICEHUB" ]; then
+            CSREQ_BLOB=$(tcc_csreq_for "$DTSERVICEHUB")
+            if [ -n "$CSREQ_BLOB" ]; then
+                tcc_insert "kTCCServiceListenEvent" "$DTSERVICEHUB" 1 "$CSREQ_BLOB"
+            fi
+        fi
+
+        killall tccd >/dev/null 2>&1 || true
     fi
 
     echo "=== Running Tests ===" | tee -a "$LOG_FILE"
