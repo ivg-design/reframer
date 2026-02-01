@@ -222,7 +222,7 @@ class MainViewController: NSViewController {
 
         // Create MPV view if needed
         if mpvVideoView == nil {
-            let mpvView = MPVVideoView()
+            let mpvView = MPVVideoView(frame: .zero)
             mpvView.translatesAutoresizingMaskIntoConstraints = false
             mpvView.videoState = videoState
             view.addSubview(mpvView, positioned: .below, relativeTo: dropZoneView)

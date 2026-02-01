@@ -32,15 +32,21 @@ final class MPVVideoView: NSOpenGLView {
     // MARK: - Initialization
 
     override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect, pixelFormat: MPVVideoView.makePixelFormat())
+        super.init(frame: frameRect)
+        if let format = MPVVideoView.makePixelFormat() {
+            pixelFormat = format
+            openGLContext = NSOpenGLContext(format: format, shareContext: nil)
+        }
         setupView()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        if openGLContext == nil {
-            let format = MPVVideoView.makePixelFormat()
-            openGLContext = NSOpenGLContext(format: format, shareContext: nil)
+        if let format = MPVVideoView.makePixelFormat() {
+            pixelFormat = format
+            if openGLContext == nil {
+                openGLContext = NSOpenGLContext(format: format, shareContext: nil)
+            }
         }
         setupView()
     }
@@ -504,17 +510,19 @@ final class MPVVideoView: NSOpenGLView {
 
     private func mpvCommand(_ args: [String]) -> Int32 {
         guard let handle = mpvHandle else { return -1 }
-        var cStrings: [UnsafePointer<CChar>?] = args.map { strdup($0) }
+        var cStrings: [UnsafeMutablePointer<CChar>?] = args.map { strdup($0) }
         cStrings.append(nil)
         defer {
             for ptr in cStrings {
                 if let ptr = ptr {
-                    free(UnsafeMutableRawPointer(mutating: ptr))
+                    free(ptr)
                 }
             }
         }
         return cStrings.withUnsafeBufferPointer { buffer in
-            MPVLibrary.shared.mpv_command(handle, buffer.baseAddress)
+            let raw = buffer.baseAddress.map { UnsafeRawPointer($0) }
+            let casted = raw?.assumingMemoryBound(to: UnsafePointer<CChar>?.self)
+            return MPVLibrary.shared.mpv_command(handle, casted)
         }
     }
 
