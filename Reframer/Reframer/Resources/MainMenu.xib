@@ -130,13 +130,6 @@
                                     <action selector="openReframerHelp:" target="-1" id="doc-action-1"/>
                                 </connections>
                             </menuItem>
-                            <menuItem isSeparatorItem="YES" id="g1l-t1-ujW"/>
-                            <menuItem title="Keyboard Shortcuts" id="FKE-Sm-Kum">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="showKeyboardShortcuts:" target="-1" id="y3h-8O-THP"/>
-                                </connections>
-                            </menuItem>
                         </items>
                     </menu>
                 </menuItem>

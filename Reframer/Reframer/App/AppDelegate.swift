@@ -211,8 +211,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let helpMenu = NSMenu(title: "Help")
         helpMenuItem.submenu = helpMenu
         helpMenu.addItem(withTitle: "Reframer Documentation", action: #selector(openReframerHelp(_:)), keyEquivalent: "?")
-        helpMenu.addItem(.separator())
-        helpMenu.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showKeyboardShortcuts(_:)), keyEquivalent: "")
 
         NSApp.mainMenu = mainMenu
     }
