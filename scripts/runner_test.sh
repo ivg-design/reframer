@@ -8,6 +8,12 @@ SCHEME="${SCHEME:-Reframer}"
 DESTINATION="${DESTINATION:-platform=macOS}"
 ARTIFACTS_BASE="${ARTIFACTS_BASE:-$HOME/ci_artifacts}"
 KEEP_ARTIFACTS="${KEEP_ARTIFACTS:-10}"
+ONLY_TESTS="${ONLY_TESTS:-}"
+UITEST_MPV_VIDEO_PATH="${UITEST_MPV_VIDEO_PATH:-}"
+UITEST_AV1_VIDEO_PATH="${UITEST_AV1_VIDEO_PATH:-}"
+UITEST_YOUTUBE_URL="${UITEST_YOUTUBE_URL:-}"
+UITEST_CLEAN_MPV="${UITEST_CLEAN_MPV:-}"
+UITEST_CLEAN_MPV_YT="${UITEST_CLEAN_MPV_YT:-}"
 # ======================================
 
 if [ -n "${DONE_FILE:-}" ]; then
@@ -32,6 +38,10 @@ mkdir -p "$ARTIFACT_DIR"
     echo "Destination:  $DESTINATION"
     echo "DerivedData:  $DERIVED_DATA_PATH"
     echo "Artifact Dir: $ARTIFACT_DIR"
+    echo "Only Tests:   ${ONLY_TESTS:-<all>}"
+    echo "MPV Video:    ${UITEST_MPV_VIDEO_PATH:-<unset>}"
+    echo "AV1 Video:    ${UITEST_AV1_VIDEO_PATH:-<unset>}"
+    echo "YouTube URL:  ${UITEST_YOUTUBE_URL:-<unset>}"
     echo ""
 } | tee "$SUMMARY_FILE"
 
@@ -154,11 +164,24 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
     echo "Command: xcodebuild test-without-building -scheme $SCHEME -destination '$DESTINATION'" | tee -a "$LOG_FILE"
     echo "" | tee -a "$LOG_FILE"
 
+    TEST_ARGS=()
+    if [ -n "$ONLY_TESTS" ]; then
+        IFS=',' read -r -a TEST_ARRAY <<< "$ONLY_TESTS"
+        for test in "${TEST_ARRAY[@]}"; do
+            if [ -n "$test" ]; then
+                TEST_ARGS+=("-only-testing:$test")
+            fi
+        done
+    fi
+
+    export UITEST_MPV_VIDEO_PATH UITEST_AV1_VIDEO_PATH UITEST_YOUTUBE_URL UITEST_CLEAN_MPV UITEST_CLEAN_MPV_YT
+
     xcodebuild test-without-building \
         -scheme "$SCHEME" \
         -destination "$DESTINATION" \
         -derivedDataPath "$DERIVED_DATA_PATH" \
         -resultBundlePath "$XCRESULT_PATH" \
+        "${TEST_ARGS[@]}" \
         2>&1 | tee -a "$LOG_FILE" || TEST_EXIT_CODE=$?
 fi
 
