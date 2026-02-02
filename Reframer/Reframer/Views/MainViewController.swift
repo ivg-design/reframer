@@ -355,7 +355,7 @@ class MainViewController: NSViewController {
 
         guard let window = view.window else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.showInstallMPVPrompt(url: url)
+                self?.showInstallMPVPromptForYouTube()
             }
             return
         }
@@ -403,7 +403,7 @@ class MainViewController: NSViewController {
 
         guard let window = view.window else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.showEnableMPVPrompt(url: url)
+                self?.showInstallMPVPrompt(url: url)
             }
             return
         }

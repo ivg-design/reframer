@@ -57,14 +57,17 @@ final class MPVIntegrationTests: XCTestCase {
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
-    private func ensureInstallIfNeeded(in app: XCUIApplication, timeout: TimeInterval = 60) {
+    private func handleMPVPromptIfNeeded(in app: XCUIApplication, timeout: TimeInterval = 90) {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            let installSheet = app.sheets.firstMatch
-            if installSheet.waitForExistence(timeout: 2) {
-                let installButton = installSheet.buttons["Install MPV"]
-                if installButton.exists {
-                    installButton.click()
+            let sheet = app.sheets.firstMatch
+            if sheet.waitForExistence(timeout: 2) {
+                if sheet.buttons["Install MPV"].exists {
+                    sheet.buttons["Install MPV"].click()
+                    return
+                }
+                if sheet.buttons["Enable"].exists {
+                    sheet.buttons["Enable"].click()
                     return
                 }
             }
@@ -76,7 +79,7 @@ final class MPVIntegrationTests: XCTestCase {
 
     /// Verify MPV install prompt appears (if needed) and playback starts for WebM.
     func testWebMPlayback_AfterMPVInstallIfNeeded() throws {
-        ensureInstallIfNeeded(in: app)
+        handleMPVPromptIfNeeded(in: app)
 
         guard waitForTimelineEnabled() else {
             XCTFail("Timeline should enable after MPV playback loads")
@@ -134,7 +137,7 @@ final class MPVIntegrationTests: XCTestCase {
         }
         av1App.launch()
 
-        ensureInstallIfNeeded(in: av1App, timeout: 120)
+        handleMPVPromptIfNeeded(in: av1App, timeout: 120)
 
         let slider = av1App.sliders["slider-timeline"]
         let predicate = NSPredicate(format: "exists == true AND isEnabled == true")

@@ -30,13 +30,21 @@ final class ReframerYouTubeUITests: XCTestCase {
             app.buttons["Open"].firstMatch.click()
         }
 
-        // If MPV is required, install prompt may appear
-        let installSheet = app.sheets.firstMatch
-        if installSheet.waitForExistence(timeout: 8) {
-            let installButton = installSheet.buttons["Install MPV"]
-            if installButton.exists {
-                installButton.click()
+        // If MPV is required, install/enable prompt may appear
+        let installDeadline = Date().addingTimeInterval(90)
+        while Date() < installDeadline {
+            let sheet = app.sheets.firstMatch
+            if sheet.waitForExistence(timeout: 2) {
+                if sheet.buttons["Install MPV"].exists {
+                    sheet.buttons["Install MPV"].click()
+                    break
+                }
+                if sheet.buttons["Enable"].exists {
+                    sheet.buttons["Enable"].click()
+                    break
+                }
             }
+            Thread.sleep(forTimeInterval: 0.5)
         }
 
         let slider = app.sliders["slider-timeline"]
