@@ -212,7 +212,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         helpMenuItem.submenu = helpMenu
         helpMenu.addItem(withTitle: "Reframer Documentation", action: #selector(openReframerHelp(_:)), keyEquivalent: "?")
         helpMenu.addItem(.separator())
-        helpMenu.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showHelp(_:)), keyEquivalent: "")
+        helpMenu.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showKeyboardShortcuts(_:)), keyEquivalent: "")
 
         NSApp.mainMenu = mainMenu
     }
@@ -865,7 +865,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         videoState.requestFrameStep(direction: .backward, amount: 1)
     }
 
-    @IBAction func showHelp(_ sender: Any?) {
+    @IBAction func showKeyboardShortcuts(_ sender: Any?) {
         videoState.showHelp = true
     }
 
