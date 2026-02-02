@@ -13,7 +13,6 @@ class VideoView: NSView {
     private var playerItem: AVPlayerItem?
     private var currentAsset: AVAsset?
     private var currentVideoAsset: AVURLAsset?
-    private var currentAudioAsset: AVURLAsset?
     private var timeObserver: Any?
     private var playerItemStatusObservation: NSKeyValueObservation?
     private var playerItemFailedObserver: NSObjectProtocol?
@@ -105,14 +104,6 @@ class VideoView: NSView {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] url in
                 guard let self = self, let url = url else { return }
-                // Skip MPV-only formats - MPVVideoView handles those
-                if MPVManager.shared.requiresMPV(url: url) {
-                    return
-                }
-                // Skip if playback engine is explicitly set to MPV
-                if self.videoState?.playbackEngine == .mpv {
-                    return
-                }
                 self.loadVideo(url: url)
             }
             .store(in: &cancellables)
@@ -229,39 +220,17 @@ class VideoView: NSView {
         state.duration = 0
         state.totalFrames = 0
         lastSeekTime = -1  // Allow scrubbing from the start
-        if state.videoTitle == nil {
-            state.videoTitle = url.lastPathComponent
-        }
-        let headers = state.videoHeaders
-        let videoAsset = makeURLAsset(url: url, headers: headers)
-        currentVideoAsset = videoAsset
 
-        let audioAsset: AVURLAsset?
-        if let audioURL = state.videoAudioURL {
-            audioAsset = makeURLAsset(url: audioURL, headers: headers)
-        } else {
-            audioAsset = nil
-        }
-        currentAudioAsset = audioAsset
+        let videoAsset = AVURLAsset(url: url)
+        currentVideoAsset = videoAsset
 
         Task { [weak self, weak state] in
             guard let self = self else { return }
             do {
-                let assetForPlayer: AVAsset
-                if let audioAsset = audioAsset {
-                    assetForPlayer = try await self.buildComposition(
-                        videoAsset: videoAsset,
-                        audioAsset: audioAsset,
-                        token: token
-                    )
-                } else {
-                    assetForPlayer = videoAsset
-                }
-
                 await MainActor.run {
                     guard self.loadToken == token else { return }
-                    self.currentAsset = assetForPlayer
-                    self.playerItem = AVPlayerItem(asset: assetForPlayer)
+                    self.currentAsset = videoAsset
+                    self.playerItem = AVPlayerItem(asset: videoAsset)
                     self.player = AVPlayer(playerItem: self.playerItem)
                     self.player?.volume = state?.volume ?? 0
                     self.playerLayer.player = self.player
@@ -273,7 +242,7 @@ class VideoView: NSView {
                     }
                 }
 
-                try await self.loadMetadata(for: assetForPlayer, state: state, token: token)
+                try await self.loadMetadata(for: videoAsset, state: state, token: token)
             } catch {
                 await MainActor.run {
                     self.showVideoLoadError(error)
@@ -283,13 +252,6 @@ class VideoView: NSView {
     }
 
     private var lastSeekTime: Double = -1
-
-    private func makeURLAsset(url: URL, headers: [String: String]?) -> AVURLAsset {
-        if let headers = headers {
-            return AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
-        }
-        return AVURLAsset(url: url)
-    }
 
     private func installPlayerItemObservers(token: UUID) {
         playerItemStatusObservation = playerItem?.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
@@ -301,14 +263,7 @@ class VideoView: NSView {
                     state.isVideoLoaded = true
                 case .failed:
                     state.isVideoLoaded = false
-                    if state.playbackEngine == .auto {
-                        NotificationCenter.default.post(
-                            name: .avFoundationPlaybackFailed,
-                            object: item.error ?? NSError(domain: "AVFoundation", code: -1)
-                        )
-                    } else {
-                        self.showVideoLoadError(item.error ?? NSError(domain: "AVFoundation", code: -1))
-                    }
+                    self.showVideoLoadError(item.error ?? NSError(domain: "AVFoundation", code: -1))
                 default:
                     break
                 }
@@ -327,12 +282,7 @@ class VideoView: NSView {
                 guard let self = self else { return }
                 let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
                 self.videoState?.isVideoLoaded = false
-                if self.videoState?.playbackEngine == .auto {
-                    NotificationCenter.default.post(
-                        name: .avFoundationPlaybackFailed,
-                        object: error ?? NSError(domain: "AVFoundation", code: -1)
-                    )
-                } else if let error = error {
+                if let error = error {
                     self.showVideoLoadError(error)
                 }
             }
@@ -353,45 +303,6 @@ class VideoView: NSView {
                 state.currentFrame = Int(sec * state.frameRate)
             }
         }
-    }
-
-    private func buildComposition(videoAsset: AVURLAsset, audioAsset: AVURLAsset, token: UUID) async throws -> AVAsset {
-        let composition = AVMutableComposition()
-
-        let duration = try await videoAsset.load(.duration)
-        let videoTracks = try await videoAsset.load(.tracks)
-
-        guard let sourceVideoTrack = videoTracks.first(where: { $0.mediaType == .video }) else {
-            return videoAsset
-        }
-
-        let compVideoTrack = composition.addMutableTrack(
-            withMediaType: .video,
-            preferredTrackID: kCMPersistentTrackID_Invalid
-        )
-        compVideoTrack?.preferredTransform = sourceVideoTrack.preferredTransform
-        try compVideoTrack?.insertTimeRange(
-            CMTimeRange(start: .zero, duration: duration),
-            of: sourceVideoTrack,
-            at: .zero
-        )
-
-        let audioTracks = try await audioAsset.load(.tracks)
-        if let sourceAudioTrack = audioTracks.first(where: { $0.mediaType == .audio }) {
-            let compAudioTrack = composition.addMutableTrack(
-                withMediaType: .audio,
-                preferredTrackID: kCMPersistentTrackID_Invalid
-            )
-            let audioDuration = try await audioAsset.load(.duration)
-            let insertDuration = min(duration, audioDuration)
-            try compAudioTrack?.insertTimeRange(
-                CMTimeRange(start: .zero, duration: insertDuration),
-                of: sourceAudioTrack,
-                at: .zero
-            )
-        }
-
-        return composition
     }
 
     private func loadMetadata(for asset: AVAsset, state: VideoState?, token: UUID) async throws {
@@ -504,7 +415,6 @@ class VideoView: NSView {
         playerItem = nil
         currentAsset = nil
         currentVideoAsset = nil
-        currentAudioAsset = nil
     }
 
     deinit {

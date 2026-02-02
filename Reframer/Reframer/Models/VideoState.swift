@@ -3,12 +3,6 @@ import AVFoundation
 import Combine
 
 class VideoState: ObservableObject {
-    enum PlaybackEngine {
-        case auto
-        case avFoundation
-        case mpv
-    }
-
     enum SeekRequest: Equatable {
         case time(Double, accurate: Bool)
         case frame(Int)
@@ -26,10 +20,6 @@ class VideoState: ObservableObject {
 
     // Video loading
     @Published var videoURL: URL?
-    @Published var videoAudioURL: URL?
-    @Published var videoHeaders: [String: String]?
-    @Published var videoTitle: String?
-    @Published var playbackEngine: PlaybackEngine = .auto
     @Published var isVideoLoaded: Bool = false
 
     // Playback

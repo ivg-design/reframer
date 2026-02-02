@@ -44,9 +44,6 @@ class ControlBar: NSView {
     private var isHovering = false
     private var isScrubbing = false
     private var firstResponderObserver: Any?
-    private var openMouseDownAt: TimeInterval?
-    private let openLongPressDuration: TimeInterval = 0.35
-
     enum StepCommand {
         case up
         case down
@@ -230,8 +227,6 @@ class ControlBar: NSView {
     private func setupActions() {
         openButton?.target = self
         openButton?.action = #selector(openClicked)
-        // Track mouse down/up so we can detect long-press reliably in UI tests
-        openButton?.sendAction(on: [.leftMouseDown, .leftMouseUp])
 
         stepBackButton?.target = self
         stepBackButton?.action = #selector(stepBackClicked)
@@ -307,26 +302,7 @@ class ControlBar: NSView {
     // MARK: - IBActions
 
     @objc private func openClicked(_ sender: Any?) {
-        guard let event = NSApp.currentEvent else {
-            NotificationCenter.default.post(name: .openVideo, object: nil)
-            return
-        }
-
-        switch event.type {
-        case .leftMouseDown:
-            openMouseDownAt = event.timestamp
-            return
-        case .leftMouseUp:
-            let start = openMouseDownAt ?? event.timestamp
-            openMouseDownAt = nil
-            if event.timestamp - start >= openLongPressDuration {
-                NotificationCenter.default.post(name: .openYouTube, object: nil)
-                return
-            }
-            NotificationCenter.default.post(name: .openVideo, object: nil)
-        default:
-            NotificationCenter.default.post(name: .openVideo, object: nil)
-        }
+        NotificationCenter.default.post(name: .openVideo, object: nil)
     }
 
     @objc private func stepBackClicked(_ sender: Any?) {

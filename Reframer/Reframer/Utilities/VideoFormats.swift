@@ -32,13 +32,9 @@ struct VideoFormats {
         // H.265/HEVC
         addType(&types, "public.hevc")
 
-        // AV1 (macOS 13+ with hardware support)
+        // AV1 (macOS 13+ with Apple Silicon hardware support)
         addType(&types, "public.av1")
         addType(&types, "org.aomedia.av1")
-
-        // WebM and Matroska (require libmpv for playback)
-        addType(&types, "org.webmproject.webm")
-        addType(&types, "org.matroska.mkv")
 
         // MPEG formats
         addType(&types, "public.mpeg")
@@ -61,9 +57,9 @@ struct VideoFormats {
 
     /// File extensions for display and validation
     static let supportedExtensions: [String] = [
-        "mp4", "m4v", "mov", "avi", "mkv", "webm",
+        "mp4", "m4v", "mov", "avi",
         "mpeg", "mpg", "mts", "m2ts", "ts", "m2v",
-        "wmv", "flv", "f4v", "ogv", "ogg",
+        "wmv", "flv", "f4v",
         "3gp", "3g2", "divx", "vob", "asf"
     ]
 
@@ -102,55 +98,5 @@ struct VideoFormats {
     }
 
     /// Get display string for supported formats
-    static let displayString = "MP4 • MOV • ProRes • H.264 • H.265 • AV1 • WebM • MKV • AVI"
-
-    /// Check if AVFoundation can play this URL by probing asset tracks
-    /// Returns true if playable by AVFoundation, false if MPV should be used
-    static func canAVFoundationPlay(_ url: URL) async -> Bool {
-        let asset = AVURLAsset(url: url)
-
-        // Check if asset is playable at all
-        do {
-            let isPlayable = try await asset.load(.isPlayable)
-            if !isPlayable {
-                return false
-            }
-        } catch {
-            return false
-        }
-
-        // Check video tracks for decodable formats
-        do {
-            let videoTracks = try await asset.loadTracks(withMediaType: .video)
-            guard !videoTracks.isEmpty else { return false }
-
-            for track in videoTracks {
-                let formats = try await track.load(.formatDescriptions)
-                for format in formats {
-                    let mediaSubType = CMFormatDescriptionGetMediaSubType(format)
-
-                    // VP8/VP9/AV1 are not supported by AVFoundation on most systems
-                    // FourCC codes: 'vp08' = VP8, 'vp09' = VP9, 'av01' = AV1
-                    let vp8Code = fourCC("vp08")
-                    let vp9Code = fourCC("vp09")
-                    let av1Code = fourCC("av01")
-
-                    if mediaSubType == vp8Code || mediaSubType == vp9Code || mediaSubType == av1Code {
-                        return false
-                    }
-                }
-            }
-
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    /// Convert a 4-character string to FourCharCode
-    private static func fourCC(_ string: String) -> FourCharCode {
-        let chars = Array(string.utf8)
-        guard chars.count == 4 else { return 0 }
-        return FourCharCode(chars[0]) << 24 | FourCharCode(chars[1]) << 16 | FourCharCode(chars[2]) << 8 | FourCharCode(chars[3])
-    }
+    static let displayString = "MP4 • MOV • ProRes • H.264 • H.265 • AVI"
 }
