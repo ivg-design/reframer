@@ -153,11 +153,26 @@ class MainViewController: NSViewController {
         print("MainViewController: playbackEngine = \(videoState.playbackEngine)")
         print("MainViewController: videoAudioURL = \(videoState.videoAudioURL?.absoluteString.prefix(50) ?? "nil")")
         print("MainViewController: MPVManager.isReady = \(manager.isReady)")
+        print("MainViewController: isInstalled = \(manager.isInstalled)")
+        print("MainViewController: isEnabled = \(manager.isEnabled)")
         print("MainViewController: requiresMPV = \(manager.requiresMPV(url: url))")
 
-        // YouTube streaming stays native; no MPV fallback.
-        if videoState.videoAudioURL != nil {
-            switchToAVPlayer()
+        // Check if this is a YouTube stream (has separate audio URL or headers)
+        let isYouTubeStream = videoState.videoAudioURL != nil || videoState.videoHeaders != nil
+
+        // YouTube streams: require MPV (AVFoundation is too slow - 60+ seconds vs 2-5 seconds)
+        if isYouTubeStream {
+            print("MainViewController: YouTube stream detected, routing to MPV")
+            if manager.isReady {
+                print("MainViewController: MPV ready, switching to MPV player for YouTube")
+                switchToMPVPlayerForYouTube()
+            } else if manager.isInstalled && !manager.isEnabled {
+                print("MainViewController: MPV installed but not enabled")
+                showEnableMPVPromptForYouTube()
+            } else {
+                print("MainViewController: MPV not available, showing install prompt")
+                showInstallMPVPromptForYouTube()
+            }
             return
         }
 
@@ -239,6 +254,130 @@ class MainViewController: NSViewController {
 
         mpvVideoView?.isHidden = false
         mpvVideoView?.loadVideo(url: url)
+    }
+
+    private func switchToMPVPlayerForYouTube() {
+        guard let videoURL = videoState.videoURL else { return }
+        print("MainViewController: Switching to MPV player for YouTube stream")
+        isUsingMPV = true
+        videoView?.isHidden = true
+
+        // Create MPV view if needed
+        if mpvVideoView == nil {
+            let mpvView = MPVVideoView(frame: .zero)
+            mpvView.translatesAutoresizingMaskIntoConstraints = false
+            mpvView.videoState = videoState
+            view.addSubview(mpvView, positioned: .below, relativeTo: dropZoneView)
+
+            NSLayoutConstraint.activate([
+                mpvView.topAnchor.constraint(equalTo: view.topAnchor),
+                mpvView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                mpvView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                mpvView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            ])
+
+            mpvVideoView = mpvView
+        }
+
+        mpvVideoView?.isHidden = false
+        mpvVideoView?.loadYouTubeVideo(
+            videoURL: videoURL,
+            audioURL: videoState.videoAudioURL,
+            headers: videoState.videoHeaders
+        )
+    }
+
+    private func showInstallMPVPromptForYouTube() {
+        print("MainViewController: showInstallMPVPromptForYouTube called")
+
+        let alert = NSAlert()
+        alert.messageText = "Install MPV for YouTube Playback"
+        alert.informativeText = "YouTube playback requires MPV. Would you like to install it now? (Downloads ~30MB)"
+        alert.addButton(withTitle: "Install MPV")
+        alert.addButton(withTitle: "Cancel")
+
+        guard let window = view.window else {
+            print("MainViewController: ERROR - view.window is nil, deferring prompt")
+            // Defer showing prompt until window is available
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.showInstallMPVPromptForYouTube()
+            }
+            return
+        }
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            if response == .alertFirstButtonReturn {
+                self?.installMPVAndPlayYouTube()
+            }
+        }
+    }
+
+    private func showEnableMPVPromptForYouTube() {
+        let alert = NSAlert()
+        alert.messageText = "Enable MPV for YouTube Playback"
+        alert.informativeText = "YouTube playback requires MPV. libmpv is installed but disabled. Enable it?"
+        alert.addButton(withTitle: "Enable")
+        alert.addButton(withTitle: "Cancel")
+
+        guard let window = view.window else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.showEnableMPVPromptForYouTube()
+            }
+            return
+        }
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            if response == .alertFirstButtonReturn {
+                MPVManager.shared.isEnabled = true
+                MPVManager.shared.loadLibrary()
+                self?.switchToMPVPlayerForYouTube()
+            }
+        }
+    }
+
+    private func installMPVAndPlayYouTube() {
+        let progressAlert = NSAlert()
+        progressAlert.messageText = "Installing MPV..."
+        progressAlert.informativeText = "Downloading..."
+        progressAlert.addButton(withTitle: "Cancel")
+
+        let progressIndicator = NSProgressIndicator()
+        progressIndicator.style = .bar
+        progressIndicator.isIndeterminate = false
+        progressIndicator.minValue = 0
+        progressIndicator.maxValue = 1
+        progressIndicator.frame = NSRect(x: 0, y: 0, width: 250, height: 20)
+        progressAlert.accessoryView = progressIndicator
+
+        guard let window = view.window else { return }
+
+        progressAlert.beginSheetModal(for: window) { _ in }
+
+        MPVManager.shared.install { progress, status in
+            progressIndicator.doubleValue = progress
+            progressAlert.informativeText = status
+        } completion: { [weak self] result in
+            window.endSheet(window.attachedSheet!)
+
+            switch result {
+            case .success:
+                MPVManager.shared.isEnabled = true
+                MPVManager.shared.loadLibrary()
+                self?.switchToMPVPlayerForYouTube()
+            case .failure(let error):
+                let errorAlert = NSAlert()
+                errorAlert.messageText = "Installation Failed"
+                errorAlert.informativeText = error.localizedDescription
+                errorAlert.alertStyle = .critical
+                errorAlert.addButton(withTitle: "Retry")
+                errorAlert.addButton(withTitle: "Cancel")
+                errorAlert.beginSheetModal(for: window) { [weak self] response in
+                    if response == .alertFirstButtonReturn {
+                        self?.installMPVAndPlayYouTube()
+                    }
+                }
+            }
+        }
     }
 
     private func showInstallMPVPrompt(url: URL) {

@@ -171,6 +171,60 @@ final class MPVVideoView: NSOpenGLView {
         startTimeObserver()
     }
 
+    /// Load a YouTube video with optional separate audio stream and HTTP headers
+    func loadYouTubeVideo(videoURL: URL, audioURL: URL?, headers: [String: String]?) {
+        isStopped = false
+        guard setupMPV() else {
+            showVideoLoadError("libmpv is not available. Install MPV in Preferences.")
+            return
+        }
+
+        guard let state = videoState else { return }
+
+        // Reset state
+        state.currentTime = 0
+        state.currentFrame = 0
+        state.duration = 0
+        state.totalFrames = 0
+        state.isVideoLoaded = false
+
+        // Configure network options for streaming
+        setOption("cache", "yes")
+        setOption("cache-secs", "30")
+        setOption("demuxer-max-bytes", "50MiB")
+        setOption("demuxer-max-back-bytes", "20MiB")
+
+        // Set HTTP headers if provided (required for YouTube DASH streams)
+        if let headers = headers {
+            let headerStrings = headers.map { "\($0.key): \($0.value)" }
+            let joinedHeaders = headerStrings.joined(separator: "\r\n")
+            setOption("http-header-fields", joinedHeaders)
+            mpvLog("Set HTTP headers: \(headerStrings)")
+        }
+
+        // Set separate audio track if provided (for YouTube separate video/audio streams)
+        if let audioURL = audioURL {
+            setOption("audio-file", audioURL.absoluteString)
+            mpvLog("Set audio file: \(audioURL.absoluteString.prefix(80))...")
+        }
+
+        let result = mpvCommand(["loadfile", videoURL.absoluteString, "replace"])
+        if result < 0 {
+            showVideoLoadError("MPV failed to load stream: \(MPVLibrary.shared.errorString(result))")
+            return
+        }
+
+        mpvLog("Loading YouTube stream: \(videoURL.absoluteString.prefix(80))...")
+
+        setVolume(Int(state.volume * 100))
+        if state.isPlaying {
+            play()
+        } else {
+            pause()
+        }
+        startTimeObserver()
+    }
+
     // MARK: - Playback Control
 
     func play() {
