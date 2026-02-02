@@ -224,24 +224,23 @@ class VideoView: NSView {
         let videoAsset = AVURLAsset(url: url)
         currentVideoAsset = videoAsset
 
+        // Set up player SYNCHRONOUSLY for responsive scrubbing
+        currentAsset = videoAsset
+        playerItem = AVPlayerItem(asset: videoAsset)
+        player = AVPlayer(playerItem: playerItem)
+        player?.volume = state.volume
+        playerLayer.player = player
+        installPlayerItemObservers(token: token)
+        installTimeObserver()
+        applyCurrentFilters()
+        if state.isPlaying {
+            player?.play()
+        }
+
+        // Load metadata asynchronously
         Task { [weak self, weak state] in
             guard let self = self else { return }
             do {
-                await MainActor.run {
-                    guard self.loadToken == token else { return }
-                    self.currentAsset = videoAsset
-                    self.playerItem = AVPlayerItem(asset: videoAsset)
-                    self.player = AVPlayer(playerItem: self.playerItem)
-                    self.player?.volume = state?.volume ?? 0
-                    self.playerLayer.player = self.player
-                    self.installPlayerItemObservers(token: token)
-                    self.installTimeObserver()
-                    self.applyCurrentFilters()
-                    if state?.isPlaying == true {
-                        self.player?.play()
-                    }
-                }
-
                 try await self.loadMetadata(for: videoAsset, state: state, token: token)
             } catch {
                 await MainActor.run {
@@ -342,27 +341,17 @@ class VideoView: NSView {
         // Clamp to valid range
         let clampedTime = max(0, min(state.duration, time))
 
-        // Avoid redundant seeks to the same time (especially while scrubbing)
-        if !accurate && abs(clampedTime - lastSeekTime) < 0.02 { return }
+        // Avoid redundant seeks to the same time
+        if abs(clampedTime - lastSeekTime) < 0.01 { return }
         lastSeekTime = clampedTime
 
         let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 600)
         player?.currentItem?.cancelPendingSeeks()
 
-        if accurate {
-            player?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak state] _ in
-                DispatchQueue.main.async {
-                    state?.currentTime = clampedTime
-                    if let rate = state?.frameRate {
-                        state?.currentFrame = Int(clampedTime * rate)
-                    }
-                }
-            }
-        } else {
-            player?.seek(to: cmTime)
-            state.currentTime = clampedTime
-            state.currentFrame = Int(clampedTime * state.frameRate)
-        }
+        // Always use accurate seeking for smooth scrubbing (seeks to exact frame, not keyframe)
+        player?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        state.currentTime = clampedTime
+        state.currentFrame = Int(clampedTime * state.frameRate)
     }
 
     func seekToFrame(_ frame: Int) {

@@ -482,14 +482,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Cmd+PageUp - Step frame forward (global)
         if hasCommand && event.keyCode == KeyCode.pageUp {
-            guard videoState.isLocked else { return false }
             videoState.requestFrameStep(direction: .forward, amount: hasShift ? 10 : 1)
             return true
         }
 
         // Cmd+PageDown - Step frame backward (global)
         if hasCommand && event.keyCode == KeyCode.pageDown {
-            guard videoState.isLocked else { return false }
             videoState.requestFrameStep(direction: .backward, amount: hasShift ? 10 : 1)
             return true
         }
@@ -523,12 +521,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return true
         }
 
-        if flags.contains(.command) && event.keyCode == KeyCode.pageUp && videoState.isLocked {
+        if flags.contains(.command) && event.keyCode == KeyCode.pageUp {
             videoState.requestFrameStep(direction: .forward, amount: flags.contains(.shift) ? 10 : 1)
             return true
         }
 
-        if flags.contains(.command) && event.keyCode == KeyCode.pageDown && videoState.isLocked {
+        if flags.contains(.command) && event.keyCode == KeyCode.pageDown {
             videoState.requestFrameStep(direction: .backward, amount: flags.contains(.shift) ? 10 : 1)
             return true
         }
