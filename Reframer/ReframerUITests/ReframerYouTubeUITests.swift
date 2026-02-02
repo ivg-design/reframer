@@ -9,7 +9,7 @@ final class ReframerYouTubeUITests: XCTestCase {
 
         let app = XCUIApplication()
         app.launchEnvironment["UITEST_MODE"] = "1"
-        if let cleanMPV = ProcessInfo.processInfo.environment["UITEST_CLEAN_MPV"] {
+        if let cleanMPV = ProcessInfo.processInfo.environment["UITEST_CLEAN_MPV_YT"] {
             app.launchEnvironment["UITEST_CLEAN_MPV"] = cleanMPV
         }
         app.launch()
