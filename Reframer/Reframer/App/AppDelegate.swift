@@ -447,6 +447,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // Only prompt once per install (user can manually enable in System Settings)
+        let promptedKey = "Reframer.accessibilityPromptShown"
+        if UserDefaults.standard.bool(forKey: promptedKey) {
+            return
+        }
+        UserDefaults.standard.set(true, forKey: promptedKey)
+
         // Show the system accessibility prompt
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
