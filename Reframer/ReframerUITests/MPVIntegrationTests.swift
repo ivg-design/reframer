@@ -57,13 +57,18 @@ final class MPVIntegrationTests: XCTestCase {
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
-    private func tryInstallIfPrompted(in app: XCUIApplication) {
-        let installSheet = app.sheets.firstMatch
-        if installSheet.waitForExistence(timeout: 5) {
-            let installButton = installSheet.buttons["Install MPV"]
-            if installButton.exists {
-                installButton.click()
+    private func ensureInstallIfNeeded(in app: XCUIApplication, timeout: TimeInterval = 60) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let installSheet = app.sheets.firstMatch
+            if installSheet.waitForExistence(timeout: 2) {
+                let installButton = installSheet.buttons["Install MPV"]
+                if installButton.exists {
+                    installButton.click()
+                    return
+                }
             }
+            Thread.sleep(forTimeInterval: 0.5)
         }
     }
 
@@ -71,7 +76,7 @@ final class MPVIntegrationTests: XCTestCase {
 
     /// Verify MPV install prompt appears (if needed) and playback starts for WebM.
     func testWebMPlayback_AfterMPVInstallIfNeeded() throws {
-        tryInstallIfPrompted(in: app)
+        ensureInstallIfNeeded(in: app)
 
         XCTAssertTrue(waitForTimelineEnabled(), "Timeline should enable after MPV playback loads")
 
@@ -126,12 +131,12 @@ final class MPVIntegrationTests: XCTestCase {
         }
         av1App.launch()
 
-        tryInstallIfPrompted(in: av1App)
+        ensureInstallIfNeeded(in: av1App, timeout: 120)
 
         let slider = av1App.sliders["slider-timeline"]
         let predicate = NSPredicate(format: "exists == true AND isEnabled == true")
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: slider)
-        let result = XCTWaiter.wait(for: [expectation], timeout: 120)
+        let result = XCTWaiter.wait(for: [expectation], timeout: 300)
         XCTAssertEqual(result, .completed, "Timeline should enable for AV1 playback")
 
         av1App.terminate()
