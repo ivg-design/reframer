@@ -1,12 +1,18 @@
 import XCTest
-@testable import Reframer
 
-/// Integration tests for MPV installation and playback.
-/// These tests verify actual functionality on a clean system.
+/// UI-driven tests for MPV installation and playback.
 final class MPVIntegrationTests: XCTestCase {
 
     private static var app: XCUIApplication?
     private static var appLaunched = false
+
+    private var mpvVideoPath: String? {
+        ProcessInfo.processInfo.environment["UITEST_MPV_VIDEO_PATH"]
+    }
+
+    private var cleanMPV: String? {
+        ProcessInfo.processInfo.environment["UITEST_CLEAN_MPV"]
+    }
 
     var app: XCUIApplication {
         if Self.app == nil {
@@ -18,11 +24,18 @@ final class MPVIntegrationTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = true
 
+        guard let mpvPath = mpvVideoPath, !mpvPath.isEmpty else {
+            throw XCTSkip("Set UITEST_MPV_VIDEO_PATH to run MPV tests")
+        }
+
         if !Self.appLaunched {
             app.launchEnvironment["UITEST_MODE"] = "1"
+            app.launchEnvironment["TEST_VIDEO_PATH"] = mpvPath
+            if let cleanMPV = cleanMPV {
+                app.launchEnvironment["UITEST_CLEAN_MPV"] = cleanMPV
+            }
             app.launch()
             Self.appLaunched = true
-            Thread.sleep(forTimeInterval: 1)
         } else {
             app.activate()
         }
@@ -35,278 +48,92 @@ final class MPVIntegrationTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - YouTube MPV Prompt Tests
+    // MARK: - Helpers
 
-    /// Test that pasting a YouTube URL when MPV is not installed triggers install prompt
-    func testYouTubeURL_TriggersInstallPromptWhenMPVNotInstalled() throws {
-        // Skip if MPV is already installed
-        let manager = MPVManager.shared
-        if manager.isReady {
-            throw XCTSkip("MPV is already installed - test only applies to clean systems")
-        }
+    private func waitForTimelineEnabled(timeout: TimeInterval = 300) -> Bool {
+        let slider = app.sliders["slider-timeline"]
+        let predicate = NSPredicate(format: "exists == true AND isEnabled == true")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: slider)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
 
-        let openButton = app.buttons["button-open"]
-        XCTAssertTrue(openButton.exists, "Open button should exist")
-
-        // Long press to get YouTube URL input
-        openButton.press(forDuration: 0.4)
-
-        let inputField = app.textFields["youtube-url-input"]
-        guard inputField.waitForExistence(timeout: 2) else {
-            XCTFail("YouTube URL input should appear")
-            return
-        }
-
-        // Type a YouTube URL
-        inputField.click()
-        inputField.typeText("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-
-        // Submit
-        app.typeKey(.return, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 3) // Wait for YouTube resolution
-
-        // Should see MPV install prompt (sheet)
+    private func tryInstallIfPrompted(in app: XCUIApplication) {
         let installSheet = app.sheets.firstMatch
-        if installSheet.waitForExistence(timeout: 10) {
-            // Verify install prompt elements
-            let installButton = app.buttons["Install MPV"]
-            let cancelButton = app.buttons["Cancel"]
-
-            XCTAssertTrue(
-                installButton.exists || cancelButton.exists,
-                "Install prompt should have Install or Cancel button"
-            )
-
-            // Cancel for now
-            if cancelButton.exists {
-                cancelButton.click()
+        if installSheet.waitForExistence(timeout: 5) {
+            let installButton = installSheet.buttons["Install MPV"]
+            if installButton.exists {
+                installButton.click()
             }
+        }
+    }
+
+    // MARK: - Tests
+
+    /// Verify MPV install prompt appears (if needed) and playback starts for WebM.
+    func testWebMPlayback_AfterMPVInstallIfNeeded() throws {
+        tryInstallIfPrompted(in: app)
+
+        XCTAssertTrue(waitForTimelineEnabled(), "Timeline should enable after MPV playback loads")
+
+        // Sanity: zoom field exists and can be edited
+        let zoomField = app.textFields["input-zoom"]
+        XCTAssertTrue(zoomField.waitForExistence(timeout: 5), "Zoom field should exist")
+        zoomField.click()
+        zoomField.typeKey("a", modifierFlags: .command)
+        zoomField.typeText("150")
+        app.typeKey(.return, modifierFlags: [])
+
+        let zoomValue = (zoomField.value as? String) ?? ""
+        XCTAssertTrue(zoomValue.contains("150"), "Zoom field should update to 150")
+    }
+
+    /// Verify MPV install route is available in Preferences.
+    func testPreferencesInstallRoute() throws {
+        app.typeKey(",", modifierFlags: .command)
+
+        let prefsWindow = app.windows["Preferences"]
+        XCTAssertTrue(prefsWindow.waitForExistence(timeout: 5), "Preferences window should appear")
+
+        let installButton = prefsWindow.buttons["prefs-mpv-install"]
+        let uninstallButton = prefsWindow.buttons["prefs-mpv-uninstall"]
+        let enableCheckbox = prefsWindow.checkBoxes["prefs-mpv-enable"]
+
+        if installButton.exists {
+            installButton.click()
+            XCTAssertTrue(uninstallButton.waitForExistence(timeout: 300), "Uninstall button should appear after install")
         } else {
-            // May have gone straight to install or error
-            print("No install sheet appeared - MPV may already be installed or URL resolution failed")
+            XCTAssertTrue(uninstallButton.exists, "Uninstall button should exist when MPV is installed")
+        }
+
+        if enableCheckbox.exists {
+            enableCheckbox.click()
+            enableCheckbox.click()
         }
     }
 
-    /// Test that the MPV installation process works end-to-end
-    func testMPVInstallation_DownloadsAndInstalls() async throws {
-        let manager = MPVManager.shared
-
-        // Clean up any existing installation for test
-        let installDir = manager.installDirectory
-        if FileManager.default.fileExists(atPath: installDir.path) {
-            try? FileManager.default.removeItem(at: installDir)
+    /// Optional AV1 playback check (uses separate app launch).
+    func testAV1PlaybackIfProvided() throws {
+        guard let av1Path = ProcessInfo.processInfo.environment["UITEST_AV1_VIDEO_PATH"],
+              !av1Path.isEmpty else {
+            throw XCTSkip("Set UITEST_AV1_VIDEO_PATH to run AV1 playback test")
         }
 
-        XCTAssertFalse(manager.isInstalled, "MPV should not be installed after cleanup")
-
-        // Start installation
-        var progressUpdates: [Double] = []
-        var statusUpdates: [String] = []
-
-        let installExpectation = expectation(description: "MPV installation completes")
-
-        Task {
-            do {
-                try await manager.installMPV { progress, status in
-                    progressUpdates.append(progress)
-                    statusUpdates.append(status)
-                }
-                installExpectation.fulfill()
-            } catch {
-                XCTFail("Installation failed: \(error)")
-                installExpectation.fulfill()
-            }
+        let av1App = XCUIApplication()
+        av1App.launchEnvironment["UITEST_MODE"] = "1"
+        av1App.launchEnvironment["TEST_VIDEO_PATH"] = av1Path
+        if let cleanMPV = cleanMPV {
+            av1App.launchEnvironment["UITEST_CLEAN_MPV"] = cleanMPV
         }
+        av1App.launch()
 
-        // Wait for installation (may take a while for downloads)
-        await fulfillment(of: [installExpectation], timeout: 300)
+        tryInstallIfPrompted(in: av1App)
 
-        // Verify installation
-        XCTAssertTrue(manager.isInstalled, "MPV should be installed after install process")
-        XCTAssertGreaterThan(progressUpdates.count, 0, "Should have progress updates")
-        XCTAssertGreaterThan(statusUpdates.count, 0, "Should have status updates")
+        let slider = av1App.sliders["slider-timeline"]
+        let predicate = NSPredicate(format: "exists == true AND isEnabled == true")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: slider)
+        let result = XCTWaiter.wait(for: [expectation], timeout: 120)
+        XCTAssertEqual(result, .completed, "Timeline should enable for AV1 playback")
 
-        // Verify library loads
-        manager.loadLibrary()
-        XCTAssertTrue(manager.isReady, "MPV library should be loadable after installation")
-    }
-
-    /// Test that WebM files trigger MPV requirement check correctly
-    func testWebMFile_RequiresMPV() throws {
-        let manager = MPVManager.shared
-
-        let webmURL = URL(fileURLWithPath: "/test/sample.webm")
-        XCTAssertTrue(manager.requiresMPV(url: webmURL), "WebM should require MPV")
-
-        let mkvURL = URL(fileURLWithPath: "/test/sample.mkv")
-        XCTAssertTrue(manager.requiresMPV(url: mkvURL), "MKV should require MPV")
-
-        let mp4URL = URL(fileURLWithPath: "/test/sample.mp4")
-        XCTAssertFalse(manager.requiresMPV(url: mp4URL), "MP4 should not require MPV")
-    }
-
-    /// Test MPV playback of a WebM file when MPV is installed
-    func testWebMPlayback_WorksWithMPV() throws {
-        let manager = MPVManager.shared
-
-        guard manager.isReady else {
-            throw XCTSkip("MPV not installed - skipping playback test")
-        }
-
-        // Create a test WebM fixture or use an existing one
-        let testWebMPath = "/Users/ivg/github/video-overlay/Reframer-filters/Reframer/ReframerTests/TestFixtures/test.webm"
-
-        guard FileManager.default.fileExists(atPath: testWebMPath) else {
-            throw XCTSkip("No WebM test fixture available")
-        }
-
-        // Open the file via drag-drop simulation or file dialog
-        // For now, verify manager state
-        XCTAssertTrue(manager.isEnabled, "MPV should be enabled")
-    }
-
-    // MARK: - MPV Enable/Disable Tests
-
-    func testMPVEnabled_TogglesPreference() throws {
-        let manager = MPVManager.shared
-
-        let original = manager.isEnabled
-        manager.isEnabled = !original
-        XCTAssertEqual(manager.isEnabled, !original, "isEnabled should toggle")
-
-        manager.isEnabled = original // Restore
-        XCTAssertEqual(manager.isEnabled, original, "isEnabled should restore")
-    }
-
-    // MARK: - Homebrew API Tests (Network)
-
-    func testHomebrewAPI_ReturnsValidMPVBottleInfo() async throws {
-        let apiURL = URL(string: "https://formulae.brew.sh/api/formula/mpv.json")!
-
-        let (data, response) = try await URLSession.shared.data(from: apiURL)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            XCTFail("Expected HTTP response")
-            return
-        }
-
-        XCTAssertEqual(httpResponse.statusCode, 200, "Homebrew API should return 200")
-
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            XCTFail("Response should be valid JSON dictionary")
-            return
-        }
-
-        XCTAssertNotNil(json["name"], "Should have name field")
-        XCTAssertEqual(json["name"] as? String, "mpv", "Name should be mpv")
-        XCTAssertNotNil(json["bottle"], "Should have bottle field")
-
-        guard let bottle = json["bottle"] as? [String: Any],
-              let stable = bottle["stable"] as? [String: Any],
-              let files = stable["files"] as? [String: Any] else {
-            XCTFail("Should have bottle.stable.files structure")
-            return
-        }
-
-        // Verify we have arm64 bottle for Apple Silicon
-        let arm64Keys = files.keys.filter { $0.contains("arm64") }
-        XCTAssertFalse(arm64Keys.isEmpty, "Should have arm64 bottle available")
-    }
-
-    func testGHCRToken_CanBeObtained() async throws {
-        let tokenURL = URL(string: "https://ghcr.io/token?scope=repository:homebrew/core/mpv:pull")!
-
-        let (data, response) = try await URLSession.shared.data(from: tokenURL)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            XCTFail("Expected HTTP response")
-            return
-        }
-
-        XCTAssertEqual(httpResponse.statusCode, 200, "GHCR token endpoint should return 200")
-
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            XCTFail("Response should be valid JSON dictionary")
-            return
-        }
-
-        guard let token = json["token"] as? String else {
-            XCTFail("Should have token field")
-            return
-        }
-
-        XCTAssertFalse(token.isEmpty, "Token should not be empty")
-        XCTAssertTrue(token.count > 50, "Token should be reasonably long")
-    }
-
-    func testBottleDownload_CanBeAuthenticated() async throws {
-        // Get mpv info
-        let apiURL = URL(string: "https://formulae.brew.sh/api/formula/mpv.json")!
-        let (data, _) = try await URLSession.shared.data(from: apiURL)
-
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let bottle = json["bottle"] as? [String: Any],
-              let stable = bottle["stable"] as? [String: Any],
-              let files = stable["files"] as? [String: Any] else {
-            XCTFail("Could not parse mpv API response")
-            return
-        }
-
-        // Find arm64 bottle URL
-        let archKeys = ["arm64_sequoia", "arm64_sonoma", "arm64_ventura", "sonoma", "ventura"]
-        var bottleURL: URL?
-        for key in archKeys {
-            if let archInfo = files[key] as? [String: Any],
-               let urlString = archInfo["url"] as? String,
-               let url = URL(string: urlString) {
-                bottleURL = url
-                break
-            }
-        }
-
-        guard let url = bottleURL else {
-            XCTFail("Should find at least one bottle URL")
-            return
-        }
-
-        // Get token
-        let tokenURL = URL(string: "https://ghcr.io/token?scope=repository:homebrew/core/mpv:pull")!
-        let (tokenData, _) = try await URLSession.shared.data(from: tokenURL)
-        guard let tokenJSON = try JSONSerialization.jsonObject(with: tokenData) as? [String: Any],
-              let token = tokenJSON["token"] as? String else {
-            XCTFail("Could not get GHCR token")
-            return
-        }
-
-        // Verify bottle is accessible
-        var request = URLRequest(url: url)
-        request.httpMethod = "HEAD"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        let (_, headResponse) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = headResponse as? HTTPURLResponse else {
-            XCTFail("Expected HTTP response")
-            return
-        }
-
-        XCTAssertEqual(httpResponse.statusCode, 200, "Bottle URL should be accessible with token")
-    }
-
-    // MARK: - Library Loading Tests
-
-    func testMPVLibrary_LoadsAllSymbols() throws {
-        let manager = MPVManager.shared
-
-        guard manager.isReady else {
-            throw XCTSkip("MPV not installed - skipping symbol test")
-        }
-
-        // Access the shared library to verify it loaded
-        let library = MPVLibrary.shared
-
-        // Verify core functions are available by checking if library is usable
-        // The library will crash if symbols aren't loaded, so just existing is proof
-        XCTAssertNotNil(library, "MPVLibrary should be accessible")
+        av1App.terminate()
     }
 }

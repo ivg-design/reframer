@@ -230,52 +230,55 @@ final class YouTubeResolver {
         let videoOnly = formats.filter { $0.hasVideo && !$0.hasAudio }
         let audioOnly = formats.filter { $0.hasAudio && !$0.hasVideo }
 
-        // Filter out AV1 formats - AVFoundation won't decode them reliably
-        let combinedNoAV1 = combined.filter { !$0.isAV1 }
-        let videoOnlyNoAV1 = videoOnly.filter { !$0.isAV1 }
-
-        // AVFoundation compatible (H.264/HEVC in MP4)
-        let bestAVCombined = combinedNoAV1.filter { $0.isAVFoundationCompatibleCombined }.max(by: formatSort)
-        let bestAVVideo = videoOnlyNoAV1.filter { $0.isAVFoundationCompatibleVideo }.max(by: formatSort)
-        let bestAVAudio = audioOnly.filter { $0.isAVFoundationCompatibleAudio }.max(by: formatSort)
+        // Prefer highest quality available for MPV playback
+        let bestCombined = combined.max(by: formatSort)
+        let bestVideo = videoOnly.max(by: formatSort)
+        let bestAudio = audioOnly.max(by: formatSort)
 
         // Log available formats for debugging
         print("YouTubeResolver: Found \(formats.count) formats total")
-        print("YouTubeResolver: AV1 formats: \(formats.filter { $0.isAV1 }.count) (excluded)")
-        print("YouTubeResolver: AVFoundation-compatible: \(videoOnlyNoAV1.filter { $0.isAVFoundationCompatibleVideo }.count) video, \(audioOnly.filter { $0.isAVFoundationCompatibleAudio }.count) audio")
+        print("YouTubeResolver: AV1 formats: \(formats.filter { $0.isAV1 }.count)")
 
-        // Primary: AVFoundation compatible
-        let avCandidate: YouTubeStreamCandidate? = {
-            if let video = bestAVVideo, let audio = bestAVAudio {
-                return YouTubeStreamCandidate(
-                    videoURL: video.url,
-                    audioURL: audio.url,
-                    qualityDescription: "\(video.height)p \(video.vcodec)",
-                    isAVFoundationCompatible: true
-                )
-            }
-            if let combined = bestAVCombined {
-                return YouTubeStreamCandidate(
-                    videoURL: combined.url,
-                    audioURL: nil,
-                    qualityDescription: "\(combined.height)p \(combined.vcodec)",
-                    isAVFoundationCompatible: true
-                )
-            }
-            return nil
+        let separateCandidate: YouTubeStreamCandidate? = {
+            guard let video = bestVideo, let audio = bestAudio else { return nil }
+            return YouTubeStreamCandidate(
+                videoURL: video.url,
+                audioURL: audio.url,
+                qualityDescription: "\(video.height)p \(video.vcodec)",
+                isAVFoundationCompatible: video.isAVFoundationCompatibleVideo && audio.isAVFoundationCompatibleAudio
+            )
         }()
 
-        // Return best available option
-        if let avCandidate = avCandidate {
-            print("YouTubeResolver: Selected AVFoundation-compatible stream: \(avCandidate.qualityDescription)")
-            return YouTubeStreamSelection(
-                title: title,
-                headers: headers,
-                primary: avCandidate
+        let combinedCandidate: YouTubeStreamCandidate? = {
+            guard let combined = bestCombined else { return nil }
+            return YouTubeStreamCandidate(
+                videoURL: combined.url,
+                audioURL: nil,
+                qualityDescription: "\(combined.height)p \(combined.vcodec)",
+                isAVFoundationCompatible: combined.isAVFoundationCompatibleCombined
             )
+        }()
+
+        if let separate = separateCandidate, let combined = combinedCandidate {
+            let separateHeight = bestVideo?.height ?? 0
+            let combinedHeight = bestCombined?.height ?? 0
+            let chosen = combinedHeight > separateHeight ? combined : separate
+            let label = combinedHeight > separateHeight ? "combined" : "separate"
+            print("YouTubeResolver: Selected \(label) stream: \(chosen.qualityDescription)")
+            return YouTubeStreamSelection(title: title, headers: headers, primary: chosen)
         }
 
-        print("YouTubeResolver: No compatible formats found (all formats are AV1 or unsupported)")
+        if let separate = separateCandidate {
+            print("YouTubeResolver: Selected separate stream: \(separate.qualityDescription)")
+            return YouTubeStreamSelection(title: title, headers: headers, primary: separate)
+        }
+
+        if let combined = combinedCandidate {
+            print("YouTubeResolver: Selected combined stream: \(combined.qualityDescription)")
+            return YouTubeStreamSelection(title: title, headers: headers, primary: combined)
+        }
+
+        print("YouTubeResolver: No playable formats found")
         return nil
     }
 

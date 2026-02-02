@@ -13,7 +13,7 @@ final class MPVManager {
     private let ghcrTokenURL = "https://ghcr.io/token?scope=repository:homebrew/core/%@:pull"
 
     // Core packages needed for libmpv (order matters for linking)
-    private let corePackages = [
+    private let requiredPackages = [
         "mpv",
         "ffmpeg",
         "libass",
@@ -82,6 +82,9 @@ final class MPVManager {
     func install(progressHandler: @escaping (Double, String) -> Void,
                  completion: @escaping (Result<Void, Error>) -> Void) {
         do {
+            if FileManager.default.fileExists(atPath: libDirectory.path) {
+                try FileManager.default.removeItem(at: libDirectory)
+            }
             try FileManager.default.createDirectory(at: libDirectory, withIntermediateDirectories: true)
         } catch {
             completion(.failure(error))
@@ -92,7 +95,7 @@ final class MPVManager {
         progressHandler(0.0, "Fetching package info...")
 
         // Download packages sequentially
-        downloadPackages(packages: corePackages, index: 0, progressHandler: progressHandler) { [weak self] result in
+        downloadPackages(packages: requiredPackages, index: 0, progressHandler: progressHandler) { [weak self] result in
             guard let self = self else { return }
             switch result {
             case .success:
@@ -104,15 +107,28 @@ final class MPVManager {
                     switch fixResult {
                     case .success:
                         DispatchQueue.main.async {
-                            progressHandler(1.0, "Installation complete")
-                            self.cachedLibPath = nil // Reset cache
-                            completion(.success(()))
+                            progressHandler(0.95, "Verifying installation...")
+                        }
+                        self.verifyInstallation { verifyResult in
+                            switch verifyResult {
+                            case .success:
+                                DispatchQueue.main.async {
+                                    progressHandler(1.0, "Installation complete")
+                                    self.cachedLibPath = nil // Reset cache
+                                    completion(.success(()))
+                                }
+                            case .failure(let error):
+                                self.cleanupFailedInstall()
+                                DispatchQueue.main.async { completion(.failure(error)) }
+                            }
                         }
                     case .failure(let error):
+                        self.cleanupFailedInstall()
                         DispatchQueue.main.async { completion(.failure(error)) }
                     }
                 }
             case .failure(let error):
+                self.cleanupFailedInstall()
                 DispatchQueue.main.async { completion(.failure(error)) }
             }
         }
@@ -136,13 +152,11 @@ final class MPVManager {
             switch result {
             case .success:
                 self?.downloadPackages(packages: packages, index: index + 1,
-                                        progressHandler: progressHandler, completion: completion)
+                                       progressHandler: progressHandler, completion: completion)
             case .failure(let error):
-                // Log but continue - some packages may be optional
-                os_log("MPV: Failed to download %{public}@: %{public}@", log: self?.log ?? .default, type: .info,
+                os_log("MPV: Failed to download %{public}@: %{public}@", log: self?.log ?? .default, type: .error,
                        package, error.localizedDescription)
-                self?.downloadPackages(packages: packages, index: index + 1,
-                                        progressHandler: progressHandler, completion: completion)
+                completion(.failure(error))
             }
         }
     }
@@ -151,11 +165,16 @@ final class MPVManager {
         // Get package info from Homebrew API
         let apiURL = URL(string: "\(homebrewAPIBase)\(name).json")!
 
-        URLSession.shared.dataTask(with: apiURL) { [weak self] data, _, error in
+        URLSession.shared.dataTask(with: apiURL) { [weak self] data, response, error in
             guard let self = self else { return }
 
             if let error = error {
                 completion(.failure(error))
+                return
+            }
+
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+                completion(.failure(MPVError.downloadFailed))
                 return
             }
 
@@ -224,6 +243,11 @@ final class MPVManager {
                     return
                 }
 
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+                    completion(.failure(MPVError.downloadFailed))
+                    return
+                }
+
                 guard let tempURL = tempURL else {
                     completion(.failure(MPVError.downloadFailed))
                     return
@@ -275,7 +299,7 @@ final class MPVManager {
 
         for case let fileURL as URL in enumerator {
             let filename = fileURL.lastPathComponent
-            if filename.hasSuffix(".dylib") || filename.hasSuffix(".a") {
+            if filename.hasSuffix(".dylib") {
                 let destPath = destination.appendingPathComponent(filename)
                 try? FileManager.default.removeItem(at: destPath)
                 try? FileManager.default.copyItem(at: fileURL, to: destPath)
@@ -286,6 +310,8 @@ final class MPVManager {
     private func fixLibraryPaths(completion: @escaping (Result<Void, Error>) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
+
+            let systemPrefixes = ["/usr/lib/", "/System/Library/"]
 
             guard let enumerator = FileManager.default.enumerator(at: self.libDirectory, includingPropertiesForKeys: nil) else {
                 completion(.success(()))
@@ -306,14 +332,27 @@ final class MPVManager {
 
                 let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
 
-                // Fix paths containing @@HOMEBREW_PREFIX@@
+                // Fix paths containing @@HOMEBREW_PREFIX@@ or absolute Homebrew paths
                 for line in output.components(separatedBy: "\n") {
                     let trimmed = line.trimmingCharacters(in: .whitespaces)
-                    if trimmed.contains("@@HOMEBREW_PREFIX@@") {
-                        let oldPath = trimmed.components(separatedBy: " ").first ?? ""
-                        let libName = (oldPath as NSString).lastPathComponent
+                    guard let oldPath = trimmed.components(separatedBy: " ").first, !oldPath.isEmpty else {
+                        continue
+                    }
 
-                        // Change to @loader_path
+                    if systemPrefixes.contains(where: { oldPath.hasPrefix($0) }) {
+                        continue
+                    }
+
+                    let libName = (oldPath as NSString).lastPathComponent
+                    let localCandidate = self.libDirectory.appendingPathComponent(libName)
+                    guard FileManager.default.fileExists(atPath: localCandidate.path) else {
+                        continue
+                    }
+
+                    if oldPath.contains("@@HOMEBREW_PREFIX@@")
+                        || oldPath.hasPrefix("/opt/homebrew/")
+                        || oldPath.hasPrefix("/usr/local/")
+                        || oldPath.hasPrefix("@rpath/") {
                         let newPath = "@loader_path/\(libName)"
                         let installNameProcess = Process()
                         installNameProcess.executableURL = URL(fileURLWithPath: "/usr/bin/install_name_tool")
@@ -336,6 +375,30 @@ final class MPVManager {
 
             completion(.success(()))
         }
+    }
+
+    private func verifyInstallation(completion: @escaping (Result<Void, Error>) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            guard let libPath = self.libMPVPath else {
+                completion(.failure(MPVError.bundleNotFound))
+                return
+            }
+            self.configureEnvironment(for: libPath)
+            do {
+                try MPVLibrary.shared.load(at: libPath.path)
+                MPVLibrary.shared.unload()
+                completion(.success(()))
+            } catch {
+                completion(.failure(MPVError.installVerificationFailed(error.localizedDescription)))
+            }
+        }
+    }
+
+    private func cleanupFailedInstall() {
+        try? FileManager.default.removeItem(at: mpvDirectory)
+        cachedLibPath = nil
+        MPVLibrary.shared.unload()
     }
 
     private func currentArchKey() -> String {
@@ -438,6 +501,7 @@ enum MPVError: LocalizedError {
     case downloadFailed
     case extractFailed
     case bundleNotFound
+    case installVerificationFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -447,6 +511,8 @@ enum MPVError: LocalizedError {
             return "Failed to extract mpv package."
         case .bundleNotFound:
             return "libmpv not found in extracted package."
+        case .installVerificationFailed(let message):
+            return "libmpv installation could not be verified: \(message)"
         }
     }
 }

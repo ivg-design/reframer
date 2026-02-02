@@ -64,6 +64,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ensureInstalledInApplications()
         }
 
+        // Clean MPV install for UI tests when requested
+        if ProcessInfo.processInfo.environment["UITEST_MODE"] != nil,
+           ProcessInfo.processInfo.environment["UITEST_CLEAN_MPV"] == "1" {
+            try? MPVManager.shared.uninstall()
+        }
+
         // Auto-load test video if specified (for UI testing)
         if let testVideoPath = ProcessInfo.processInfo.environment["TEST_VIDEO_PATH"] {
             let url = URL(fileURLWithPath: testVideoPath)

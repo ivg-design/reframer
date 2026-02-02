@@ -123,7 +123,7 @@ class MainViewController: NSViewController {
             .sink { [weak self] _ in
                 guard let self = self, let url = self.videoState.videoURL else { return }
                 guard self.videoState.playbackEngine == .auto else { return }
-                // YouTube streaming stays native; no MPV fallback.
+                // YouTube streaming is handled by MPV; skip AVFoundation fallback.
                 if self.videoState.videoAudioURL != nil {
                     return
                 }
@@ -330,7 +330,11 @@ class MainViewController: NSViewController {
             if response == .alertFirstButtonReturn {
                 MPVManager.shared.isEnabled = true
                 MPVManager.shared.loadLibrary()
-                self?.switchToMPVPlayerForYouTube()
+                if MPVManager.shared.isReady {
+                    self?.switchToMPVPlayerForYouTube()
+                } else {
+                    self?.showMPVLoadFailure()
+                }
             }
         }
     }
@@ -363,7 +367,11 @@ class MainViewController: NSViewController {
             case .success:
                 MPVManager.shared.isEnabled = true
                 MPVManager.shared.loadLibrary()
-                self?.switchToMPVPlayerForYouTube()
+                if MPVManager.shared.isReady {
+                    self?.switchToMPVPlayerForYouTube()
+                } else {
+                    self?.showMPVLoadFailure()
+                }
             case .failure(let error):
                 let errorAlert = NSAlert()
                 errorAlert.messageText = "Installation Failed"
@@ -417,7 +425,11 @@ class MainViewController: NSViewController {
             if response == .alertFirstButtonReturn {
                 MPVManager.shared.isEnabled = true
                 MPVManager.shared.loadLibrary()
-                self?.switchToMPVPlayer(url: url)
+                if MPVManager.shared.isReady {
+                    self?.switchToMPVPlayer(url: url)
+                } else {
+                    self?.showMPVLoadFailure()
+                }
             }
         }
     }
@@ -450,7 +462,11 @@ class MainViewController: NSViewController {
             case .success:
                 MPVManager.shared.isEnabled = true
                 MPVManager.shared.loadLibrary()
-                self?.switchToMPVPlayer(url: url)
+                if MPVManager.shared.isReady {
+                    self?.switchToMPVPlayer(url: url)
+                } else {
+                    self?.showMPVLoadFailure()
+                }
             case .failure(let error):
                 let errorAlert = NSAlert()
                 errorAlert.messageText = "Installation Failed"
@@ -458,6 +474,16 @@ class MainViewController: NSViewController {
                 errorAlert.alertStyle = .critical
                 errorAlert.beginSheetModal(for: window)
             }
+        }
+    }
+
+    private func showMPVLoadFailure() {
+        let alert = NSAlert()
+        alert.messageText = "MPV Could Not Be Loaded"
+        alert.informativeText = "libmpv installed but failed to load. Try reinstalling MPV from Preferences."
+        alert.alertStyle = .critical
+        if let window = view.window {
+            alert.beginSheetModal(for: window)
         }
     }
 

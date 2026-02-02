@@ -75,6 +75,7 @@ class PreferencesWindowController: NSWindowController {
         // Checkbox
         mpvCheckbox.target = self
         mpvCheckbox.action = #selector(mpvToggled(_:))
+        mpvCheckbox.setAccessibilityIdentifier("prefs-mpv-enable")
         container.addArrangedSubview(mpvCheckbox)
 
         // Button row
@@ -85,14 +86,19 @@ class PreferencesWindowController: NSWindowController {
         installButton.bezelStyle = .rounded
         installButton.target = self
         installButton.action = #selector(installClicked(_:))
+        installButton.setAccessibilityIdentifier("prefs-mpv-install")
 
         uninstallButton.bezelStyle = .rounded
         uninstallButton.target = self
         uninstallButton.action = #selector(uninstallClicked(_:))
+        uninstallButton.setAccessibilityIdentifier("prefs-mpv-uninstall")
 
-        progressIndicator.style = .spinning
-        progressIndicator.controlSize = .small
+        progressIndicator.style = .bar
+        progressIndicator.isIndeterminate = false
+        progressIndicator.minValue = 0
+        progressIndicator.maxValue = 1
         progressIndicator.isHidden = true
+        progressIndicator.setAccessibilityIdentifier("prefs-mpv-progress")
 
         buttonRow.addArrangedSubview(installButton)
         buttonRow.addArrangedSubview(uninstallButton)
@@ -102,6 +108,7 @@ class PreferencesWindowController: NSWindowController {
         // Status label
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.textColor = .secondaryLabelColor
+        statusLabel.setAccessibilityIdentifier("prefs-mpv-status")
         container.addArrangedSubview(statusLabel)
 
         // Size info
@@ -134,7 +141,7 @@ class PreferencesWindowController: NSWindowController {
         } else {
             statusLabel.stringValue = "libmpv is not installed"
             statusLabel.textColor = .secondaryLabelColor
-            sizeLabel.stringValue = "Download size: ~35MB (mpv bundle)"
+            sizeLabel.stringValue = "Download size: ~35MB (libmpv + dependencies)"
         }
     }
 
@@ -151,10 +158,12 @@ class PreferencesWindowController: NSWindowController {
     @objc private func installClicked(_ sender: NSButton) {
         installButton.isEnabled = false
         progressIndicator.isHidden = false
+        progressIndicator.doubleValue = 0
         progressIndicator.startAnimation(nil)
 
         MPVManager.shared.install { [weak self] progress, status in
             self?.statusLabel.stringValue = status
+            self?.progressIndicator.doubleValue = progress
         } completion: { [weak self] result in
             self?.progressIndicator.stopAnimation(nil)
             self?.progressIndicator.isHidden = true

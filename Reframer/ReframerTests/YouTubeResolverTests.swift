@@ -2,7 +2,7 @@ import XCTest
 @testable import Reframer
 
 final class YouTubeResolverTests: XCTestCase {
-    func testSelectionPrefersAVFoundationVideoAndAudio() throws {
+    func testSelectionPrefersHighestQualityStreams() throws {
         let fixtureURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("TestFixtures/youtube-sample.json")
@@ -11,8 +11,8 @@ final class YouTubeResolverTests: XCTestCase {
         let selection = try YouTubeResolver.shared.selectionFromJSONData(data)
 
         XCTAssertEqual(selection.title, "Sample Video")
-        XCTAssertEqual(selection.primary.videoURL.absoluteString, "https://example.com/video1080.mp4")
-        XCTAssertEqual(selection.primary.audioURL?.absoluteString, "https://example.com/audio.m4a")
-        XCTAssertTrue(selection.primary.isAVFoundationCompatible)
+        XCTAssertEqual(selection.primary.videoURL.absoluteString, "https://example.com/combined4k.webm")
+        XCTAssertNil(selection.primary.audioURL)
+        XCTAssertFalse(selection.primary.isAVFoundationCompatible)
     }
 }
