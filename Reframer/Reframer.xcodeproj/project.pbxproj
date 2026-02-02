@@ -49,6 +49,7 @@
 		YT001004 /* YouTubeResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001003 /* YouTubeResolverTests.swift */; };
 		YT001006 /* ReframerYouTubeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001005 /* ReframerYouTubeUITests.swift */; };
 		MPVUI001002 /* MPVIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPVUI001001 /* MPVIntegrationTests.swift */; };
+		UIT001002 /* UITestConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = UIT001001 /* UITestConfig.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -118,6 +119,7 @@
 		YT001003 /* YouTubeResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeResolverTests.swift; sourceTree = "<group>"; };
 		YT001005 /* ReframerYouTubeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerYouTubeUITests.swift; sourceTree = "<group>"; };
 		MPVUI001001 /* MPVIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVIntegrationTests.swift; sourceTree = "<group>"; };
+		UIT001001 /* UITestConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestConfig.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -271,6 +273,7 @@
 				CCC10003 /* ReframerIntegrationTests.swift */,
 				YT001005 /* ReframerYouTubeUITests.swift */,
 				MPVUI001001 /* MPVIntegrationTests.swift */,
+				UIT001001 /* UITestConfig.swift */,
 			);
 			path = ReframerUITests;
 			sourceTree = "<group>";
@@ -490,6 +493,7 @@
 				CCC00003 /* ReframerIntegrationTests.swift in Sources */,
 				YT001006 /* ReframerYouTubeUITests.swift in Sources */,
 				MPVUI001002 /* MPVIntegrationTests.swift in Sources */,
+				UIT001002 /* UITestConfig.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
