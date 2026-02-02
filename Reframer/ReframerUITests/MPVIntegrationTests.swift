@@ -78,7 +78,10 @@ final class MPVIntegrationTests: XCTestCase {
     func testWebMPlayback_AfterMPVInstallIfNeeded() throws {
         ensureInstallIfNeeded(in: app)
 
-        XCTAssertTrue(waitForTimelineEnabled(), "Timeline should enable after MPV playback loads")
+        guard waitForTimelineEnabled() else {
+            XCTFail("Timeline should enable after MPV playback loads")
+            return
+        }
 
         // Sanity: zoom field exists and can be edited
         let zoomField = app.textFields["input-zoom"]
@@ -137,7 +140,10 @@ final class MPVIntegrationTests: XCTestCase {
         let predicate = NSPredicate(format: "exists == true AND isEnabled == true")
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: slider)
         let result = XCTWaiter.wait(for: [expectation], timeout: 300)
-        XCTAssertEqual(result, .completed, "Timeline should enable for AV1 playback")
+        if result != .completed {
+            XCTFail("Timeline should enable for AV1 playback")
+            return
+        }
 
         av1App.terminate()
     }

@@ -353,7 +353,12 @@ class MainViewController: NSViewController {
         progressIndicator.frame = NSRect(x: 0, y: 0, width: 250, height: 20)
         progressAlert.accessoryView = progressIndicator
 
-        guard let window = view.window else { return }
+        guard let window = view.window else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.showInstallMPVPrompt(url: url)
+            }
+            return
+        }
 
         progressAlert.beginSheetModal(for: window) { _ in }
 
@@ -396,7 +401,12 @@ class MainViewController: NSViewController {
         alert.addButton(withTitle: "Open Preferences")
         alert.addButton(withTitle: "Cancel")
 
-        guard let window = view.window else { return }
+        guard let window = view.window else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.showEnableMPVPrompt(url: url)
+            }
+            return
+        }
 
         alert.beginSheetModal(for: window) { [weak self] response in
             switch response {

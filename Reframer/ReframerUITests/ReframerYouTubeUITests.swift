@@ -23,8 +23,11 @@ final class ReframerYouTubeUITests: XCTestCase {
         inputField.click()
         inputField.typeText(youtubeURL)
 
-        if app.buttons["Open"].exists {
-            app.buttons["Open"].click()
+        let sheetOpen = app.sheets.buttons["Open"].firstMatch
+        if sheetOpen.exists {
+            sheetOpen.click()
+        } else if app.buttons["Open"].firstMatch.exists {
+            app.buttons["Open"].firstMatch.click()
         }
 
         // If MPV is required, install prompt may appear
