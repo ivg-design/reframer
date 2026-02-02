@@ -28,6 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var mainWindow: TransparentWindow!
     private var controlWindow: TransparentWindow!
     private var helpWindow: TransparentWindow?
+    private var filterPanelWindow: TransparentWindow?
 
     let videoState = VideoState()
     private var cancellables = Set<AnyCancellable>()
@@ -122,6 +123,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let lockItem = NSMenuItem(title: "Toggle Lock", action: #selector(toggleLock(_:)), keyEquivalent: "L")
         lockItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(lockItem)
+
+        // Filter menu
+        let filterMenuItem = NSMenuItem()
+        mainMenu.addItem(filterMenuItem)
+        let filterMenu = NSMenu(title: "Filter")
+        filterMenuItem.submenu = filterMenu
+        filterMenu.addItem(withTitle: "Next Filter", action: #selector(nextFilter(_:)), keyEquivalent: "f")
+        let prevFilterItem = NSMenuItem(title: "Previous Filter", action: #selector(previousFilter(_:)), keyEquivalent: "F")
+        prevFilterItem.keyEquivalentModifierMask = [.shift]
+        filterMenu.addItem(prevFilterItem)
+        filterMenu.addItem(.separator())
+        filterMenu.addItem(withTitle: "Filter Settings...", action: #selector(showFilterSettings(_:)), keyEquivalent: "")
+        filterMenu.addItem(.separator())
+        filterMenu.addItem(withTitle: "Reset Filter Settings", action: #selector(resetFilterSettings(_:)), keyEquivalent: "")
 
         // Playback menu
         let playbackMenuItem = NSMenuItem()
@@ -299,6 +314,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        // Filter panel
+        videoState.$showFilterPanel
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] showPanel in
+                guard let self = self else { return }
+                if showPanel {
+                    self.showFilterPanelWindow()
+                } else {
+                    self.hideFilterPanelWindow()
+                }
+            }
+            .store(in: &cancellables)
+
         // Open video notification
         NotificationCenter.default.publisher(for: .openVideo)
             .receive(on: DispatchQueue.main)
@@ -406,9 +434,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             videoState.showHelp.toggle()
             return true
 
-        // Escape - Close help
-        case 53 where videoState.showHelp:
-            videoState.showHelp = false
+        // Escape - Close help or filter panel
+        case 53:
+            if videoState.showHelp {
+                videoState.showHelp = false
+                return true
+            }
+            if videoState.showFilterPanel {
+                videoState.showFilterPanel = false
+                return true
+            }
+            return false
+
+        // F - Cycle filters forward, Shift+F - Cycle filters backward
+        case 3 where videoState.isVideoLoaded:
+            if flags.contains(.shift) {
+                videoState.cyclePreviousFilter()
+            } else if noModifiers {
+                videoState.cycleFilter()
+            }
             return true
 
         // Arrow keys for pan (when unlocked and video loaded)
@@ -457,6 +501,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func mainWindowFrameDidChange(_ notification: Notification) {
         updateControlWindowFrame()
         updateHelpWindowFrame()
+        updateFilterPanelWindowFrame()
     }
 
     private func updateControlWindowFrame() {
@@ -528,6 +573,64 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         helpWindow.setFrameOrigin(origin)
     }
 
+    // MARK: - Filter Panel Window
+
+    private func showFilterPanelWindow() {
+        if filterPanelWindow == nil {
+            let mainFrame = mainWindow.frame
+            let size = NSSize(width: 320, height: 500)
+            // Position to the right of main window
+            let origin = NSPoint(
+                x: mainFrame.maxX + 10,
+                y: mainFrame.midY - size.height / 2
+            )
+
+            let panel = TransparentWindow(
+                contentRect: NSRect(origin: origin, size: size),
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
+
+            panel.isOpaque = false
+            panel.backgroundColor = .clear
+            panel.hasShadow = true
+            panel.level = mainWindow.level
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            panel.isMovableByWindowBackground = true
+
+            let filterPanelView = FilterPanelView(frame: NSRect(origin: .zero, size: size))
+            filterPanelView.videoState = videoState
+
+            let viewController = NSViewController()
+            viewController.view = filterPanelView
+            panel.contentViewController = viewController
+
+            panel.setAccessibilityIdentifier("window-filter-panel")
+            filterPanelView.setAccessibilityIdentifier("panel-filter-settings")
+
+            filterPanelWindow = panel
+            mainWindow.addChildWindow(panel, ordered: .above)
+        }
+
+        filterPanelWindow?.orderFront(nil)
+    }
+
+    private func hideFilterPanelWindow() {
+        filterPanelWindow?.orderOut(nil)
+    }
+
+    private func updateFilterPanelWindowFrame() {
+        guard let filterPanelWindow = filterPanelWindow else { return }
+        let mainFrame = mainWindow.frame
+        let size = filterPanelWindow.frame.size
+        let origin = NSPoint(
+            x: mainFrame.maxX + 10,
+            y: mainFrame.midY - size.height / 2
+        )
+        filterPanelWindow.setFrameOrigin(origin)
+    }
+
     // MARK: - File Operations
 
     private func openVideoFile() {
@@ -585,6 +688,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Open the Reframer help book
         let helpBookName = Bundle.main.object(forInfoDictionaryKey: "CFBundleHelpBookName") as? String ?? "com.reframer.help"
         NSHelpManager.shared.openHelpAnchor("index", inBook: helpBookName)
+    }
+
+    @IBAction func nextFilter(_ sender: Any?) {
+        videoState.cycleFilter()
+    }
+
+    @IBAction func previousFilter(_ sender: Any?) {
+        videoState.cyclePreviousFilter()
+    }
+
+    @IBAction func showFilterSettings(_ sender: Any?) {
+        videoState.showFilterPanel = true
+    }
+
+    @IBAction func resetFilterSettings(_ sender: Any?) {
+        videoState.resetFilterSettings()
     }
 
 

@@ -18,6 +18,10 @@ class ControlBar: NSView {
     private var muteButton: NSButton?
     private var lockButton: NSButton?
 
+    // Filter menu button (replaces opacity icon)
+    private var filterMenuButton: FilterMenuButton?
+    private var opacityIcon: NSImageView?
+
     // Sliders
     private var timelineSlider: NSSlider?
     private var opacitySlider: NSSlider?
@@ -88,6 +92,9 @@ class ControlBar: NSView {
         // Apply bottom corner radius to match main window's corner radius
         applyCornerRadius()
 
+        // Replace opacity icon with FilterMenuButton
+        setupFilterButton()
+
         setupActions()
         setupTextFieldDelegates()
         setupTrackingArea()
@@ -119,6 +126,7 @@ class ControlBar: NSView {
         zoomField = find("field-zoom")
         zoomPercentLabel = find("label-zoom-pct")
         opacityField = find("field-opacity")
+        opacityIcon = find("icon-opacity")
 
         // Set accessibility identifiers for UI testing
         // Regular buttons
@@ -186,6 +194,27 @@ class ControlBar: NSView {
         visualEffectView?.layer?.cornerRadius = 12
         visualEffectView?.layer?.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         visualEffectView?.layer?.masksToBounds = true
+    }
+
+    private func setupFilterButton() {
+        guard let stackView = mainStackView,
+              let icon = opacityIcon,
+              let index = stackView.arrangedSubviews.firstIndex(of: icon) else { return }
+
+        // Create the filter menu button
+        let button = FilterMenuButton(frame: NSRect(x: 0, y: 0, width: 24, height: 24))
+        button.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            button.widthAnchor.constraint(equalToConstant: 24),
+            button.heightAnchor.constraint(equalToConstant: 24)
+        ])
+
+        // Replace the opacity icon with the filter button in the stack view
+        stackView.removeArrangedSubview(icon)
+        icon.removeFromSuperview()
+        stackView.insertArrangedSubview(button, at: index)
+
+        filterMenuButton = button
     }
 
     // MARK: - Actions Setup
@@ -323,6 +352,9 @@ class ControlBar: NSView {
     private func bindState() {
         cancellables.removeAll()
         guard let state = videoState else { return }
+
+        // Pass state to filter button
+        filterMenuButton?.videoState = state
 
         // Update play button state
         state.$isPlaying
