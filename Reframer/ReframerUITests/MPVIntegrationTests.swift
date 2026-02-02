@@ -7,11 +7,11 @@ final class MPVIntegrationTests: XCTestCase {
     private static var appLaunched = false
 
     private var mpvVideoPath: String? {
-        ProcessInfo.processInfo.environment["UITEST_MPV_VIDEO_PATH"]
+        UITestConfig.value(for: "UITEST_MPV_VIDEO_PATH")
     }
 
     private var cleanMPV: String? {
-        ProcessInfo.processInfo.environment["UITEST_CLEAN_MPV"]
+        UITestConfig.value(for: "UITEST_CLEAN_MPV")
     }
 
     var app: XCUIApplication {
@@ -113,7 +113,7 @@ final class MPVIntegrationTests: XCTestCase {
 
     /// Optional AV1 playback check (uses separate app launch).
     func testAV1PlaybackIfProvided() throws {
-        guard let av1Path = ProcessInfo.processInfo.environment["UITEST_AV1_VIDEO_PATH"],
+        guard let av1Path = UITestConfig.value(for: "UITEST_AV1_VIDEO_PATH"),
               !av1Path.isEmpty else {
             throw XCTSkip("Set UITEST_AV1_VIDEO_PATH to run AV1 playback test")
         }

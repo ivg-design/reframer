@@ -2,14 +2,14 @@ import XCTest
 
 final class ReframerYouTubeUITests: XCTestCase {
     func testYouTubePlaybackIfConfigured() throws {
-        guard let youtubeURL = ProcessInfo.processInfo.environment["UITEST_YOUTUBE_URL"],
+        guard let youtubeURL = UITestConfig.value(for: "UITEST_YOUTUBE_URL"),
               !youtubeURL.isEmpty else {
             throw XCTSkip("Set UITEST_YOUTUBE_URL to run this test")
         }
 
         let app = XCUIApplication()
         app.launchEnvironment["UITEST_MODE"] = "1"
-        if let cleanMPV = ProcessInfo.processInfo.environment["UITEST_CLEAN_MPV_YT"] {
+        if let cleanMPV = UITestConfig.value(for: "UITEST_CLEAN_MPV_YT") {
             app.launchEnvironment["UITEST_CLEAN_MPV"] = cleanMPV
         }
         app.launch()
