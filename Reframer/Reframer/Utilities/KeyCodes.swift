@@ -19,4 +19,5 @@ enum KeyCode {
     static let f: UInt16 = 3
     static let questionMark: UInt16 = 44
     static let escape: UInt16 = 53
+    static let returnKey: UInt16 = 36
 }

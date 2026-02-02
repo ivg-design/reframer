@@ -83,7 +83,12 @@ class VideoView: NSView {
         state.$isPlaying
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isPlaying in
-                if isPlaying { self?.player?.play() } else { self?.player?.pause() }
+                guard let self = self else { return }
+                if isPlaying {
+                    self.player?.play()
+                } else {
+                    self.player?.pause()
+                }
             }
             .store(in: &cancellables)
 
@@ -352,8 +357,10 @@ class VideoView: NSView {
 
     private func buildComposition(videoAsset: AVURLAsset, audioAsset: AVURLAsset, token: UUID) async throws -> AVAsset {
         let composition = AVMutableComposition()
+
         let duration = try await videoAsset.load(.duration)
         let videoTracks = try await videoAsset.load(.tracks)
+
         guard let sourceVideoTrack = videoTracks.first(where: { $0.mediaType == .video }) else {
             return videoAsset
         }
@@ -460,6 +467,11 @@ class VideoView: NSView {
 
         let delta = forward ? amount : -amount
         let newFrame = max(0, min(state.totalFrames - 1, state.currentFrame + delta))
+
+        // Update frame immediately so rapid key presses use the correct frame
+        state.currentFrame = newFrame
+        state.currentTime = Double(newFrame) / state.frameRate
+
         seekToFrame(newFrame)
     }
 

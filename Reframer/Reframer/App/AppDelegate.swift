@@ -6,6 +6,11 @@ import ApplicationServices
 class TransparentWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    // Enable Cmd+M minimize for borderless windows
+    override func performMiniaturize(_ sender: Any?) {
+        miniaturize(sender)
+    }
 }
 
 @main
@@ -182,7 +187,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         lockItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(lockItem)
 
-        // Filter menu
+        // Filter menu (single selection like toolbar, simple filters only)
         let filterMenuItem = NSMenuItem()
         mainMenu.addItem(filterMenuItem)
         let filterMenu = NSMenu(title: "Filter")
@@ -192,9 +197,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Filter items will be populated dynamically via menu delegate
         filterMenu.addItem(withTitle: "Placeholder", action: nil, keyEquivalent: "")
         filterMenu.addItem(.separator())
-        filterMenu.addItem(withTitle: "Clear All Filters", action: #selector(clearAllFilters(_:)), keyEquivalent: "")
-        filterMenu.addItem(.separator())
-        filterMenu.addItem(withTitle: "Filter Settings...", action: #selector(showFilterSettings(_:)), keyEquivalent: "")
+        filterMenu.addItem(withTitle: "Advanced Filters...", action: #selector(showFilterSettings(_:)), keyEquivalent: "")
         filterMenu.addItem(.separator())
         filterMenu.addItem(withTitle: "Reset Filter Parameters", action: #selector(resetFilterSettings(_:)), keyEquivalent: "")
 
@@ -219,7 +222,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(windowMenuItem)
         let windowMenu = NSMenu(title: "Window")
         windowMenuItem.submenu = windowMenu
-        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(toggleMinimize(_:)), keyEquivalent: "m")
         windowMenu.addItem(.separator())
         windowMenu.addItem(withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         NSApp.windowsMenu = windowMenu
@@ -252,7 +255,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let window = TransparentWindow(
             contentRect: windowFrame,
-            styleMask: [.borderless, .resizable],
+            styleMask: [.borderless, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
@@ -534,6 +537,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if commandOnly && event.keyCode == KeyCode.a,
            let textView = activeFieldEditor() {
             textView.selectAll(nil)
+            return true
+        }
+
+        // Enter/Esc in text fields - defocus and return focus to previous app (keep Reframer visible)
+        if noModifiers && (event.keyCode == KeyCode.returnKey || event.keyCode == KeyCode.escape),
+           let textView = activeFieldEditor() {
+            // End editing and defocus
+            textView.window?.makeFirstResponder(nil)
+            // Hide then unhide to return focus to previous app while keeping Reframer visible
+            NSApp.hide(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                NSApp.unhide(nil)
+            }
             return true
         }
 
@@ -1066,13 +1082,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSHelpManager.shared.openHelpAnchor("index.html", inBook: helpBookName)
     }
 
-    @IBAction func toggleFilter(_ sender: NSMenuItem) {
+    @IBAction func selectFilter(_ sender: NSMenuItem) {
         guard let filter = sender.representedObject as? VideoFilter else { return }
-        videoState.toggleAdvancedFilter(filter)
+        // Single selection - same as toolbar behavior
+        videoState.setQuickFilter(filter)
     }
 
-    @IBAction func clearAllFilters(_ sender: Any?) {
-        videoState.clearAdvancedFilters()
+    @IBAction func clearQuickFilter(_ sender: Any?) {
+        videoState.setQuickFilter(nil)
+    }
+
+    @IBAction func toggleMinimize(_ sender: Any?) {
+        // Toggle minimize - restore if minimized, minimize if not
+        if mainWindow.isMiniaturized {
+            mainWindow.deminiaturize(sender)
+        } else {
+            mainWindow.miniaturize(sender)
+        }
     }
 
     @IBAction func showFilterSettings(_ sender: Any?) {
@@ -1147,9 +1173,9 @@ extension AppDelegate: NSMenuDelegate {
         // Only handle the Filter menu
         guard menu.title == "Filter" else { return }
 
-        // Remove existing filter items (keep separators and other items)
+        // Remove existing filter items and "None" item
         let itemsToRemove = menu.items.filter { item in
-            item.representedObject is VideoFilter
+            item.representedObject is VideoFilter || item.title == "None"
         }
         itemsToRemove.forEach { menu.removeItem($0) }
 
@@ -1158,16 +1184,26 @@ extension AppDelegate: NSMenuDelegate {
             menu.removeItem(placeholder)
         }
 
-        // Insert filter items at the beginning
-        for (index, filter) in VideoFilter.allCases.enumerated() {
+        // Insert "None" option at the beginning
+        let noneItem = NSMenuItem()
+        noneItem.title = "None"
+        noneItem.image = NSImage(systemSymbolName: "circle.slash", accessibilityDescription: "None")
+        noneItem.target = self
+        noneItem.action = #selector(clearQuickFilter(_:))
+        noneItem.state = (videoState.quickFilter == nil) ? .on : .off
+        menu.insertItem(noneItem, at: 0)
+
+        // Insert simple filters only (single selection like toolbar)
+        for (index, filter) in VideoFilter.simpleFilters.enumerated() {
             let item = NSMenuItem()
             item.title = filter.rawValue
             item.image = NSImage(systemSymbolName: filter.iconName, accessibilityDescription: filter.rawValue)
             item.target = self
-            item.action = #selector(toggleFilter(_:))
+            item.action = #selector(selectFilter(_:))
             item.representedObject = filter
-            item.state = videoState.isAdvancedFilterActive(filter) ? .on : .off
-            menu.insertItem(item, at: index)
+            // Radio-style: checkmark only on current quickFilter
+            item.state = (videoState.quickFilter == filter) ? .on : .off
+            menu.insertItem(item, at: index + 1)  // +1 for "None" item
         }
     }
 }

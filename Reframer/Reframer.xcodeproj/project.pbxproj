@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		0631DC8CF1CB9806E1F13AE0 /* ControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242CE7E3F5EFF404409747F7 /* ControlBar.swift */; };
 		0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19D82333A5671C5FB146764 /* VideoFormats.swift */; };
-		889027EB0A16468DA6E73FD3 /* MPVLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDFBBC73F2B1449DB52FD707 /* MPVLibrary.swift */; };
 		15FDF44DEF2AEB44C895443B /* VideoState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE63ACD63859E708710A97D4 /* VideoState.swift */; };
 		2491A9B249AD2563B719271A /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C014B4F5CB12CD15A1A186 /* Notifications.swift */; };
 		370628C9CD00AD6AA6DF0707 /* ControlBar.xib in Resources */ = {isa = PBXBuildFile; fileRef = B972E974DDAFCDB4952DE88C /* ControlBar.xib */; };
@@ -17,6 +16,7 @@
 		6E1F01CFBCE69080FA2B16F6 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 331DF56DBDF1FEEE4E142195 /* MainMenu.xib */; };
 		7148C7DD0239873CFBA24CB6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12166D40D39C3C452F590B2E /* AppDelegate.swift */; };
 		7C580FCBE04BAD9DED666438 /* DropZoneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 205A94D5C521D2C8598E3FAA /* DropZoneView.swift */; };
+		889027EB0A16468DA6E73FD3 /* MPVLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDFBBC73F2B1449DB52FD707 /* MPVLibrary.swift */; };
 		903D85FA96F4D67AAE7D51A6 /* EdgeIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */; };
 		AAA00011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AAA10011 /* Assets.xcassets */; };
 		B8CFABAEDE33931C8E299E81 /* MPVManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2502FE4461DC2B65CC2AD0F1 /* MPVManager.swift */; };
@@ -40,14 +40,15 @@
 		FP001002 /* FilterPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FP001001 /* FilterPanelView.swift */; };
 		FS001002 /* FilterSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FS001001 /* FilterSettings.swift */; };
 		KC001002 /* KeyCodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = KC001001 /* KeyCodes.swift */; };
+		MPV001002 /* MPVManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPV001001 /* MPVManagerTests.swift */; };
+		MPV001004 /* MPVInstallationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPV001003 /* MPVInstallationTests.swift */; };
 		SS001002 /* ScrollStepAccumulator.swift in Sources */ = {isa = PBXBuildFile; fileRef = SS001001 /* ScrollStepAccumulator.swift */; };
 		SST001002 /* ScrollStepAccumulatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SST001001 /* ScrollStepAccumulatorTests.swift */; };
 		VF001002 /* VideoFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF001001 /* VideoFilter.swift */; };
 		YT001002 /* YouTubeResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001001 /* YouTubeResolver.swift */; };
 		YT001004 /* YouTubeResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001003 /* YouTubeResolverTests.swift */; };
 		YT001006 /* ReframerYouTubeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001005 /* ReframerYouTubeUITests.swift */; };
-		MPV001002 /* MPVManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPV001001 /* MPVManagerTests.swift */; };
-		MPV001004 /* MPVInstallationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPV001003 /* MPVInstallationTests.swift */; };
+		MPVUI001002 /* MPVIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPVUI001001 /* MPVIntegrationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -96,26 +97,27 @@
 		CCC10003 /* ReframerIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerIntegrationTests.swift; sourceTree = "<group>"; };
 		CCC20002 /* ReframerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ReframerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D19D82333A5671C5FB146764 /* VideoFormats.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFormats.swift; sourceTree = "<group>"; };
-		FDFBBC73F2B1449DB52FD707 /* MPVLibrary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MPVLibrary.swift; sourceTree = "<group>"; };
 		DDD10001 /* test_30fps_2s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_30fps_2s.mp4; sourceTree = "<group>"; };
 		DDD10002 /* test_60fps_5s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_60fps_5s.mp4; sourceTree = "<group>"; };
 		DDD10003 /* test_4x3_1s.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_4x3_1s.mp4; sourceTree = "<group>"; };
 		DDD10004 /* test-video.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "test-video.mp4"; sourceTree = "<group>"; };
 		DZ001001 /* DropZoneViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropZoneViewTests.swift; sourceTree = "<group>"; };
 		EEE10001 /* Reframer.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = Reframer.docc; sourceTree = "<group>"; };
+		FDFBBC73F2B1449DB52FD707 /* MPVLibrary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MPVLibrary.swift; sourceTree = "<group>"; };
 		FFF10001 /* Reframer.help */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Reframer.help; sourceTree = "<group>"; };
 		FM001001 /* FilterMenuButton.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FilterMenuButton.swift; sourceTree = "<group>"; };
 		FP001001 /* FilterPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FilterPanelView.swift; sourceTree = "<group>"; };
 		FS001001 /* FilterSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FilterSettings.swift; sourceTree = "<group>"; };
 		KC001001 /* KeyCodes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeyCodes.swift; sourceTree = "<group>"; };
+		MPV001001 /* MPVManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVManagerTests.swift; sourceTree = "<group>"; };
+		MPV001003 /* MPVInstallationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVInstallationTests.swift; sourceTree = "<group>"; };
 		SS001001 /* ScrollStepAccumulator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScrollStepAccumulator.swift; sourceTree = "<group>"; };
 		SST001001 /* ScrollStepAccumulatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollStepAccumulatorTests.swift; sourceTree = "<group>"; };
 		VF001001 /* VideoFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilter.swift; sourceTree = "<group>"; };
 		YT001001 /* YouTubeResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = YouTubeResolver.swift; sourceTree = "<group>"; };
 		YT001003 /* YouTubeResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeResolverTests.swift; sourceTree = "<group>"; };
-		MPV001001 /* MPVManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVManagerTests.swift; sourceTree = "<group>"; };
-		MPV001003 /* MPVInstallationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVInstallationTests.swift; sourceTree = "<group>"; };
 		YT001005 /* ReframerYouTubeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerYouTubeUITests.swift; sourceTree = "<group>"; };
+		MPVUI001001 /* MPVIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVIntegrationTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -268,6 +270,7 @@
 				CCC10002 /* ReframerUITestsLaunchTests.swift */,
 				CCC10003 /* ReframerIntegrationTests.swift */,
 				YT001005 /* ReframerYouTubeUITests.swift */,
+				MPVUI001001 /* MPVIntegrationTests.swift */,
 			);
 			path = ReframerUITests;
 			sourceTree = "<group>";
@@ -486,6 +489,7 @@
 				CCC00002 /* ReframerUITestsLaunchTests.swift in Sources */,
 				CCC00003 /* ReframerIntegrationTests.swift in Sources */,
 				YT001006 /* ReframerYouTubeUITests.swift in Sources */,
+				MPVUI001002 /* MPVIntegrationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
