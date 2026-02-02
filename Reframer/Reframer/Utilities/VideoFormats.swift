@@ -32,14 +32,6 @@ struct VideoFormats {
         // H.265/HEVC
         addType(&types, "public.hevc")
 
-        // AV1
-        addType(&types, "public.av1")
-        addType(&types, "org.aomedia.av1")
-
-        // WebM and Matroska
-        addType(&types, "org.webmproject.webm")
-        addType(&types, "org.matroska.mkv")
-
         // MPEG formats
         addType(&types, "public.mpeg")
         addType(&types, "public.mpeg-2-video")
@@ -59,12 +51,11 @@ struct VideoFormats {
         }
     }
 
-    /// File extensions for display and validation
+    /// File extensions for display and validation (AVFoundation-supported)
     static let supportedExtensions: [String] = [
-        "mp4", "m4v", "mov", "avi", "mkv", "webm",
+        "mp4", "m4v", "mov", "avi",
         "mpeg", "mpg", "mts", "m2ts", "ts", "m2v",
-        "wmv", "flv", "f4v", "ogv", "ogg",
-        "3gp", "3g2", "divx", "vob", "asf"
+        "3gp", "3g2"
     ]
 
     /// Check if a URL is a supported video format
@@ -74,5 +65,5 @@ struct VideoFormats {
     }
 
     /// Get display string for supported formats
-    static let displayString = "MP4 • MOV • ProRes • H.264 • H.265 • AV1 • WebM • MKV • AVI"
+    static let displayString = "MP4 • MOV • ProRes • H.264 • H.265 • AVI"
 }

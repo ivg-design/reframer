@@ -27,10 +27,11 @@ The app window is completely transparent and frameless, showing only the video c
 - **Lock mode** — Click through the video to interact with apps below
 - **Keyboard shortcuts** — Full control without touching the mouse
 - **Edge glow indicators** — Subtle visual hints for window resize handles
+- **Video filters** — Quick filters for brightness, contrast, saturation, invert, and line art effects
 
 ## Supported Formats
 
-MP4, MOV, ProRes, H.264, H.265, AV1, WebM, MKV, AVI
+MP4, MOV, ProRes, H.264, H.265, AVI
 
 ## Keyboard Shortcuts
 
