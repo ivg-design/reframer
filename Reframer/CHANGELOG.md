@@ -5,17 +5,19 @@ All notable changes to Reframer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2025-02-01
 
 ### Added
+- Real-time video filters (Grayscale, Sepia, Invert, Noir, etc.)
+- Quick filter dropdown in toolbar with adjustable intensity
+- Advanced filter panel for stacking multiple effects
 - Edge glow indicators with soft gradient effect for resize handle discovery
 - Subtle visual hints appear when hovering near window edges (when unlocked)
 - 100ms debounce to prevent flickering on edge hover
 - Preference persistence for opacity, volume, mute state, always-on-top, and window position
 - Scroll step accumulator for precise trackpad stepping
-- Expanded unit + UI automation coverage for scrubbing, input modifiers, filters, and persistence
+- Expanded unit test coverage for filters and persistence
 - Cmd+A select-all support in numeric input fields
-- On-demand libmpv installer for extended formats (WebM/MKV/VPx/AV1)
 
 ### Changed
 - Toolbar now positioned below video canvas instead of overlapping
@@ -28,14 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Control bar height increased to 80pt to avoid clipping
 - Quick filter slider disables for parameterless filters (Invert/Noir)
 - Global frame-step shortcuts now only fire when lock mode is enabled
-- Extended format playback now uses libmpv
-- MPV high-precision seeking enabled for scrub accuracy
 
 ### Fixed
 - Global shortcut permission prompt handled explicitly
 - Frame/zoom/opacity inputs capture Cmd+Shift/Option/Ctrl arrow selectors
 - Scroll wheel discrete stepping triggers on any tick
-- Open button long-press reliably triggers YouTube prompt
 - Parameterless quick filters now keep the opacity field readable while disabling edits
 - Supported format detection checks UTType in addition to extensions
 - Mute toggle restores last volume instead of resetting
@@ -44,8 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scrubbar not reaching the last frame
 - Window dragging accidentally causing video panning
 - Timeline slider now properly updates maxValue on video load
-- UI test runner now clears quarantine and re-signs before automation runs
-- MPV metadata refresh now retries and uses display-size fallback for width/height
 
 ## [1.0.0] - 2025-01-31
 
@@ -64,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow for automated builds
 
 ### Supported Formats
-- MP4, MOV, ProRes, H.264, H.265, AV1, WebM, MKV, AVI
+- MP4, MOV, ProRes, H.264, H.265, AVI
 
 ## [0.1.0] - 2025-01-30
 

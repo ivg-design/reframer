@@ -13,8 +13,6 @@ Reframer supports a wide range of video formats commonly used in production work
 | MPEG-4 | `.mp4` | Most common, highly recommended |
 | QuickTime | `.mov` | Native macOS format |
 | AVI | `.avi` | Windows format, widely supported |
-| Matroska | `.mkv` | Open container format |
-| WebM | `.webm` | Web-optimized format |
 | M4V | `.m4v` | Apple TV format |
 
 ### Codecs

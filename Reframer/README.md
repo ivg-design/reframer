@@ -28,11 +28,11 @@ The app window is completely transparent and frameless, showing only the video c
 - **Lock mode** — Click through the video to interact with apps below
 - **Keyboard shortcuts** — Full control without touching the mouse
 - **Edge glow indicators** — Subtle visual hints for window resize handles
-- **YouTube links** — Paste a YouTube URL (long-press Open)
+- **Video filters** — Apply real-time effects (grayscale, sepia, invert, etc.)
 
 ## Supported Formats
 
-MP4, MOV, ProRes, H.264, H.265, AV1, WebM, MKV, AVI (WebM/MKV require libmpv)
+MP4, MOV, ProRes, H.264, H.265, AVI
 
 ## Keyboard Shortcuts
 
