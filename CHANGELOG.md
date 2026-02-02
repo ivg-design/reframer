@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expanded unit + UI automation coverage for scrubbing, input modifiers, filters, and persistence
 - Cmd+A select-all support in numeric input fields
 - On-demand libmpv installer for extended formats (WebM/MKV/VPx/AV1)
+- **Homebrew Bottle Installation**: MPVManager downloads libmpv from Homebrew bottles
+  - Uses ghcr.io with anonymous token authentication (no Homebrew CLI required)
+  - Downloads mpv, ffmpeg, libass, and all dependencies (~30MB total)
+  - Uses install_name_tool to fix @loader_path references
+- **YouTube via MPV**: Route YouTube DASH streams through libmpv
+  - Much faster loading (2-5 seconds vs 60+ with AVFoundation)
+  - Separate audio track support for high-quality streams
+  - HTTP header injection for YouTube authentication
 
 ### Fixed
 - Help book documentation link now opens the correct help index
@@ -36,8 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filter pipeline now creates filters per frame to avoid thread-safety issues
 - Global frame-step shortcuts now only fire when lock mode is enabled
 - Extended format playback now uses libmpv
-- YouTube playback remains native (AVFoundation-only)
+- **YouTube playback now requires MPV** (AVFoundation too slow - 60+ seconds)
 - MPV high-precision seeking enabled for scrub accuracy
+- MPVManager downloads from Homebrew bottles (stolendata.net bundles have static libmpv)
 
 ### Project Structure
 - Xcode project with proper source organization (App, Views, Models, Utilities)
