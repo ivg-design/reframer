@@ -39,7 +39,7 @@ You can load videos in several ways:
 - **Click the drop zone** — Opens a file picker
 - **Keyboard** — Press **⌘O** to open a file
 
-Supported formats include MP4, MOV, AVI, MKV, WebM, and ProRes.
+Supported formats include MP4, MOV, AVI, and ProRes.
 
 ## Basic Controls
 

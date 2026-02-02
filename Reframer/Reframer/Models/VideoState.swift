@@ -27,6 +27,11 @@ class VideoState: ObservableObject {
     // Opacity
     @Published var opacity: Double = 1.0
 
+    // Video Filters
+    @Published var activeFilters: Set<VideoFilter> = []
+    @Published var filterSettings: FilterSettings = .defaults
+    @Published var showFilterPanel: Bool = false
+
     // Lock mode - disables pan/zoom gestures on video, controls remain active
     @Published var isLocked: Bool = false
 
@@ -90,6 +95,37 @@ class VideoState: ObservableObject {
     func toggleMute() {
         isMuted.toggle()
         volume = isMuted ? 0.0 : 0.5
+    }
+
+    // MARK: - Filter Methods
+
+    /// Toggle a specific filter on/off
+    func toggleFilter(_ filter: VideoFilter) {
+        if activeFilters.contains(filter) {
+            activeFilters.remove(filter)
+        } else {
+            activeFilters.insert(filter)
+        }
+    }
+
+    /// Check if a filter is active
+    func isFilterActive(_ filter: VideoFilter) -> Bool {
+        activeFilters.contains(filter)
+    }
+
+    /// Clear all active filters
+    func clearAllFilters() {
+        activeFilters.removeAll()
+    }
+
+    /// Get active filters in a consistent order for chaining
+    var orderedActiveFilters: [VideoFilter] {
+        VideoFilter.allCases.filter { activeFilters.contains($0) }
+    }
+
+    /// Reset filter settings to defaults
+    func resetFilterSettings() {
+        filterSettings = .defaults
     }
 
     private func formatTime(_ time: Double) -> String {

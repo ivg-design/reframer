@@ -28,6 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var mainWindow: TransparentWindow!
     private var controlWindow: TransparentWindow!
     private var helpWindow: TransparentWindow?
+    private var filterPanelWindow: TransparentWindow?
 
     let videoState = VideoState()
     private var cancellables = Set<AnyCancellable>()
@@ -122,6 +123,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let lockItem = NSMenuItem(title: "Toggle Lock", action: #selector(toggleLock(_:)), keyEquivalent: "L")
         lockItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(lockItem)
+
+        // Filter menu
+        let filterMenuItem = NSMenuItem()
+        mainMenu.addItem(filterMenuItem)
+        let filterMenu = NSMenu(title: "Filter")
+        filterMenuItem.submenu = filterMenu
+        filterMenu.delegate = self
+
+        // Filter items will be populated dynamically via menu delegate
+        filterMenu.addItem(withTitle: "Placeholder", action: nil, keyEquivalent: "")
+        filterMenu.addItem(.separator())
+        filterMenu.addItem(withTitle: "Clear All Filters", action: #selector(clearAllFilters(_:)), keyEquivalent: "")
+        filterMenu.addItem(.separator())
+        filterMenu.addItem(withTitle: "Filter Settings...", action: #selector(showFilterSettings(_:)), keyEquivalent: "")
+        filterMenu.addItem(.separator())
+        filterMenu.addItem(withTitle: "Reset Filter Parameters", action: #selector(resetFilterSettings(_:)), keyEquivalent: "")
 
         // Playback menu
         let playbackMenuItem = NSMenuItem()
@@ -299,6 +316,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        // Filter panel
+        videoState.$showFilterPanel
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] showPanel in
+                guard let self = self else { return }
+                if showPanel {
+                    self.showFilterPanelWindow()
+                } else {
+                    self.hideFilterPanelWindow()
+                }
+            }
+            .store(in: &cancellables)
+
         // Open video notification
         NotificationCenter.default.publisher(for: .openVideo)
             .receive(on: DispatchQueue.main)
@@ -406,9 +436,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             videoState.showHelp.toggle()
             return true
 
-        // Escape - Close help
-        case 53 where videoState.showHelp:
-            videoState.showHelp = false
+        // Escape - Close help or filter panel
+        case 53:
+            if videoState.showHelp {
+                videoState.showHelp = false
+                return true
+            }
+            if videoState.showFilterPanel {
+                videoState.showFilterPanel = false
+                return true
+            }
+            return false
+
+        // F - Toggle filter panel
+        case 3 where videoState.isVideoLoaded && noModifiers:
+            videoState.showFilterPanel.toggle()
             return true
 
         // Arrow keys for pan (when unlocked and video loaded)
@@ -457,6 +499,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func mainWindowFrameDidChange(_ notification: Notification) {
         updateControlWindowFrame()
         updateHelpWindowFrame()
+        updateFilterPanelWindowFrame()
     }
 
     private func updateControlWindowFrame() {
@@ -528,6 +571,64 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         helpWindow.setFrameOrigin(origin)
     }
 
+    // MARK: - Filter Panel Window
+
+    private func showFilterPanelWindow() {
+        if filterPanelWindow == nil {
+            let mainFrame = mainWindow.frame
+            let size = NSSize(width: 320, height: 500)
+            // Position to the right of main window
+            let origin = NSPoint(
+                x: mainFrame.maxX + 10,
+                y: mainFrame.midY - size.height / 2
+            )
+
+            let panel = TransparentWindow(
+                contentRect: NSRect(origin: origin, size: size),
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
+
+            panel.isOpaque = false
+            panel.backgroundColor = .clear
+            panel.hasShadow = true
+            panel.level = mainWindow.level
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            panel.isMovableByWindowBackground = true
+
+            let filterPanelView = FilterPanelView(frame: NSRect(origin: .zero, size: size))
+            filterPanelView.videoState = videoState
+
+            let viewController = NSViewController()
+            viewController.view = filterPanelView
+            panel.contentViewController = viewController
+
+            panel.setAccessibilityIdentifier("window-filter-panel")
+            filterPanelView.setAccessibilityIdentifier("panel-filter-settings")
+
+            filterPanelWindow = panel
+            mainWindow.addChildWindow(panel, ordered: .above)
+        }
+
+        filterPanelWindow?.orderFront(nil)
+    }
+
+    private func hideFilterPanelWindow() {
+        filterPanelWindow?.orderOut(nil)
+    }
+
+    private func updateFilterPanelWindowFrame() {
+        guard let filterPanelWindow = filterPanelWindow else { return }
+        let mainFrame = mainWindow.frame
+        let size = filterPanelWindow.frame.size
+        let origin = NSPoint(
+            x: mainFrame.maxX + 10,
+            y: mainFrame.midY - size.height / 2
+        )
+        filterPanelWindow.setFrameOrigin(origin)
+    }
+
     // MARK: - File Operations
 
     private func openVideoFile() {
@@ -587,6 +688,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSHelpManager.shared.openHelpAnchor("index", inBook: helpBookName)
     }
 
+    @IBAction func toggleFilter(_ sender: NSMenuItem) {
+        guard let filter = sender.representedObject as? VideoFilter else { return }
+        videoState.toggleFilter(filter)
+    }
+
+    @IBAction func clearAllFilters(_ sender: Any?) {
+        videoState.clearAllFilters()
+    }
+
+    @IBAction func showFilterSettings(_ sender: Any?) {
+        videoState.showFilterPanel = true
+    }
+
+    @IBAction func resetFilterSettings(_ sender: Any?) {
+        videoState.resetFilterSettings()
+    }
 
     // MARK: - Installation
 
@@ -621,6 +738,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             errorAlert.messageText = "Could not move app"
             errorAlert.informativeText = "Please drag Video Overlay into /Applications manually."
             errorAlert.runModal()
+        }
+    }
+}
+
+// MARK: - NSMenuDelegate
+
+extension AppDelegate: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        // Only handle the Filter menu
+        guard menu.title == "Filter" else { return }
+
+        // Remove existing filter items (keep separators and other items)
+        let itemsToRemove = menu.items.filter { item in
+            item.representedObject is VideoFilter
+        }
+        itemsToRemove.forEach { menu.removeItem($0) }
+
+        // Remove placeholder if present
+        if let placeholder = menu.items.first(where: { $0.title == "Placeholder" }) {
+            menu.removeItem(placeholder)
+        }
+
+        // Insert filter items at the beginning
+        for (index, filter) in VideoFilter.allCases.enumerated() {
+            let item = NSMenuItem()
+            item.title = filter.rawValue
+            item.image = NSImage(systemSymbolName: filter.iconName, accessibilityDescription: filter.rawValue)
+            item.target = self
+            item.action = #selector(toggleFilter(_:))
+            item.representedObject = filter
+            item.state = videoState.isFilterActive(filter) ? .on : .off
+            menu.insertItem(item, at: index)
         }
     }
 }

@@ -20,6 +20,7 @@ The app window is completely transparent and frameless, showing only the video c
 - **Frame-accurate navigation** — Step through videos frame by frame
 - **Zoom and pan** — Inspect details at any scale
 - **Adjustable opacity** — Blend with your workspace
+- **Video filters** — Apply and combine real-time effects like edge detection, sharpening, and color adjustments
 - **Lock mode** — Click through the video to interact with apps below
 - **Keyboard shortcuts** — Full control without touching the mouse
 
@@ -35,6 +36,7 @@ The app window is completely transparent and frameless, showing only the video c
 - <doc:PlaybackControls>
 - <doc:ZoomAndPan>
 - <doc:Opacity>
+- <doc:Filters>
 
 ### Window Control
 
