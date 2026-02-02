@@ -16,6 +16,7 @@ UITEST_CLEAN_MPV="${UITEST_CLEAN_MPV:-}"
 UITEST_CLEAN_MPV_YT="${UITEST_CLEAN_MPV_YT:-}"
 
 LOG_DIR="$ARTIFACTS_BASE/launchd"
+ENV_FILE="${ENV_FILE:-$LOG_DIR/runner.env}"
 STDOUT_LOG="$LOG_DIR/runner.out.log"
 STDERR_LOG="$LOG_DIR/runner.err.log"
 DONE_FILE="$LOG_DIR/runner.done"
@@ -24,6 +25,13 @@ TERMINAL_APP="/System/Applications/Utilities/Terminal.app/Contents/MacOS/Termina
 
 mkdir -p "$LOG_DIR"
 rm -f "$DONE_FILE"
+
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    # shellcheck source=/dev/null
+    . "$ENV_FILE"
+    set +a
+fi
 
 if command -v sqlite3 >/dev/null 2>&1 && command -v csreq >/dev/null 2>&1 && [ -x "$TERMINAL_APP" ]; then
     TCC_DB="$HOME/Library/Application Support/com.apple.TCC/TCC.db"
