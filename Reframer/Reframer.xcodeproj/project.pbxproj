@@ -46,6 +46,8 @@
 		YT001002 /* YouTubeResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001001 /* YouTubeResolver.swift */; };
 		YT001004 /* YouTubeResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001003 /* YouTubeResolverTests.swift */; };
 		YT001006 /* ReframerYouTubeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = YT001005 /* ReframerYouTubeUITests.swift */; };
+		MPV001002 /* MPVManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPV001001 /* MPVManagerTests.swift */; };
+		MPV001004 /* MPVInstallationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPV001003 /* MPVInstallationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -111,6 +113,8 @@
 		VF001001 /* VideoFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilter.swift; sourceTree = "<group>"; };
 		YT001001 /* YouTubeResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = YouTubeResolver.swift; sourceTree = "<group>"; };
 		YT001003 /* YouTubeResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeResolverTests.swift; sourceTree = "<group>"; };
+		MPV001001 /* MPVManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVManagerTests.swift; sourceTree = "<group>"; };
+		MPV001003 /* MPVInstallationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVInstallationTests.swift; sourceTree = "<group>"; };
 		YT001005 /* ReframerYouTubeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReframerYouTubeUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -250,6 +254,8 @@
 				CBT001001 /* ControlBarStepTests.swift */,
 				SST001001 /* ScrollStepAccumulatorTests.swift */,
 				YT001003 /* YouTubeResolverTests.swift */,
+				MPV001001 /* MPVManagerTests.swift */,
+				MPV001003 /* MPVInstallationTests.swift */,
 				DDD40001 /* TestFixtures */,
 			);
 			path = ReframerTests;
@@ -467,6 +473,8 @@
 				CBT001002 /* ControlBarStepTests.swift in Sources */,
 				SST001002 /* ScrollStepAccumulatorTests.swift in Sources */,
 				YT001004 /* YouTubeResolverTests.swift in Sources */,
+				MPV001002 /* MPVManagerTests.swift in Sources */,
+				MPV001004 /* MPVInstallationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
