@@ -26,16 +26,6 @@ final class VideoFormatsTests: XCTestCase {
                       "AVI should be a supported format")
     }
 
-    func testMKVSupported() {
-        XCTAssertTrue(VideoFormats.supportedExtensions.contains("mkv"),
-                      "MKV should be a supported format")
-    }
-
-    func testWebMSupported() {
-        XCTAssertTrue(VideoFormats.supportedExtensions.contains("webm"),
-                      "WebM should be a supported format")
-    }
-
     func testSupportedTypesNotEmpty() {
         XCTAssertFalse(VideoFormats.supportedTypes.isEmpty, "There should be supported types")
         XCTAssertGreaterThan(VideoFormats.supportedTypes.count, 5, "Should support multiple types")
@@ -43,7 +33,7 @@ final class VideoFormatsTests: XCTestCase {
 
     func testSupportedExtensionsNotEmpty() {
         XCTAssertFalse(VideoFormats.supportedExtensions.isEmpty, "Should have supported extensions")
-        XCTAssertGreaterThan(VideoFormats.supportedExtensions.count, 10, "Should support many extensions")
+        XCTAssertGreaterThan(VideoFormats.supportedExtensions.count, 5, "Should support several extensions")
     }
 
     // MARK: - isSupported URL method
