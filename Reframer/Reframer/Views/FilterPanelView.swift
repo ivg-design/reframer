@@ -1,6 +1,11 @@
 import Cocoa
 import Combine
 
+/// Flipped view for top-aligned scroll content
+private class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
+
 /// Floating panel view with filter toggles and parameter sliders
 class FilterPanelView: NSView {
 
@@ -14,9 +19,9 @@ class FilterPanelView: NSView {
 
     private let visualEffectView = NSVisualEffectView()
     private let scrollView = NSScrollView()
-    private let contentView = NSView()  // Document view for scroll
+    private let contentView = FlippedView()  // Flipped document view for top-aligned scroll
     private let contentStack = NSStackView()
-    private let titleLabel = NSTextField(labelWithString: "Filters")
+    private let titleLabel = NSTextField(labelWithString: "Advanced Filters")
     private let closeButton = NSButton()
     private let resetButton = NSButton()
     private let clearButton = NSButton()
@@ -359,11 +364,11 @@ class FilterPanelView: NSView {
         cancellables.removeAll()
         guard let state = videoState else { return }
 
-        state.$activeFilters
+        state.$advancedFilters
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] activeFilters in
-                self?.updateFilterToggles(activeFilters: activeFilters)
-                self?.rebuildParameters(for: activeFilters)
+            .sink { [weak self] advancedFilters in
+                self?.updateFilterToggles(activeFilters: advancedFilters)
+                self?.rebuildParameters(for: advancedFilters)
             }
             .store(in: &cancellables)
 
@@ -409,7 +414,7 @@ class FilterPanelView: NSView {
     @objc private func filterToggleChanged(_ sender: NSSwitch) {
         guard let identifier = sender.identifier?.rawValue,
               let filter = VideoFilter.allCases.first(where: { $0.rawValue == identifier }) else { return }
-        videoState?.toggleFilter(filter)
+        videoState?.toggleAdvancedFilter(filter)
     }
 
     @objc private func sliderChanged(_ sender: NSSlider) {
@@ -450,6 +455,6 @@ class FilterPanelView: NSView {
     }
 
     @objc private func clearAllFilters() {
-        videoState?.clearAllFilters()
+        videoState?.clearAdvancedFilters()
     }
 }

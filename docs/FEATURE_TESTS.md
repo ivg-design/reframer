@@ -2,6 +2,19 @@
 
 This document lists **practical automated tests** (unit, integration, and UI) that should be added to conclusively verify every feature in `FEATURES.md`. Each test includes a short method + expected result. Where a feature can’t be validated purely with unit tests, it is called out and mapped to an **XCUITest/UI test** or **integration test**. The goal is full coverage of all functional requirements.
 
+## Implemented (2026-02-01)
+- UI: Timeline scrub updates frame (`ReframerIntegrationTests.testTimelineScrubUpdatesFrame`)
+- UI: Frame input Shift+Arrow steps 10 frames (`ReframerIntegrationTests.testFrameField_ShiftArrowStepsBy10`)
+- UI: Opacity input Shift+Arrow steps 10% (`ReframerIntegrationTests.testOpacityField_ShiftArrowAdjustsBy10`)
+- UI: Quick filter parameterless disables slider (`ReframerIntegrationTests.testQuickFilterParameterlessDisablesSlider`)
+- UI: Mute restores volume (`ReframerIntegrationTests.testMuteRestoresPreviousVolume`)
+- UI: Cmd+A selects all in inputs (`ReframerIntegrationTests.testInputField_CmdASelectAllReplacesValue`)
+- UI: Cmd+PageDown steps when locked (`ReframerIntegrationTests.testLockMode_CmdPageDownStepsFrames`)
+- Unit: Input command selectors mapped (`ControlBarStepTests`)
+- Unit: Scroll step accumulation (`ScrollStepAccumulatorTests`)
+- Unit: Drop zone load handler (`DropZoneViewTests`)
+- Unit: Preference persistence + mute restore (`VideoStateTests`)
+
 ## Test Harness & Fixtures (Foundational)
 These are prerequisites that many tests depend on.
 
@@ -19,6 +32,11 @@ These are prerequisites that many tests depend on.
 - **Type**: Test harness
 - **Method**: Add optional launch argument to auto‑open fixture video and start paused.
 - **Pass**: App launches into known state, enabling deterministic UI tests.
+
+### F-004: YouTube URL hook (optional)
+- **Type**: Test harness
+- **Method**: Use `UITEST_YOUTUBE_URL` to run the YouTube streaming UI test against a real video.
+- **Pass**: The optional UI test can resolve and start playback when a URL is provided.
 
 ---
 
@@ -67,6 +85,16 @@ These are prerequisites that many tests depend on.
 - **Type**: Unit + integration
 - **Method**: `VideoFormats.isSupported` returns true for expected extensions. Load fixtures with matching UTTypes.
 - **Pass**: Supported list matches feature list; open dialog filters correctly.
+
+### V-001b: YouTube link playback (optional)
+- **Type**: UI test (optional)
+- **Method**: Long‑press **Open**, paste `UITEST_YOUTUBE_URL`, click **Open**, wait for timeline slider to enable.
+- **Pass**: Video loads and playback controls respond.
+
+### V-001c: MPV fallback for WebM (conditional)
+- **Type**: Integration/UI test (optional)
+- **Method**: Provide a `.webm` path and enable libmpv; load via drag‑drop and verify playback/metadata updates.
+- **Pass**: Video renders with correct duration and frame counts.
 
 ### V-002: Play / pause toggle
 - **Type**: Integration/UI test

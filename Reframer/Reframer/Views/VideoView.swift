@@ -11,9 +11,14 @@ class VideoView: NSView {
     private let playerLayer = AVPlayerLayer()
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
-    private var currentAsset: AVURLAsset?
+    private var currentAsset: AVAsset?
+    private var currentVideoAsset: AVURLAsset?
     private var timeObserver: Any?
+    private var playerItemStatusObservation: NSKeyValueObservation?
+    private var playerItemFailedObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
+    private var loadToken = UUID()
+    private var filterToken = UUID()
 
     // Core Image context for filter processing (reused for performance)
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -26,6 +31,7 @@ class VideoView: NSView {
     private var dragStart: NSPoint = .zero
     private var panStart: CGSize = .zero
     private var isPanning: Bool = false  // Track if we started a pan operation
+    private var scrollStepper = ScrollStepAccumulator()
 
     // MARK: - Initialization
 
@@ -76,7 +82,12 @@ class VideoView: NSView {
         state.$isPlaying
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isPlaying in
-                if isPlaying { self?.player?.play() } else { self?.player?.pause() }
+                guard let self = self else { return }
+                if isPlaying {
+                    self.player?.play()
+                } else {
+                    self.player?.pause()
+                }
             }
             .store(in: &cancellables)
 
@@ -92,39 +103,44 @@ class VideoView: NSView {
         state.$videoURL
             .receive(on: DispatchQueue.main)
             .sink { [weak self] url in
-                if let url = url {
-                    self?.loadVideo(url: url)
+                guard let self = self, let url = url else { return }
+                self.loadVideo(url: url)
+            }
+            .store(in: &cancellables)
+
+        state.seekRequests
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] request in
+                switch request {
+                case .time(let time, let accurate):
+                    self?.seek(to: time, accurate: accurate)
+                case .frame(let frame):
+                    self?.seekToFrame(frame)
                 }
             }
             .store(in: &cancellables)
 
-        // Listen for seek notifications
-        NotificationCenter.default.publisher(for: .seekToTime)
+        state.frameStepRequests
             .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Double }
-            .sink { [weak self] time in self?.scrub(to: time) }
+            .sink { [weak self] request in
+                let forward = request.direction == .forward
+                self?.stepFrame(forward: forward, amount: request.amount)
+            }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: .seekToFrame)
+        // Observe quick filter changes
+        state.$quickFilter
             .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Int }
-            .sink { [weak self] frame in self?.seekToFrame(frame) }
+            .sink { [weak self] _ in self?.applyCurrentFilters() }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: .frameStepForward)
+        state.$quickFilterValue
             .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Int }
-            .sink { [weak self] amount in self?.stepFrame(forward: true, amount: amount) }
+            .sink { [weak self] _ in self?.applyCurrentFilters() }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: .frameStepBackward)
-            .receive(on: DispatchQueue.main)
-            .compactMap { $0.object as? Int }
-            .sink { [weak self] amount in self?.stepFrame(forward: false, amount: amount) }
-            .store(in: &cancellables)
-
-        // Observe filter changes
-        state.$activeFilters
+        // Observe advanced filter changes
+        state.$advancedFilters
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyCurrentFilters() }
             .store(in: &cancellables)
@@ -193,58 +209,90 @@ class VideoView: NSView {
         cleanup()
         guard let state = videoState else { return }
 
+        let token = UUID()
+        loadToken = token
+        filterToken = token
+
         // Reset state for new video
+        state.isVideoLoaded = false
         state.currentTime = 0
         state.currentFrame = 0
         state.duration = 0
         state.totalFrames = 0
         lastSeekTime = -1  // Allow scrubbing from the start
 
-        let asset = AVURLAsset(url: url)
-        currentAsset = asset
-        playerItem = AVPlayerItem(asset: asset)
+        let videoAsset = AVURLAsset(url: url)
+        currentVideoAsset = videoAsset
+
+        // Set up player SYNCHRONOUSLY for responsive scrubbing
+        currentAsset = videoAsset
+        playerItem = AVPlayerItem(asset: videoAsset)
         player = AVPlayer(playerItem: playerItem)
         player?.volume = state.volume
         playerLayer.player = player
-
-        // Apply current filters if any
+        installPlayerItemObservers(token: token)
+        installTimeObserver()
         applyCurrentFilters()
+        if state.isPlaying {
+            player?.play()
+        }
 
-        // Load asset properties
+        // Load metadata asynchronously
         Task { [weak self, weak state] in
+            guard let self = self else { return }
             do {
-                let duration = try await asset.load(.duration)
-                let tracks = try await asset.load(.tracks)
-
-                await MainActor.run {
-                    guard let state = state else { return }
-                    state.duration = CMTimeGetSeconds(duration)
-                    state.totalFrames = Int(state.duration * state.frameRate)
-                }
-
-                if let track = tracks.first(where: { $0.mediaType == .video }) {
-                    let fps = try? await track.load(.nominalFrameRate)
-                    let (naturalSize, preferredTransform) = try await track.load(.naturalSize, .preferredTransform)
-                    let transformedSize = naturalSize.applying(preferredTransform)
-                    let resolvedSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
-
-                    await MainActor.run {
-                        guard let state = state else { return }
-                        if let fps = fps, fps > 0 {
-                            state.frameRate = Double(fps)
-                            state.totalFrames = Int(state.duration * Double(fps))
-                        }
-                        state.videoNaturalSize = resolvedSize
-                    }
-                }
+                try await self.loadMetadata(for: videoAsset, state: state, token: token)
             } catch {
                 await MainActor.run {
-                    self?.showVideoLoadError(error)
+                    self.showVideoLoadError(error)
+                }
+            }
+        }
+    }
+
+    private var lastSeekTime: Double = -1
+
+    private func installPlayerItemObservers(token: UUID) {
+        playerItemStatusObservation = playerItem?.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            guard let self = self, let state = self.videoState else { return }
+            DispatchQueue.main.async {
+                guard self.loadToken == token else { return }
+                switch item.status {
+                case .readyToPlay:
+                    state.isVideoLoaded = true
+                case .failed:
+                    state.isVideoLoaded = false
+                    self.showVideoLoadError(item.error ?? NSError(domain: "AVFoundation", code: -1))
+                default:
+                    break
                 }
             }
         }
 
-        // Time observer for playback position
+        if let observer = playerItemFailedObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let item = playerItem {
+            playerItemFailedObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemFailedToPlayToEndTime,
+                object: item,
+                queue: .main
+            ) { [weak self] notification in
+                guard let self = self else { return }
+                let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+                self.videoState?.isVideoLoaded = false
+                if let error = error {
+                    self.showVideoLoadError(error)
+                }
+            }
+        }
+    }
+
+    private func installTimeObserver() {
+        if let obs = timeObserver {
+            player?.removeTimeObserver(obs)
+            timeObserver = nil
+        }
         let interval = CMTime(value: 1, timescale: 30)
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let state = self?.videoState else { return }
@@ -256,9 +304,38 @@ class VideoView: NSView {
         }
     }
 
-    private var lastSeekTime: Double = -1
+    private func loadMetadata(for asset: AVAsset, state: VideoState?, token: UUID) async throws {
+        let duration = try await asset.load(.duration)
+        let tracks = try await asset.load(.tracks)
 
-    func scrub(to time: Double) {
+        await MainActor.run {
+            guard let state = state, self.loadToken == token else { return }
+            state.duration = CMTimeGetSeconds(duration)
+            state.totalFrames = Int(state.duration * state.frameRate)
+        }
+
+        if let track = tracks.first(where: { $0.mediaType == .video }) {
+            var fps = try? await track.load(.nominalFrameRate)
+            let (naturalSize, preferredTransform) = try await track.load(.naturalSize, .preferredTransform)
+            let transformedSize = naturalSize.applying(preferredTransform)
+            let resolvedSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
+
+            if (fps == nil || fps == 0), let sourceTrack = try? await currentVideoAsset?.load(.tracks).first(where: { $0.mediaType == .video }) {
+                fps = try? await sourceTrack.load(.nominalFrameRate)
+            }
+
+            await MainActor.run {
+                guard let state = state, self.loadToken == token else { return }
+                if let fps = fps, fps > 0 {
+                    state.frameRate = Double(fps)
+                    state.totalFrames = Int(state.duration * Double(fps))
+                }
+                state.videoNaturalSize = resolvedSize
+            }
+        }
+    }
+
+    func seek(to time: Double, accurate: Bool) {
         guard let state = videoState else { return }
 
         // Clamp to valid range
@@ -270,6 +347,8 @@ class VideoView: NSView {
 
         let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 600)
         player?.currentItem?.cancelPendingSeeks()
+
+        // Always use accurate seeking for smooth scrubbing (seeks to exact frame, not keyframe)
         player?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
         state.currentTime = clampedTime
         state.currentFrame = Int(clampedTime * state.frameRate)
@@ -279,6 +358,7 @@ class VideoView: NSView {
         guard let state = videoState else { return }
         let time = Double(frame) / state.frameRate
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+        // Direct seek - bypasses debounce for frame-accurate stepping
         player?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak state] _ in
             DispatchQueue.main.async {
                 state?.currentFrame = frame
@@ -316,10 +396,16 @@ class VideoView: NSView {
             player?.removeTimeObserver(obs)
             timeObserver = nil
         }
+        playerItemStatusObservation = nil
+        if let observer = playerItemFailedObserver {
+            NotificationCenter.default.removeObserver(observer)
+            playerItemFailedObserver = nil
+        }
         player?.pause()
         player = nil
         playerItem = nil
         currentAsset = nil
+        currentVideoAsset = nil
     }
 
     deinit {
@@ -333,20 +419,19 @@ class VideoView: NSView {
               let state = videoState,
               let playerItem = playerItem else { return }
 
-        // If no filters active, remove any existing composition
-        guard !state.activeFilters.isEmpty else {
+        let quickFilter = state.quickFilter
+        let quickFilterValue = state.quickFilterValue
+        let orderedAdvanced = state.orderedAdvancedFilters
+        let settings = state.filterSettings
+
+        // If no filters active (neither quick nor advanced), remove any existing composition
+        guard quickFilter != nil || !orderedAdvanced.isEmpty else {
             playerItem.videoComposition = nil
             return
         }
 
-        // Create filters in order
-        let orderedFilters = state.orderedActiveFilters
-        let filters = orderedFilters.compactMap { $0.createFilter(settings: state.filterSettings) }
-
-        guard !filters.isEmpty else {
-            playerItem.videoComposition = nil
-            return
-        }
+        let token = UUID()
+        filterToken = token
 
         // Get video track to determine size and timing
         Task { [weak self] in
@@ -361,11 +446,15 @@ class VideoView: NSView {
                 let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
 
                 await MainActor.run {
+                    guard self.filterToken == token else { return }
                     self.createVideoComposition(
                         for: playerItem,
                         renderSize: renderSize,
                         frameRate: nominalFrameRate,
-                        filters: filters
+                        quickFilter: quickFilter,
+                        quickFilterValue: quickFilterValue,
+                        advancedFilters: orderedAdvanced,
+                        settings: settings
                     )
                 }
             } catch {
@@ -378,7 +467,10 @@ class VideoView: NSView {
         for playerItem: AVPlayerItem,
         renderSize: CGSize,
         frameRate: Float,
-        filters: [CIFilter]
+        quickFilter: VideoFilter?,
+        quickFilterValue: Double,
+        advancedFilters: [VideoFilter],
+        settings: FilterSettings
     ) {
         let composition = AVMutableVideoComposition(asset: playerItem.asset, applyingCIFiltersWithHandler: { [weak self] request in
             guard let self = self else {
@@ -389,7 +481,17 @@ class VideoView: NSView {
             // Start with source image
             var currentImage = request.sourceImage
 
-            // Chain all filters together
+            // Chain all filters together (create per-frame to avoid thread-safety issues)
+            var filters: [CIFilter] = []
+            if let quickFilter = quickFilter,
+               let quick = quickFilter.createQuickFilter(normalizedValue: quickFilterValue) {
+                filters.append(quick)
+            }
+            for filter in advancedFilters {
+                if let created = filter.createFilter(settings: settings) {
+                    filters.append(created)
+                }
+            }
             for filter in filters {
                 filter.setValue(currentImage, forKey: kCIInputImageKey)
                 if let outputImage = filter.outputImage {
@@ -405,11 +507,8 @@ class VideoView: NSView {
         composition.renderSize = renderSize
 
         // Set frame duration based on video frame rate
-        if frameRate > 0 {
-            composition.frameDuration = CMTime(value: 1, timescale: CMTimeScale(frameRate))
-        } else {
-            composition.frameDuration = CMTime(value: 1, timescale: 30)
-        }
+        let fps = frameRate > 0 ? Double(frameRate) : 30.0
+        composition.frameDuration = CMTimeMakeWithSeconds(1.0 / fps, preferredTimescale: 600)
 
         playerItem.videoComposition = composition
     }
@@ -461,7 +560,7 @@ class VideoView: NSView {
 
         guard delta != 0 else { return }
 
-        let direction = delta < 0 ? 1.0 : -1.0
+        let direction = delta > 0 ? 1.0 : -1.0
         let magnitude: Double
         if event.hasPreciseScrollingDeltas {
             magnitude = max(0.25, min(4.0, abs(delta) / 10.0))
@@ -477,10 +576,9 @@ class VideoView: NSView {
             state.adjustZoom(byPercent: direction * 5.0 * magnitude)
         } else {
             // Frame stepping
-            if delta > 0.5 {
-                NotificationCenter.default.post(name: .frameStepBackward, object: 1)
-            } else if delta < -0.5 {
-                NotificationCenter.default.post(name: .frameStepForward, object: 1)
+            let steps = scrollStepper.steps(for: delta, hasPreciseDeltas: event.hasPreciseScrollingDeltas)
+            for step in steps {
+                state.requestFrameStep(direction: step, amount: 1)
             }
         }
     }

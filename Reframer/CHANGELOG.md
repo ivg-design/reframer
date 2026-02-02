@@ -5,36 +5,46 @@ All notable changes to Reframer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0-beta.1] - 2026-02-01
+## [0.8.0] - 2025-02-01
 
 ### Added
-- **Video filters** — Quick filter system with click-to-cycle and hold-for-menu UI
-  - Brightness, Contrast, Exposure, Saturation adjustments
-  - Invert filter for negative effect
-  - Line Art filter for edge detection
-  - Blur filter for soft overlay effect
-- Filter panel for advanced multi-filter combinations
-- Filter chaining support with independent parameter controls
+- Real-time video filters (Grayscale, Sepia, Invert, Noir, etc.)
+- Quick filter dropdown in toolbar with adjustable intensity
+- Advanced filter panel for stacking multiple effects
 - Edge glow indicators with soft gradient effect for resize handle discovery
-- Subtle visual hints appear when hovering near window edges
+- Subtle visual hints appear when hovering near window edges (when unlocked)
+- 100ms debounce to prevent flickering on edge hover
+- Preference persistence for opacity, volume, mute state, always-on-top, and window position
+- Scroll step accumulator for precise trackpad stepping
+- Expanded unit test coverage for filters and persistence
+- Cmd+A select-all support in numeric input fields
 
 ### Changed
 - Toolbar now positioned below video canvas instead of overlapping
 - Video canvas has rounded corners on all four sides
 - Pan now requires Ctrl+drag to prevent conflict with window dragging
 - Improved drag-and-drop registration for video files
+- Timeline scrubbing uses fast seeks while dragging and accurate seeks on release
+- Open panel is asynchronous (non-blocking)
+- Default appearance forced to Dark mode
+- Control bar height increased to 80pt to avoid clipping
+- Quick filter slider disables for parameterless filters (Invert/Noir)
+- Global frame-step shortcuts now only fire when lock mode is enabled
 
 ### Fixed
+- Global shortcut permission prompt handled explicitly
+- Frame/zoom/opacity inputs capture Cmd+Shift/Option/Ctrl arrow selectors
+- Scroll wheel discrete stepping triggers on any tick
+- Parameterless quick filters now keep the opacity field readable while disabling edits
+- Supported format detection checks UTType in addition to extensions
+- Mute toggle restores last volume instead of resetting
 - Toolbar and canvas width mismatch (was 861px vs 800px)
 - Scrubbar not resetting when loading a new video
 - Scrubbar not reaching the last frame
 - Window dragging accidentally causing video panning
 - Timeline slider now properly updates maxValue on video load
 
-### Supported Formats
-- MP4, MOV, ProRes, H.264, H.265, AVI
-
-## [0.7.0] - 2026-01-31
+## [1.0.0] - 2025-01-31
 
 ### Added
 - Pure AppKit implementation (migrated from SwiftUI)
@@ -50,7 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DocC API documentation
 - CI workflow for automated builds
 
-## [0.1.0] - 2026-01-30
+### Supported Formats
+- MP4, MOV, ProRes, H.264, H.265, AVI
+
+## [0.1.0] - 2025-01-30
 
 ### Added
 - Initial commit with basic video overlay functionality

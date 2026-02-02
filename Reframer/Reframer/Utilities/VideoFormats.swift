@@ -32,6 +32,10 @@ struct VideoFormats {
         // H.265/HEVC
         addType(&types, "public.hevc")
 
+        // AV1 (macOS 13+ with Apple Silicon hardware support)
+        addType(&types, "public.av1")
+        addType(&types, "org.aomedia.av1")
+
         // MPEG formats
         addType(&types, "public.mpeg")
         addType(&types, "public.mpeg-2-video")
@@ -51,17 +55,46 @@ struct VideoFormats {
         }
     }
 
-    /// File extensions for display and validation (AVFoundation-supported)
+    /// File extensions for display and validation
     static let supportedExtensions: [String] = [
         "mp4", "m4v", "mov", "avi",
         "mpeg", "mpg", "mts", "m2ts", "ts", "m2v",
-        "3gp", "3g2"
+        "wmv", "flv", "f4v",
+        "3gp", "3g2", "divx", "vob", "asf"
     ]
 
     /// Check if a URL is a supported video format
     static func isSupported(_ url: URL) -> Bool {
+        if let contentType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType {
+            if isSupported(contentType: contentType) {
+                return true
+            }
+        }
+
         let ext = url.pathExtension.lowercased()
-        return supportedExtensions.contains(ext)
+        if supportedExtensions.contains(ext) {
+            return true
+        }
+
+        if let type = UTType(filenameExtension: ext) {
+            return isSupported(contentType: type)
+        }
+
+        return false
+    }
+
+    static func isSupported(contentType: UTType) -> Bool {
+        for type in supportedTypes {
+            if contentType.conforms(to: type) {
+                return true
+            }
+        }
+
+        if contentType.conforms(to: .movie) || contentType.conforms(to: .video) || contentType.conforms(to: .audiovisualContent) {
+            return true
+        }
+
+        return false
     }
 
     /// Get display string for supported formats

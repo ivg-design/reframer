@@ -124,17 +124,10 @@
                 <menuItem title="Help" id="wpr-3q-Mcd">
                     <menu key="submenu" title="Help" systemMenu="help" id="F2S-fz-NVQ">
                         <items>
-                            <menuItem title="Documentation" id="Nc2-M9-bRr">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="openDocumentation:" target="-1" id="doc-action-1"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem isSeparatorItem="YES" id="g1l-t1-ujW"/>
-                            <menuItem title="Keyboard Shortcuts" keyEquivalent="/" id="FKE-Sm-Kum">
+                            <menuItem title="Reframer Documentation" keyEquivalent="?" id="Nc2-M9-bRr">
                                 <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
                                 <connections>
-                                    <action selector="showHelp:" target="-1" id="y3h-8O-THP"/>
+                                    <action selector="openReframerHelp:" target="-1" id="doc-action-1"/>
                                 </connections>
                             </menuItem>
                         </items>

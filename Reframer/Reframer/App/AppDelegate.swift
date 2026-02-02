@@ -1,10 +1,17 @@
 import Cocoa
 import Combine
+import ApplicationServices
+import WebKit
 
 // Custom window that can become key
 class TransparentWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    // Enable Cmd+M minimize for borderless windows
+    override func performMiniaturize(_ sender: Any?) {
+        miniaturize(sender)
+    }
 }
 
 @main
@@ -27,12 +34,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var localShortcutMonitor: Any?
     var mainWindow: TransparentWindow!
     private var controlWindow: TransparentWindow!
-    private var helpWindow: TransparentWindow?
+    private var shortcutsWindow: TransparentWindow?  // Keyboard shortcuts panel (H key)
+    private var documentationWindow: NSWindow?        // Documentation browser (Help menu)
+    private var documentationWebView: WKWebView?
     private var filterPanelWindow: TransparentWindow?
 
     let videoState = VideoState()
     private var cancellables = Set<AnyCancellable>()
-    private let controlWindowHeight: CGFloat = 40
+    private let controlWindowHeight: CGFloat = 80
+    private let windowFrameDefaultsKey = "VideoOverlay.mainWindowFrame"
 
     private var mainViewController: MainViewController!
     private var controlBar: ControlBar!
@@ -41,24 +51,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
+        NSApp.appearance = NSAppearance(named: .darkAqua)
         createMainWindow()
         createControlWindow()
         observeWindowFrameChanges()
         setupGlobalShortcuts()
         observeState()
 
-        // Skip move-to-Applications prompt during UI testing
-        if ProcessInfo.processInfo.environment["UITEST_MODE"] == nil {
-            ensureInstalledInApplications()
-        }
+        // Skip move-to-Applications prompt (disabled for development)
+        // ensureInstalledInApplications()
 
         // Auto-load test video if specified (for UI testing)
         if let testVideoPath = ProcessInfo.processInfo.environment["TEST_VIDEO_PATH"] {
             let url = URL(fileURLWithPath: testVideoPath)
             if FileManager.default.fileExists(atPath: testVideoPath) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.videoState.isVideoLoaded = false
                     self?.videoState.videoURL = url
-                    self?.videoState.isVideoLoaded = true
                 }
             }
         }
@@ -75,6 +84,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    /// Handle files opened via "Open With" from Finder
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let url = urls.first else { return }
+
+        // Check if it's a supported video format
+        if VideoFormats.isSupported(url) {
+            // Delay slightly to ensure windows are ready
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.videoState.isVideoLoaded = false
+                self?.videoState.videoURL = url
+            }
+        } else {
+            // Show error for unsupported formats
+            showErrorAlert(title: "Unsupported Format",
+                           message: "The file '\(url.lastPathComponent)' is not a supported video format.\n\nSupported formats: \(VideoFormats.displayString)")
+        }
     }
 
     // MARK: - Menu Setup
@@ -112,6 +139,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         fileMenuItem.submenu = fileMenu
         fileMenu.addItem(withTitle: "Open Video", action: #selector(openVideo(_:)), keyEquivalent: "o")
 
+        // Edit menu (required for Cmd+V paste in text fields)
+        let editMenuItem = NSMenuItem()
+        mainMenu.addItem(editMenuItem)
+        let editMenu = NSMenu(title: "Edit")
+        editMenuItem.submenu = editMenu
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Delete", action: #selector(NSText.delete(_:)), keyEquivalent: "")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
         // View menu
         let viewMenuItem = NSMenuItem()
         mainMenu.addItem(viewMenuItem)
@@ -124,7 +166,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         lockItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(lockItem)
 
-        // Filter menu
+        // Filter menu (single selection like toolbar, simple filters only)
         let filterMenuItem = NSMenuItem()
         mainMenu.addItem(filterMenuItem)
         let filterMenu = NSMenu(title: "Filter")
@@ -134,9 +176,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Filter items will be populated dynamically via menu delegate
         filterMenu.addItem(withTitle: "Placeholder", action: nil, keyEquivalent: "")
         filterMenu.addItem(.separator())
-        filterMenu.addItem(withTitle: "Clear All Filters", action: #selector(clearAllFilters(_:)), keyEquivalent: "")
-        filterMenu.addItem(.separator())
-        filterMenu.addItem(withTitle: "Filter Settings...", action: #selector(showFilterSettings(_:)), keyEquivalent: "")
+        filterMenu.addItem(withTitle: "Advanced Filters...", action: #selector(showFilterSettings(_:)), keyEquivalent: "")
         filterMenu.addItem(.separator())
         filterMenu.addItem(withTitle: "Reset Filter Parameters", action: #selector(resetFilterSettings(_:)), keyEquivalent: "")
 
@@ -161,7 +201,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(windowMenuItem)
         let windowMenu = NSMenu(title: "Window")
         windowMenuItem.submenu = windowMenu
-        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(toggleMinimize(_:)), keyEquivalent: "m")
         windowMenu.addItem(.separator())
         windowMenu.addItem(withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         NSApp.windowsMenu = windowMenu
@@ -172,8 +212,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let helpMenu = NSMenu(title: "Help")
         helpMenuItem.submenu = helpMenu
         helpMenu.addItem(withTitle: "Reframer Documentation", action: #selector(openReframerHelp(_:)), keyEquivalent: "?")
-        helpMenu.addItem(.separator())
-        helpMenu.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showHelp(_:)), keyEquivalent: "")
 
         NSApp.mainMenu = mainMenu
     }
@@ -185,15 +223,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         // Main window is just the video canvas - toolbar will be BELOW it
         let windowSize = NSSize(width: 800, height: 560)
-        let origin = NSPoint(
+        let defaultOrigin = NSPoint(
             x: screenFrame.midX - windowSize.width / 2,
             y: screenFrame.midY - windowSize.height / 2 + controlWindowHeight / 2
         )
-        let windowFrame = NSRect(origin: origin, size: windowSize)
+        let defaultFrame = NSRect(origin: defaultOrigin, size: windowSize)
+        let windowFrame = loadSavedWindowFrame(defaultFrame: defaultFrame, screenFrame: screenFrame)
 
         let window = TransparentWindow(
             contentRect: windowFrame,
-            styleMask: [.borderless, .resizable],
+            styleMask: [.borderless, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
@@ -273,6 +312,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow.makeKeyAndOrderFront(nil)
     }
 
+    private func loadSavedWindowFrame(defaultFrame: NSRect, screenFrame: NSRect) -> NSRect {
+        guard let savedString = UserDefaults.standard.string(forKey: windowFrameDefaultsKey) else {
+            return defaultFrame
+        }
+
+        let savedFrame = NSRectFromString(savedString)
+        if savedFrame.width <= 0 || savedFrame.height <= 0 {
+            return defaultFrame
+        }
+
+        return sanitizeWindowFrame(savedFrame, screenFrame: screenFrame)
+    }
+
+    private func sanitizeWindowFrame(_ frame: NSRect, screenFrame: NSRect) -> NSRect {
+        var adjusted = frame
+
+        if adjusted.width > screenFrame.width {
+            adjusted.size.width = screenFrame.width
+        }
+        if adjusted.height > screenFrame.height {
+            adjusted.size.height = screenFrame.height
+        }
+
+        if adjusted.minX < screenFrame.minX {
+            adjusted.origin.x = screenFrame.minX
+        }
+        if adjusted.maxX > screenFrame.maxX {
+            adjusted.origin.x = screenFrame.maxX - adjusted.width
+        }
+        if adjusted.minY < screenFrame.minY {
+            adjusted.origin.y = screenFrame.minY
+        }
+        if adjusted.maxY > screenFrame.maxY {
+            adjusted.origin.y = screenFrame.maxY - adjusted.height
+        }
+
+        return adjusted
+    }
+
     // MARK: - State Observation
 
     private func observeState() {
@@ -299,7 +377,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let level: NSWindow.Level = isOnTop ? .floating : .normal
                 self.mainWindow?.level = level
                 self.controlWindow?.level = level
-                self.helpWindow?.level = level
+                self.shortcutsWindow?.level = level
             }
             .store(in: &cancellables)
 
@@ -341,6 +419,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Global Shortcuts
 
     private func setupGlobalShortcuts() {
+        requestAccessibilityPermissionIfNeeded()
+
         globalShortcutMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleGlobalKey(event)
         }
@@ -356,27 +436,49 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func requestAccessibilityPermissionIfNeeded() {
+        // Already have permission - no need to prompt
+        if AXIsProcessTrusted() {
+            return
+        }
+
+        // Skip for UI tests
+        if ProcessInfo.processInfo.environment["UITEST_MODE"] != nil {
+            return
+        }
+
+        // Show the system accessibility prompt
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+    }
+
     @discardableResult
     private func handleGlobalKey(_ event: NSEvent) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let hasCommand = flags.contains(.command)
-        let hasShift = flags.contains(.shift)
+        let shortcuts = videoState.shortcutSettings
 
-        // Cmd+Shift+L - Toggle lock (global)
-        if hasCommand && hasShift && event.keyCode == 37 {
+        // Toggle lock (global)
+        if shortcuts.matches(event: event, action: .globalToggleLock) {
             videoState.isLocked.toggle()
             return true
         }
 
-        // Cmd+PageUp - Step frame forward (global)
-        if hasCommand && event.keyCode == 116 {
-            NotificationCenter.default.post(name: .frameStepForward, object: hasShift ? 10 : 1)
+        // Step frame forward (global)
+        if shortcuts.matches(event: event, action: .frameStepForward) {
+            videoState.requestFrameStep(direction: .forward, amount: 1)
+            return true
+        }
+        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepForward) {
+            videoState.requestFrameStep(direction: .forward, amount: 10)
             return true
         }
 
-        // Cmd+PageDown - Step frame backward (global)
-        if hasCommand && event.keyCode == 121 {
-            NotificationCenter.default.post(name: .frameStepBackward, object: hasShift ? 10 : 1)
+        // Step frame backward (global)
+        if shortcuts.matches(event: event, action: .frameStepBackward) {
+            videoState.requestFrameStep(direction: .backward, amount: 1)
+            return true
+        }
+        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepBackward) {
+            videoState.requestFrameStep(direction: .backward, amount: 10)
             return true
         }
 
@@ -386,58 +488,84 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Handle app-local keyboard shortcuts that should work from any window
     @discardableResult
     private func handleLocalKey(_ event: NSEvent) -> Bool {
+        let shortcuts = videoState.shortcutSettings
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let noModifiers = flags.isEmpty
+        let commandOnly = flags == [.command]
 
-        // Don't handle if a text field is first responder (check all windows)
-        // Check ALL windows, not just key window, since control bar is in separate window
+        // Cmd+A in text fields - select all
+        if commandOnly && event.keyCode == KeyCode.a,
+           let textView = activeFieldEditor() {
+            textView.selectAll(nil)
+            return true
+        }
+
+        // Enter/Esc in text fields - defocus and return focus to previous app
+        if event.keyCode == KeyCode.returnKey || event.keyCode == KeyCode.escape,
+           let textView = activeFieldEditor() {
+            textView.window?.makeFirstResponder(nil)
+            NSApp.hide(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                NSApp.unhide(nil)
+            }
+            return true
+        }
+
+        // Don't handle other shortcuts if a text field is first responder
         for window in NSApp.windows {
-            if let firstResponder = window.firstResponder,
-               firstResponder is NSTextView {
+            if let firstResponder = window.firstResponder, firstResponder is NSTextView {
                 return false
             }
         }
-
-        // Also check specific field editor state
         if let keyWindow = NSApp.keyWindow,
            let firstResponder = keyWindow.firstResponder,
            firstResponder is NSTextField {
             return false
         }
 
-        switch event.keyCode {
-        // Space - Play/Pause
-        case 49 where noModifiers && videoState.isVideoLoaded:
+        // Frame step (also works locally)
+        if shortcuts.matches(event: event, action: .frameStepForward) {
+            videoState.requestFrameStep(direction: .forward, amount: 1)
+            return true
+        }
+        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepForward) {
+            videoState.requestFrameStep(direction: .forward, amount: 10)
+            return true
+        }
+        if shortcuts.matches(event: event, action: .frameStepBackward) {
+            videoState.requestFrameStep(direction: .backward, amount: 1)
+            return true
+        }
+        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepBackward) {
+            videoState.requestFrameStep(direction: .backward, amount: 10)
+            return true
+        }
+
+        // Play/Pause
+        if shortcuts.matches(event: event, action: .playPause) && videoState.isVideoLoaded {
             videoState.isPlaying.toggle()
             return true
+        }
 
-        // L - Toggle lock
-        case 37 where noModifiers:
+        // Toggle lock (local)
+        if shortcuts.matches(event: event, action: .toggleLock) {
             videoState.isLocked.toggle()
             return true
+        }
 
-        // H - Toggle help
-        case 4 where noModifiers:
+        // Toggle lock (global) - also works locally
+        if shortcuts.matches(event: event, action: .globalToggleLock) {
+            videoState.isLocked.toggle()
+            return true
+        }
+
+        // Show help
+        if shortcuts.matches(event: event, action: .showHelp) {
             videoState.showHelp.toggle()
             return true
+        }
 
-        // 0 - Reset zoom to 100%
-        case 29 where noModifiers && videoState.isVideoLoaded && !videoState.isLocked:
-            videoState.zoomScale = 1.0
-            return true
-
-        // R - Reset view
-        case 15 where noModifiers && !videoState.isLocked:
-            videoState.resetView()
-            return true
-
-        // ? (Shift+/) - Toggle help
-        case 44 where flags.contains(.shift):
-            videoState.showHelp.toggle()
-            return true
-
-        // Escape - Close help or filter panel
-        case 53:
+        // Close modal (Esc) - but not while recording a shortcut
+        if shortcuts.matches(event: event, action: .closeModal) && !videoState.isRecordingShortcut {
             if videoState.showHelp {
                 videoState.showHelp = false
                 return true
@@ -447,36 +575,82 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return true
             }
             return false
+        }
 
-        // F - Toggle filter panel
-        case 3 where videoState.isVideoLoaded && noModifiers:
+        // Reset zoom
+        if shortcuts.matches(event: event, action: .resetZoom) && videoState.isVideoLoaded && !videoState.isLocked {
+            videoState.zoomScale = 1.0
+            return true
+        }
+
+        // Reset view
+        if shortcuts.matches(event: event, action: .resetView) && !videoState.isLocked {
+            videoState.resetView()
+            return true
+        }
+
+        // Toggle filter panel
+        if shortcuts.matches(event: event, action: .toggleFilterPanel) && videoState.isVideoLoaded {
             videoState.showFilterPanel.toggle()
             return true
-
-        // Arrow keys for pan (when unlocked and video loaded)
-        case 123 where videoState.isVideoLoaded && !videoState.isLocked: // Left
-            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
-            videoState.panOffset.width -= amount
-            return true
-
-        case 124 where videoState.isVideoLoaded && !videoState.isLocked: // Right
-            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
-            videoState.panOffset.width += amount
-            return true
-
-        case 126 where videoState.isVideoLoaded && !videoState.isLocked: // Up
-            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
-            videoState.panOffset.height += amount
-            return true
-
-        case 125 where videoState.isVideoLoaded && !videoState.isLocked: // Down
-            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
-            videoState.panOffset.height -= amount
-            return true
-
-        default:
-            return false
         }
+
+        // Pan shortcuts (with multiplier for 10px)
+        if videoState.isVideoLoaded && !videoState.isLocked {
+            if shortcuts.matches(event: event, action: .panLeft) {
+                videoState.panOffset.width -= 1.0
+                return true
+            }
+            if shortcuts.matchesWithMultiplier(event: event, action: .panLeft) {
+                videoState.panOffset.width -= 10.0
+                return true
+            }
+            if shortcuts.matches(event: event, action: .panRight) {
+                videoState.panOffset.width += 1.0
+                return true
+            }
+            if shortcuts.matchesWithMultiplier(event: event, action: .panRight) {
+                videoState.panOffset.width += 10.0
+                return true
+            }
+            if shortcuts.matches(event: event, action: .panUp) {
+                videoState.panOffset.height += 1.0
+                return true
+            }
+            if shortcuts.matchesWithMultiplier(event: event, action: .panUp) {
+                videoState.panOffset.height += 10.0
+                return true
+            }
+            if shortcuts.matches(event: event, action: .panDown) {
+                videoState.panOffset.height -= 1.0
+                return true
+            }
+            if shortcuts.matchesWithMultiplier(event: event, action: .panDown) {
+                videoState.panOffset.height -= 10.0
+                return true
+            }
+        }
+
+        // ? (Shift+/) - Toggle help (legacy, keep for convenience)
+        if event.keyCode == KeyCode.questionMark && flags.contains(.shift) {
+            videoState.showHelp.toggle()
+            return true
+        }
+
+        return false
+    }
+
+    private func activeFieldEditor() -> NSTextView? {
+        for window in NSApp.windows {
+            if let textView = window.firstResponder as? NSTextView {
+                return textView
+            }
+            if let textField = window.firstResponder as? NSTextField,
+               let editor = window.fieldEditor(false, for: textField) as? NSTextView {
+                return editor
+            }
+        }
+        return nil
     }
 
     // MARK: - Window Frame Updates
@@ -500,6 +674,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateControlWindowFrame()
         updateHelpWindowFrame()
         updateFilterPanelWindowFrame()
+        saveWindowFrame()
     }
 
     private func updateControlWindowFrame() {
@@ -515,10 +690,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         controlWindow.setFrame(controlFrame, display: true)
     }
 
+    private func saveWindowFrame() {
+        guard let mainWindow = mainWindow else { return }
+        let frameString = NSStringFromRect(mainWindow.frame)
+        UserDefaults.standard.set(frameString, forKey: windowFrameDefaultsKey)
+    }
+
     // MARK: - Help Window
 
     private func showHelpWindow() {
-        if helpWindow == nil {
+        if shortcutsWindow == nil {
             let mainFrame = mainWindow.frame
             let size = NSSize(width: 360, height: 500)
             let origin = NSPoint(
@@ -549,26 +730,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             panel.setAccessibilityIdentifier("window-help")
             helpView.setAccessibilityIdentifier("modal-help")
 
-            helpWindow = panel
+            shortcutsWindow = panel
             mainWindow.addChildWindow(panel, ordered: .above)
         }
 
-        helpWindow?.orderFront(nil)
+        shortcutsWindow?.orderFront(nil)
     }
 
     private func hideHelpWindow() {
-        helpWindow?.orderOut(nil)
+        shortcutsWindow?.orderOut(nil)
     }
 
     private func updateHelpWindowFrame() {
-        guard let helpWindow = helpWindow else { return }
+        guard let shortcutsWindow = shortcutsWindow else { return }
         let mainFrame = mainWindow.frame
-        let size = helpWindow.frame.size
+        let size = shortcutsWindow.frame.size
         let origin = NSPoint(
             x: mainFrame.midX - size.width / 2,
             y: mainFrame.midY - size.height / 2
         )
-        helpWindow.setFrameOrigin(origin)
+        shortcutsWindow.setFrameOrigin(origin)
     }
 
     // MARK: - Filter Panel Window
@@ -638,9 +819,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.canChooseDirectories = false
         panel.message = "Select a video file"
 
-        if panel.runModal() == .OK, let url = panel.url {
-            videoState.videoURL = url
-            videoState.isVideoLoaded = true
+        // Show as sheet attached to main window so it appears above the floating window
+        if let window = mainWindow {
+            panel.beginSheetModal(for: window) { [weak self] response in
+                guard response == .OK, let url = panel.url else { return }
+                self?.videoState.isVideoLoaded = false
+                self?.videoState.videoURL = url
+            }
+        } else {
+            panel.begin { [weak self] response in
+                guard response == .OK, let url = panel.url else { return }
+                self?.videoState.isVideoLoaded = false
+                self?.videoState.videoURL = url
+            }
+        }
+    }
+
+    /// Show an error alert as a sheet on the main window
+    private func showErrorAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        if let window = mainWindow {
+            alert.beginSheetModal(for: window, completionHandler: nil)
+        } else {
+            alert.runModal()
         }
     }
 
@@ -671,30 +875,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @IBAction func stepForward(_ sender: Any?) {
-        NotificationCenter.default.post(name: .frameStepForward, object: 1)
+        videoState.requestFrameStep(direction: .forward, amount: 1)
     }
 
     @IBAction func stepBackward(_ sender: Any?) {
-        NotificationCenter.default.post(name: .frameStepBackward, object: 1)
+        videoState.requestFrameStep(direction: .backward, amount: 1)
     }
 
-    @IBAction func showHelp(_ sender: Any?) {
+    @IBAction func showKeyboardShortcuts(_ sender: Any?) {
         videoState.showHelp = true
     }
 
     @IBAction func openReframerHelp(_ sender: Any?) {
-        // Open the Reframer help book
-        let helpBookName = Bundle.main.object(forInfoDictionaryKey: "CFBundleHelpBookName") as? String ?? "com.reframer.help"
-        NSHelpManager.shared.openHelpAnchor("index", inBook: helpBookName)
+        // Show documentation in a floating window above Reframer
+        guard let resourceURL = Bundle.main.resourceURL else { return }
+        let helpURL = resourceURL
+            .appendingPathComponent("Reframer.help")
+            .appendingPathComponent("Contents/Resources/en.lproj/index.html")
+
+        // Create or reuse documentation window
+        if documentationWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 700, height: 600),
+                styleMask: [.titled, .closable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Reframer Documentation"
+            window.level = .floating + 1  // Above Reframer's floating level
+            window.isReleasedWhenClosed = false
+
+            let webView = WKWebView(frame: window.contentView!.bounds)
+            webView.autoresizingMask = [.width, .height]
+            window.contentView?.addSubview(webView)
+
+            documentationWindow = window
+            documentationWebView = webView
+        }
+
+        documentationWebView?.loadFileURL(helpURL, allowingReadAccessTo: resourceURL)
+        documentationWindow?.center()
+        documentationWindow?.makeKeyAndOrderFront(nil)
     }
 
-    @IBAction func toggleFilter(_ sender: NSMenuItem) {
+    @IBAction func selectFilter(_ sender: NSMenuItem) {
         guard let filter = sender.representedObject as? VideoFilter else { return }
-        videoState.toggleFilter(filter)
+        // Single selection - same as toolbar behavior
+        videoState.setQuickFilter(filter)
     }
 
-    @IBAction func clearAllFilters(_ sender: Any?) {
-        videoState.clearAllFilters()
+    @IBAction func clearQuickFilter(_ sender: Any?) {
+        videoState.setQuickFilter(nil)
+    }
+
+    @IBAction func toggleMinimize(_ sender: Any?) {
+        // Toggle minimize - restore if minimized, minimize if not
+        if mainWindow.isMiniaturized {
+            mainWindow.deminiaturize(sender)
+        } else {
+            mainWindow.miniaturize(sender)
+        }
     }
 
     @IBAction func showFilterSettings(_ sender: Any?) {
@@ -715,12 +955,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let alert = NSAlert()
         alert.messageText = "Move to Applications folder?"
-        alert.informativeText = "Video Overlay should be installed in /Applications."
+        alert.informativeText = "Reframer should be installed in /Applications."
         alert.addButton(withTitle: "Move")
         alert.addButton(withTitle: "Cancel")
-        let response = alert.runModal()
-        guard response == .alertFirstButtonReturn else { return }
 
+        // Show as sheet if main window is ready, otherwise use modal
+        let handleResponse: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            self?.performMoveToApplications(from: bundleURL, to: applicationsURL)
+        }
+
+        if let window = mainWindow {
+            alert.beginSheetModal(for: window, completionHandler: handleResponse)
+        } else {
+            handleResponse(alert.runModal())
+        }
+    }
+
+    private func performMoveToApplications(from bundleURL: URL, to applicationsURL: URL) {
         let destinationURL = applicationsURL.appendingPathComponent(bundleURL.lastPathComponent)
         let fileManager = FileManager.default
 
@@ -728,16 +980,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if fileManager.fileExists(atPath: destinationURL.path) {
                 try fileManager.removeItem(at: destinationURL)
             }
-            try fileManager.copyItem(at: bundleURL, to: destinationURL)
+            // Move instead of copy to avoid duplicate app bundles
+            try fileManager.moveItem(at: bundleURL, to: destinationURL)
 
             NSWorkspace.shared.openApplication(at: destinationURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
                 NSApp.terminate(nil)
             }
         } catch {
-            let errorAlert = NSAlert(error: error)
-            errorAlert.messageText = "Could not move app"
-            errorAlert.informativeText = "Please drag Video Overlay into /Applications manually."
-            errorAlert.runModal()
+            // If move fails (e.g., cross-volume), try copy + delete original
+            do {
+                try fileManager.copyItem(at: bundleURL, to: destinationURL)
+                try? fileManager.removeItem(at: bundleURL) // Best effort delete original
+                NSWorkspace.shared.openApplication(at: destinationURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
+                    NSApp.terminate(nil)
+                }
+            } catch {
+                showErrorAlert(title: "Could not move app",
+                               message: "Please drag Reframer into /Applications manually.\n\n\(error.localizedDescription)")
+            }
         }
     }
 }
@@ -749,9 +1009,9 @@ extension AppDelegate: NSMenuDelegate {
         // Only handle the Filter menu
         guard menu.title == "Filter" else { return }
 
-        // Remove existing filter items (keep separators and other items)
+        // Remove existing filter items and "None" item
         let itemsToRemove = menu.items.filter { item in
-            item.representedObject is VideoFilter
+            item.representedObject is VideoFilter || item.title == "None"
         }
         itemsToRemove.forEach { menu.removeItem($0) }
 
@@ -760,16 +1020,26 @@ extension AppDelegate: NSMenuDelegate {
             menu.removeItem(placeholder)
         }
 
-        // Insert filter items at the beginning
-        for (index, filter) in VideoFilter.allCases.enumerated() {
+        // Insert "None" option at the beginning
+        let noneItem = NSMenuItem()
+        noneItem.title = "None"
+        noneItem.image = NSImage(systemSymbolName: "circle.slash", accessibilityDescription: "None")
+        noneItem.target = self
+        noneItem.action = #selector(clearQuickFilter(_:))
+        noneItem.state = (videoState.quickFilter == nil) ? .on : .off
+        menu.insertItem(noneItem, at: 0)
+
+        // Insert simple filters only (single selection like toolbar)
+        for (index, filter) in VideoFilter.simpleFilters.enumerated() {
             let item = NSMenuItem()
             item.title = filter.rawValue
             item.image = NSImage(systemSymbolName: filter.iconName, accessibilityDescription: filter.rawValue)
             item.target = self
-            item.action = #selector(toggleFilter(_:))
+            item.action = #selector(selectFilter(_:))
             item.representedObject = filter
-            item.state = videoState.isFilterActive(filter) ? .on : .off
-            menu.insertItem(item, at: index)
+            // Radio-style: checkmark only on current quickFilter
+            item.state = (videoState.quickFilter == filter) ? .on : .off
+            menu.insertItem(item, at: index + 1)  // +1 for "None" item
         }
     }
 }

@@ -1,16 +1,26 @@
 import XCTest
 
 final class ZoomScreenshotTest: XCTestCase {
-    
-    let screenshotDir = "/Users/ivg/github/video-overlay/Reframer/screenshots"
+
+    private func fixtureURL(_ name: String, ext: String = "mp4") -> URL {
+        let fileURL = URL(fileURLWithPath: #file)
+        let baseURL = fileURL.deletingLastPathComponent().deletingLastPathComponent() // .../Reframer
+        return baseURL.appendingPathComponent("ReframerTests/TestFixtures/\(name).\(ext)")
+    }
+
+    let screenshotDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("ReframerScreenshots", isDirectory: true)
     
     func testZoomVisualVerification() throws {
+        guard ProcessInfo.processInfo.environment["UITEST_SCREENSHOTS"] == "1" else {
+            throw XCTSkip("Set UITEST_SCREENSHOTS=1 to capture screenshots")
+        }
+
         // Create screenshot directory
-        try? FileManager.default.createDirectory(atPath: screenshotDir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
         
         let app = XCUIApplication()
         app.launchEnvironment["UITEST_MODE"] = "1"
-        app.launchEnvironment["TEST_VIDEO_PATH"] = "/Users/ivg/github/video-overlay/Reframer/ReframerTests/TestFixtures/test-video.mp4"
+        app.launchEnvironment["TEST_VIDEO_PATH"] = fixtureURL("test-video").path
         app.launch()
         
         // Wait for video to load
@@ -24,7 +34,7 @@ final class ZoomScreenshotTest: XCTestCase {
         
         // Screenshot at 100%
         let screen1 = XCUIScreen.main.screenshot()
-        let url1 = URL(fileURLWithPath: "\(screenshotDir)/zoom_100_percent.png")
+        let url1 = screenshotDir.appendingPathComponent("zoom_100_percent.png")
         try screen1.pngRepresentation.write(to: url1)
         
         // Zoom to 200%
@@ -40,7 +50,7 @@ final class ZoomScreenshotTest: XCTestCase {
         
         // Screenshot at 200%
         let screen2 = XCUIScreen.main.screenshot()
-        let url2 = URL(fileURLWithPath: "\(screenshotDir)/zoom_200_percent.png")
+        let url2 = screenshotDir.appendingPathComponent("zoom_200_percent.png")
         try screen2.pngRepresentation.write(to: url2)
         
         app.terminate()

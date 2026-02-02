@@ -8,14 +8,17 @@ A lightweight macOS video overlay app for frame-accurate video reference. Design
 - **Frame-Accurate Playback**: Step through video frame-by-frame using keyboard shortcuts or scroll wheel
 - **Zoom & Pan**: Inspect video details with zoom (up to 1000%) and pan controls
 - **Adjustable Opacity**: Set video transparency from 2-100%
+- **Persistent Settings**: Remembers opacity, volume, and window position
 - **Lock Mode**: Click-through mode lets you interact with apps underneath
 - **Drag & Drop**: Open videos by dragging files onto the window
 - **Liquid Glass UI**: Modern macOS Tahoe-style controls with Sequoia fallback
+- **YouTube Links**: Long-press Open to paste a YouTube URL
 
 ## System Requirements
 
 - macOS 15.0 (Sequoia) or later
 - macOS 26.0 (Tahoe) recommended for Liquid Glass visual effects
+- WebM/MKV playback requires libmpv (prompted on first use)
 
 ## Keyboard Shortcuts
 

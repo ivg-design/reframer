@@ -42,10 +42,12 @@ class MainViewController: NSViewController {
         // Create views programmatically
         videoView = VideoView()
         videoView.translatesAutoresizingMaskIntoConstraints = false
+        videoView.setAccessibilityIdentifier("video-view")
         view.addSubview(videoView)
 
         dropZoneView = DropZoneView()
         dropZoneView.translatesAutoresizingMaskIntoConstraints = false
+        dropZoneView.setAccessibilityIdentifier("drop-zone")
         view.addSubview(dropZoneView)
 
         // Edge indicator view for resize hints (pulsing edges when unlocked)
@@ -88,8 +90,9 @@ class MainViewController: NSViewController {
         videoState.$isVideoLoaded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isLoaded in
-                self?.dropZoneView?.isHidden = isLoaded
-                self?.videoView?.isHidden = !isLoaded
+                guard let self = self else { return }
+                self.dropZoneView?.isHidden = isLoaded
+                self.videoView?.isHidden = !isLoaded
             }
             .store(in: &cancellables)
 
@@ -138,63 +141,63 @@ class MainViewController: NSViewController {
 
         switch event.keyCode {
         // Cmd+O - Open video
-        case 31 where cmd && !shift:
+        case KeyCode.o where cmd && !shift:
             NotificationCenter.default.post(name: .openVideo, object: nil)
             return true
 
         // Space - Play/Pause
-        case 49 where flags.isEmpty && videoState.isVideoLoaded:
+        case KeyCode.space where flags.isEmpty && videoState.isVideoLoaded:
             videoState.isPlaying.toggle()
             return true
 
         // Arrow keys - Pan (when unlocked)
-        case 123 where videoState.isVideoLoaded && !videoState.isLocked: // Left
+        case KeyCode.leftArrow where videoState.isVideoLoaded && !videoState.isLocked: // Left
             let amount = cmd && shift ? 100.0 : (shift ? 10.0 : 1.0)
             videoState.panOffset.width -= amount
             return true
 
-        case 124 where videoState.isVideoLoaded && !videoState.isLocked: // Right
+        case KeyCode.rightArrow where videoState.isVideoLoaded && !videoState.isLocked: // Right
             let amount = cmd && shift ? 100.0 : (shift ? 10.0 : 1.0)
             videoState.panOffset.width += amount
             return true
 
-        case 126 where videoState.isVideoLoaded && !videoState.isLocked: // Up
+        case KeyCode.upArrow where videoState.isVideoLoaded && !videoState.isLocked: // Up
             let amount = cmd && shift ? 100.0 : (shift ? 10.0 : 1.0)
             videoState.panOffset.height += amount
             return true
 
-        case 125 where videoState.isVideoLoaded && !videoState.isLocked: // Down
+        case KeyCode.downArrow where videoState.isVideoLoaded && !videoState.isLocked: // Down
             let amount = cmd && shift ? 100.0 : (shift ? 10.0 : 1.0)
             videoState.panOffset.height -= amount
             return true
 
         // 0 - Reset zoom to 100%
-        case 29 where videoState.isVideoLoaded && !videoState.isLocked && flags.isEmpty:
+        case KeyCode.zero where videoState.isVideoLoaded && !videoState.isLocked && flags.isEmpty:
             videoState.zoomScale = 1.0
             return true
 
         // R - Reset view (zoom and pan)
-        case 15 where flags.isEmpty && !videoState.isLocked:
+        case KeyCode.r where flags.isEmpty && !videoState.isLocked:
             videoState.resetView()
             return true
 
         // L - Toggle lock
-        case 37 where flags.isEmpty:
+        case KeyCode.l where flags.isEmpty:
             videoState.isLocked.toggle()
             return true
 
         // H - Toggle help
-        case 4 where flags.isEmpty:
+        case KeyCode.h where flags.isEmpty:
             videoState.showHelp.toggle()
             return true
 
         // ? (Shift+/) - Toggle help
-        case 44 where shift:
+        case KeyCode.questionMark where shift:
             videoState.showHelp.toggle()
             return true
 
         // Esc - Close help if open
-        case 53 where videoState.showHelp:
+        case KeyCode.escape where videoState.showHelp:
             videoState.showHelp = false
             return true
 
