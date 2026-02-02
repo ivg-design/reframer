@@ -33,7 +33,7 @@ final class VideoFormatsTests: XCTestCase {
 
     func testSupportedExtensionsNotEmpty() {
         XCTAssertFalse(VideoFormats.supportedExtensions.isEmpty, "Should have supported extensions")
-        XCTAssertGreaterThan(VideoFormats.supportedExtensions.count, 10, "Should support many extensions")
+        XCTAssertGreaterThan(VideoFormats.supportedExtensions.count, 5, "Should support several extensions")
     }
 
     // MARK: - isSupported URL method

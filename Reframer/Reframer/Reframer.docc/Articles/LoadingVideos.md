@@ -22,7 +22,6 @@ The following codecs are supported:
 - **H.264** — Universal compatibility
 - **H.265/HEVC** — High efficiency, smaller files
 - **ProRes** — Professional quality, larger files
-- **AV1** — Next-gen codec (macOS 13+)
 
 ## Loading Methods
 
