@@ -39,8 +39,8 @@ class VideoState: ObservableObject {
     @Published var zoomScale: CGFloat = 1.0
     @Published var panOffset: CGSize = .zero
 
-    // Opacity
-    @Published var opacity: Double = 1.0 { didSet { persistDouble(opacity, key: DefaultsKeys.opacity) } }
+    // Opacity - always starts at 100%, not persisted
+    @Published var opacity: Double = 1.0
 
     // Quick Filter (single filter from dropdown, controls toolbar slider)
     @Published var quickFilter: VideoFilter? = nil
@@ -59,6 +59,12 @@ class VideoState: ObservableObject {
 
     // Help
     @Published var showHelp: Bool = false
+
+    // Shortcut recording state (prevents Esc from closing help while recording)
+    @Published var isRecordingShortcut: Bool = false
+
+    // Shortcut settings (configurable keyboard shortcuts)
+    let shortcutSettings = ShortcutSettings()
 
     // Requests
     let seekRequests = PassthroughSubject<SeekRequest, Never>()
@@ -237,9 +243,7 @@ class VideoState: ObservableObject {
             isAlwaysOnTop = defaults.bool(forKey: DefaultsKeys.alwaysOnTop)
         }
 
-        if defaults.object(forKey: DefaultsKeys.opacity) != nil {
-            opacity = defaults.double(forKey: DefaultsKeys.opacity)
-        }
+        // Opacity always starts at 100% - don't restore from defaults
 
         if defaults.object(forKey: DefaultsKeys.lastVolume) != nil {
             lastNonZeroVolume = defaults.float(forKey: DefaultsKeys.lastVolume)

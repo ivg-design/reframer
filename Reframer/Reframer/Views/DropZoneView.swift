@@ -39,10 +39,12 @@ class DropZoneView: NSView {
         // Register for drag and drop - must register for fileURL to accept file drops
         registerForDraggedTypes([.fileURL])
 
-        // Glass background
-        visualEffectView.material = .hudWindow
+        // Glass background with strong blur
+        visualEffectView.material = .fullScreenUI
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
+        visualEffectView.wantsLayer = true
+        visualEffectView.layer?.cornerRadius = 12
         visualEffectView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(visualEffectView)
 

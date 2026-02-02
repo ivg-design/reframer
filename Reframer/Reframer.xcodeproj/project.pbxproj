@@ -10,6 +10,7 @@
 		0631DC8CF1CB9806E1F13AE0 /* ControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242CE7E3F5EFF404409747F7 /* ControlBar.swift */; };
 		0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19D82333A5671C5FB146764 /* VideoFormats.swift */; };
 		15FDF44DEF2AEB44C895443B /* VideoState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE63ACD63859E708710A97D4 /* VideoState.swift */; };
+		1C151236800FA80F87CAAD76 /* ShortcutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A76BD7926C2FA781BB04D1 /* ShortcutSettings.swift */; };
 		2491A9B249AD2563B719271A /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C014B4F5CB12CD15A1A186 /* Notifications.swift */; };
 		370628C9CD00AD6AA6DF0707 /* ControlBar.xib in Resources */ = {isa = PBXBuildFile; fileRef = B972E974DDAFCDB4952DE88C /* ControlBar.xib */; };
 		5E887FAA7C23F19E7451BD73 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8072E56EC759E00E54249624 /* MainViewController.swift */; };
@@ -38,8 +39,8 @@
 		KC001002 /* KeyCodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = KC001001 /* KeyCodes.swift */; };
 		SS001002 /* ScrollStepAccumulator.swift in Sources */ = {isa = PBXBuildFile; fileRef = SS001001 /* ScrollStepAccumulator.swift */; };
 		SST001002 /* ScrollStepAccumulatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SST001001 /* ScrollStepAccumulatorTests.swift */; };
-		VF001002 /* VideoFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF001001 /* VideoFilter.swift */; };
 		UIT001002 /* UITestConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = UIT001001 /* UITestConfig.swift */; };
+		VF001002 /* VideoFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF001001 /* VideoFilter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -65,6 +66,7 @@
 		205A94D5C521D2C8598E3FAA /* DropZoneView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DropZoneView.swift; sourceTree = "<group>"; };
 		242CE7E3F5EFF404409747F7 /* ControlBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlBar.swift; sourceTree = "<group>"; };
 		331DF56DBDF1FEEE4E142195 /* MainMenu.xib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.xib; path = MainMenu.xib; sourceTree = "<group>"; };
+		56A76BD7926C2FA781BB04D1 /* ShortcutSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShortcutSettings.swift; sourceTree = "<group>"; };
 		5F1E904417161A398ABD5FE0 /* VideoView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		70C014B4F5CB12CD15A1A186 /* Notifications.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		8072E56EC759E00E54249624 /* MainViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
@@ -98,12 +100,22 @@
 		KC001001 /* KeyCodes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeyCodes.swift; sourceTree = "<group>"; };
 		SS001001 /* ScrollStepAccumulator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScrollStepAccumulator.swift; sourceTree = "<group>"; };
 		SST001001 /* ScrollStepAccumulatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollStepAccumulatorTests.swift; sourceTree = "<group>"; };
-		VF001001 /* VideoFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilter.swift; sourceTree = "<group>"; };
 		UIT001001 /* UITestConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestConfig.swift; sourceTree = "<group>"; };
+		VF001001 /* VideoFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B214C6102F2E40FA0048F524 /* ../docs */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ../docs; sourceTree = SOURCE_ROOT; };
+		B214C6102F2E40FA0048F524 /* ../docs */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = ../docs;
+			sourceTree = SOURCE_ROOT;
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -195,6 +207,7 @@
 				AE63ACD63859E708710A97D4 /* VideoState.swift */,
 				VF001001 /* VideoFilter.swift */,
 				FS001001 /* FilterSettings.swift */,
+				56A76BD7926C2FA781BB04D1 /* ShortcutSettings.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -430,6 +443,7 @@
 				FS001002 /* FilterSettings.swift in Sources */,
 				FM001002 /* FilterMenuButton.swift in Sources */,
 				FP001002 /* FilterPanelView.swift in Sources */,
+				1C151236800FA80F87CAAD76 /* ShortcutSettings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

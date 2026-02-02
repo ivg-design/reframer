@@ -1,6 +1,7 @@
 import Cocoa
 import Combine
 import ApplicationServices
+import WebKit
 
 // Custom window that can become key
 class TransparentWindow: NSWindow {
@@ -33,7 +34,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var localShortcutMonitor: Any?
     var mainWindow: TransparentWindow!
     private var controlWindow: TransparentWindow!
-    private var helpWindow: TransparentWindow?
+    private var shortcutsWindow: TransparentWindow?  // Keyboard shortcuts panel (H key)
+    private var documentationWindow: NSWindow?        // Documentation browser (Help menu)
+    private var documentationWebView: WKWebView?
     private var filterPanelWindow: TransparentWindow?
 
     let videoState = VideoState()
@@ -55,10 +58,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupGlobalShortcuts()
         observeState()
 
-        // Skip move-to-Applications prompt during UI testing
-        if ProcessInfo.processInfo.environment["UITEST_MODE"] == nil {
-            ensureInstalledInApplications()
-        }
+        // Skip move-to-Applications prompt (disabled for development)
+        // ensureInstalledInApplications()
 
         // Auto-load test video if specified (for UI testing)
         if let testVideoPath = ProcessInfo.processInfo.environment["TEST_VIDEO_PATH"] {
@@ -376,7 +377,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let level: NSWindow.Level = isOnTop ? .floating : .normal
                 self.mainWindow?.level = level
                 self.controlWindow?.level = level
-                self.helpWindow?.level = level
+                self.shortcutsWindow?.level = level
             }
             .store(in: &cancellables)
 
@@ -419,6 +420,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupGlobalShortcuts() {
         requestAccessibilityPermissionIfNeeded()
+
         globalShortcutMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleGlobalKey(event)
         }
@@ -434,59 +436,49 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private static var accessibilityPromptShown = false
-
     private func requestAccessibilityPermissionIfNeeded() {
-        // Only check/prompt once per app launch
-        guard !Self.accessibilityPromptShown else { return }
-        Self.accessibilityPromptShown = true
-
-        // First check if already trusted (without prompting)
+        // Already have permission - no need to prompt
         if AXIsProcessTrusted() {
-            return  // Already authorized, no prompt needed
+            return
         }
 
-        // Skip prompt for UI tests
+        // Skip for UI tests
         if ProcessInfo.processInfo.environment["UITEST_MODE"] != nil {
             return
         }
 
-        // Skip prompt for development builds (running from Xcode/DerivedData)
-        // These get new code signatures on each build, so prompts are annoying
-        let bundlePath = Bundle.main.bundlePath
-        if bundlePath.contains("DerivedData") || bundlePath.contains("Build/Products") {
-            print("Reframer: Skipping accessibility prompt for development build")
-            print("Reframer: Global shortcuts (Cmd+PageUp/Down) won't work without accessibility permission")
-            print("Reframer: To enable, run from /Applications or grant permission manually in System Settings")
-            return
-        }
-
-        // Only prompt for production installs (in /Applications or user-launched from elsewhere)
+        // Show the system accessibility prompt
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
     }
 
     @discardableResult
     private func handleGlobalKey(_ event: NSEvent) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let hasCommand = flags.contains(.command)
-        let hasShift = flags.contains(.shift)
+        let shortcuts = videoState.shortcutSettings
 
-        // Cmd+Shift+L - Toggle lock (global)
-        if hasCommand && hasShift && event.keyCode == KeyCode.l {
+        // Toggle lock (global)
+        if shortcuts.matches(event: event, action: .globalToggleLock) {
             videoState.isLocked.toggle()
             return true
         }
 
-        // Cmd+PageUp - Step frame forward (global)
-        if hasCommand && event.keyCode == KeyCode.pageUp {
-            videoState.requestFrameStep(direction: .forward, amount: hasShift ? 10 : 1)
+        // Step frame forward (global)
+        if shortcuts.matches(event: event, action: .frameStepForward) {
+            videoState.requestFrameStep(direction: .forward, amount: 1)
+            return true
+        }
+        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepForward) {
+            videoState.requestFrameStep(direction: .forward, amount: 10)
             return true
         }
 
-        // Cmd+PageDown - Step frame backward (global)
-        if hasCommand && event.keyCode == KeyCode.pageDown {
-            videoState.requestFrameStep(direction: .backward, amount: hasShift ? 10 : 1)
+        // Step frame backward (global)
+        if shortcuts.matches(event: event, action: .frameStepBackward) {
+            videoState.requestFrameStep(direction: .backward, amount: 1)
+            return true
+        }
+        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepBackward) {
+            videoState.requestFrameStep(direction: .backward, amount: 10)
             return true
         }
 
@@ -496,22 +488,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Handle app-local keyboard shortcuts that should work from any window
     @discardableResult
     private func handleLocalKey(_ event: NSEvent) -> Bool {
+        let shortcuts = videoState.shortcutSettings
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let commandOnly = flags == [.command]
-        let noModifiers = flags.isEmpty
 
+        // Cmd+A in text fields - select all
         if commandOnly && event.keyCode == KeyCode.a,
            let textView = activeFieldEditor() {
             textView.selectAll(nil)
             return true
         }
 
-        // Enter/Esc in text fields - defocus and return focus to previous app (keep Reframer visible)
-        if noModifiers && (event.keyCode == KeyCode.returnKey || event.keyCode == KeyCode.escape),
+        // Enter/Esc in text fields - defocus and return focus to previous app
+        if event.keyCode == KeyCode.returnKey || event.keyCode == KeyCode.escape,
            let textView = activeFieldEditor() {
-            // End editing and defocus
             textView.window?.makeFirstResponder(nil)
-            // Hide then unhide to return focus to previous app while keeping Reframer visible
             NSApp.hide(nil)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 NSApp.unhide(nil)
@@ -519,65 +510,62 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return true
         }
 
-        if flags.contains(.command) && event.keyCode == KeyCode.pageUp {
-            videoState.requestFrameStep(direction: .forward, amount: flags.contains(.shift) ? 10 : 1)
-            return true
-        }
-
-        if flags.contains(.command) && event.keyCode == KeyCode.pageDown {
-            videoState.requestFrameStep(direction: .backward, amount: flags.contains(.shift) ? 10 : 1)
-            return true
-        }
-
-        // Don't handle if a text field is first responder (check all windows)
-        // Check ALL windows, not just key window, since control bar is in separate window
+        // Don't handle other shortcuts if a text field is first responder
         for window in NSApp.windows {
-            if let firstResponder = window.firstResponder,
-               firstResponder is NSTextView {
+            if let firstResponder = window.firstResponder, firstResponder is NSTextView {
                 return false
             }
         }
-
-        // Also check specific field editor state
         if let keyWindow = NSApp.keyWindow,
            let firstResponder = keyWindow.firstResponder,
            firstResponder is NSTextField {
             return false
         }
 
-        switch event.keyCode {
-        // Space - Play/Pause
-        case KeyCode.space where noModifiers && videoState.isVideoLoaded:
+        // Frame step (also works locally)
+        if shortcuts.matches(event: event, action: .frameStepForward) {
+            videoState.requestFrameStep(direction: .forward, amount: 1)
+            return true
+        }
+        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepForward) {
+            videoState.requestFrameStep(direction: .forward, amount: 10)
+            return true
+        }
+        if shortcuts.matches(event: event, action: .frameStepBackward) {
+            videoState.requestFrameStep(direction: .backward, amount: 1)
+            return true
+        }
+        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepBackward) {
+            videoState.requestFrameStep(direction: .backward, amount: 10)
+            return true
+        }
+
+        // Play/Pause
+        if shortcuts.matches(event: event, action: .playPause) && videoState.isVideoLoaded {
             videoState.isPlaying.toggle()
             return true
+        }
 
-        // L - Toggle lock
-        case KeyCode.l where noModifiers:
+        // Toggle lock (local)
+        if shortcuts.matches(event: event, action: .toggleLock) {
             videoState.isLocked.toggle()
             return true
+        }
 
-        // H - Toggle help
-        case KeyCode.h where noModifiers:
+        // Toggle lock (global) - also works locally
+        if shortcuts.matches(event: event, action: .globalToggleLock) {
+            videoState.isLocked.toggle()
+            return true
+        }
+
+        // Show help
+        if shortcuts.matches(event: event, action: .showHelp) {
             videoState.showHelp.toggle()
             return true
+        }
 
-        // 0 - Reset zoom to 100%
-        case KeyCode.zero where noModifiers && videoState.isVideoLoaded && !videoState.isLocked:
-            videoState.zoomScale = 1.0
-            return true
-
-        // R - Reset view
-        case KeyCode.r where noModifiers && !videoState.isLocked:
-            videoState.resetView()
-            return true
-
-        // ? (Shift+/) - Toggle help
-        case KeyCode.questionMark where flags.contains(.shift):
-            videoState.showHelp.toggle()
-            return true
-
-        // Escape - Close help or filter panel
-        case KeyCode.escape:
+        // Close modal (Esc) - but not while recording a shortcut
+        if shortcuts.matches(event: event, action: .closeModal) && !videoState.isRecordingShortcut {
             if videoState.showHelp {
                 videoState.showHelp = false
                 return true
@@ -587,36 +575,69 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return true
             }
             return false
+        }
 
-        // F - Toggle filter panel
-        case KeyCode.f where videoState.isVideoLoaded && noModifiers:
+        // Reset zoom
+        if shortcuts.matches(event: event, action: .resetZoom) && videoState.isVideoLoaded && !videoState.isLocked {
+            videoState.zoomScale = 1.0
+            return true
+        }
+
+        // Reset view
+        if shortcuts.matches(event: event, action: .resetView) && !videoState.isLocked {
+            videoState.resetView()
+            return true
+        }
+
+        // Toggle filter panel
+        if shortcuts.matches(event: event, action: .toggleFilterPanel) && videoState.isVideoLoaded {
             videoState.showFilterPanel.toggle()
             return true
-
-        // Arrow keys for pan (when unlocked and video loaded)
-        case KeyCode.leftArrow where videoState.isVideoLoaded && !videoState.isLocked: // Left
-            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
-            videoState.panOffset.width -= amount
-            return true
-
-        case KeyCode.rightArrow where videoState.isVideoLoaded && !videoState.isLocked: // Right
-            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
-            videoState.panOffset.width += amount
-            return true
-
-        case KeyCode.upArrow where videoState.isVideoLoaded && !videoState.isLocked: // Up
-            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
-            videoState.panOffset.height += amount
-            return true
-
-        case KeyCode.downArrow where videoState.isVideoLoaded && !videoState.isLocked: // Down
-            let amount = (flags.contains(.command) && flags.contains(.shift)) ? 100.0 : (flags.contains(.shift) ? 10.0 : 1.0)
-            videoState.panOffset.height -= amount
-            return true
-
-        default:
-            return false
         }
+
+        // Pan shortcuts (with multiplier for 10px)
+        if videoState.isVideoLoaded && !videoState.isLocked {
+            if shortcuts.matches(event: event, action: .panLeft) {
+                videoState.panOffset.width -= 1.0
+                return true
+            }
+            if shortcuts.matchesWithMultiplier(event: event, action: .panLeft) {
+                videoState.panOffset.width -= 10.0
+                return true
+            }
+            if shortcuts.matches(event: event, action: .panRight) {
+                videoState.panOffset.width += 1.0
+                return true
+            }
+            if shortcuts.matchesWithMultiplier(event: event, action: .panRight) {
+                videoState.panOffset.width += 10.0
+                return true
+            }
+            if shortcuts.matches(event: event, action: .panUp) {
+                videoState.panOffset.height += 1.0
+                return true
+            }
+            if shortcuts.matchesWithMultiplier(event: event, action: .panUp) {
+                videoState.panOffset.height += 10.0
+                return true
+            }
+            if shortcuts.matches(event: event, action: .panDown) {
+                videoState.panOffset.height -= 1.0
+                return true
+            }
+            if shortcuts.matchesWithMultiplier(event: event, action: .panDown) {
+                videoState.panOffset.height -= 10.0
+                return true
+            }
+        }
+
+        // ? (Shift+/) - Toggle help (legacy, keep for convenience)
+        if event.keyCode == KeyCode.questionMark && flags.contains(.shift) {
+            videoState.showHelp.toggle()
+            return true
+        }
+
+        return false
     }
 
     private func activeFieldEditor() -> NSTextView? {
@@ -678,7 +699,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Help Window
 
     private func showHelpWindow() {
-        if helpWindow == nil {
+        if shortcutsWindow == nil {
             let mainFrame = mainWindow.frame
             let size = NSSize(width: 360, height: 500)
             let origin = NSPoint(
@@ -709,26 +730,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             panel.setAccessibilityIdentifier("window-help")
             helpView.setAccessibilityIdentifier("modal-help")
 
-            helpWindow = panel
+            shortcutsWindow = panel
             mainWindow.addChildWindow(panel, ordered: .above)
         }
 
-        helpWindow?.orderFront(nil)
+        shortcutsWindow?.orderFront(nil)
     }
 
     private func hideHelpWindow() {
-        helpWindow?.orderOut(nil)
+        shortcutsWindow?.orderOut(nil)
     }
 
     private func updateHelpWindowFrame() {
-        guard let helpWindow = helpWindow else { return }
+        guard let shortcutsWindow = shortcutsWindow else { return }
         let mainFrame = mainWindow.frame
-        let size = helpWindow.frame.size
+        let size = shortcutsWindow.frame.size
         let origin = NSPoint(
             x: mainFrame.midX - size.width / 2,
             y: mainFrame.midY - size.height / 2
         )
-        helpWindow.setFrameOrigin(origin)
+        shortcutsWindow.setFrameOrigin(origin)
     }
 
     // MARK: - Filter Panel Window
@@ -866,9 +887,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @IBAction func openReframerHelp(_ sender: Any?) {
-        // Open the Reframer help book
-        let helpBookName = Bundle.main.object(forInfoDictionaryKey: "CFBundleHelpBookName") as? String ?? "com.reframer.help"
-        NSHelpManager.shared.openHelpAnchor("index.html", inBook: helpBookName)
+        // Show documentation in a floating window above Reframer
+        guard let resourceURL = Bundle.main.resourceURL else { return }
+        let helpURL = resourceURL
+            .appendingPathComponent("Reframer.help")
+            .appendingPathComponent("Contents/Resources/en.lproj/index.html")
+
+        // Create or reuse documentation window
+        if documentationWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 700, height: 600),
+                styleMask: [.titled, .closable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Reframer Documentation"
+            window.level = .floating + 1  // Above Reframer's floating level
+            window.isReleasedWhenClosed = false
+
+            let webView = WKWebView(frame: window.contentView!.bounds)
+            webView.autoresizingMask = [.width, .height]
+            window.contentView?.addSubview(webView)
+
+            documentationWindow = window
+            documentationWebView = webView
+        }
+
+        documentationWebView?.loadFileURL(helpURL, allowingReadAccessTo: resourceURL)
+        documentationWindow?.center()
+        documentationWindow?.makeKeyAndOrderFront(nil)
     }
 
     @IBAction func selectFilter(_ sender: NSMenuItem) {

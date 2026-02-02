@@ -357,7 +357,14 @@ class VideoView: NSView {
     func seekToFrame(_ frame: Int) {
         guard let state = videoState else { return }
         let time = Double(frame) / state.frameRate
-        seek(to: time, accurate: true)
+        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+        // Direct seek - bypasses debounce for frame-accurate stepping
+        player?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak state] _ in
+            DispatchQueue.main.async {
+                state?.currentFrame = frame
+                state?.currentTime = time
+            }
+        }
     }
 
     func stepFrame(forward: Bool, amount: Int) {
@@ -367,11 +374,6 @@ class VideoView: NSView {
 
         let delta = forward ? amount : -amount
         let newFrame = max(0, min(state.totalFrames - 1, state.currentFrame + delta))
-
-        // Update frame immediately so rapid key presses use the correct frame
-        state.currentFrame = newFrame
-        state.currentTime = Double(newFrame) / state.frameRate
-
         seekToFrame(newFrame)
     }
 
