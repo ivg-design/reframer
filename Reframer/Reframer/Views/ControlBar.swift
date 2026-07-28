@@ -17,8 +17,8 @@ final class TimelineSlider: NSSlider {
     }
 }
 
-/// A dedicated grip for moving the main overlay window from its attached
-/// control window. Keeping this as an arranged view means its hit region can
+/// A dedicated grip for moving the main overlay window from its integral
+/// control bar. Keeping this as an arranged view means its hit region can
 /// never cover playback controls.
 final class WindowDragHandle: NSView, ReframerShortcutOwningResponder {
     weak var targetWindow: NSWindow?
@@ -183,7 +183,7 @@ final class WindowDragHandle: NSView, ReframerShortcutOwningResponder {
     @discardableResult
     private func moveTargetWindow(x: CGFloat, y: CGFloat) -> Bool {
         guard isDragEnabled,
-              let windowToMove = targetWindow ?? window?.parent else {
+              let windowToMove = targetWindow ?? window?.parent ?? window else {
             return false
         }
 
@@ -194,7 +194,7 @@ final class WindowDragHandle: NSView, ReframerShortcutOwningResponder {
         let clampedFrame = WindowPlacement.clampMainFrame(
             proposedFrame,
             visibleFrames: visibleFrames,
-            toolbarHeight: window?.frame.height ?? 48,
+            toolbarHeight: 0,
             minimumSize: windowToMove.minSize
         )
         windowToMove.setFrame(clampedFrame, display: true, animate: false)
@@ -215,7 +215,9 @@ final class WindowDragHandle: NSView, ReframerShortcutOwningResponder {
         layer?.borderColor = NSColor.keyboardFocusIndicatorColor.cgColor
         toolTip = isDragEnabled
             ? "Drag to move. Focus and use Option-Arrow for keyboard movement."
-            : "Unlock the overlay before moving it"
+            : "Locked above application windows with whole-overlay pointer pass-through; " +
+                "move and resize are disabled. Use the configured global " +
+                "Lock/Unlock shortcut to recover."
         setAccessibilityHelp(toolTip)
         setAccessibilityValue(isDragEnabled ? "Available" : "Disabled while locked")
         setAccessibilityEnabled(isDragEnabled)
@@ -224,14 +226,40 @@ final class WindowDragHandle: NSView, ReframerShortcutOwningResponder {
 
 /// Pure AppKit control bar loaded from XIB
 class ControlBar: NSView {
-    /// Natural width of the complete control set, including the drag handle,
-    /// readable long-frame metadata, and the volume slider when unmuted.
-    static let minimumUsableWidth: CGFloat = 1_060
+    enum LayoutMode: Equatable {
+        case regular
+        case compact
+    }
+
+    /// The natural one-row width used for the default window size.
+    static let preferredFullWidth: CGFloat = 1_060
+
+    /// The narrowest supported overlay width. At this width the controls use
+    /// two complete rows rather than hiding or collapsing functionality.
+    static let minimumWindowWidth: CGFloat = 640
+
+    /// Widths below this value use the two-row compact control layout.
+    static let compactLayoutBreakpoint: CGFloat = 920
+
+    static let regularHeight: CGFloat = 48
+    static let compactHeight: CGFloat = 96
+    static let unlockedLockHelp =
+        "Lock above application windows, pass pointer input through the whole overlay, " +
+        "and disable move and resize. Use the configured global Lock/Unlock " +
+        "shortcut to recover."
+    static let lockedLockHelp =
+        "Locked above application windows with whole-overlay pointer pass-through and " +
+        "move and resize disabled. Use the configured global Lock/Unlock " +
+        "shortcut to recover."
 
     // MARK: - Controls (found programmatically)
 
     private var visualEffectView: NSVisualEffectView?
     private var mainStackView: NSStackView?
+    private var secondaryStackView: NSStackView?
+    private var regularLayoutConstraints: [NSLayoutConstraint] = []
+    private var compactLayoutConstraints: [NSLayoutConstraint] = []
+    private(set) var layoutMode: LayoutMode = .regular
 
     // Buttons
     private var openButton: NSButton?
@@ -267,6 +295,22 @@ class ControlBar: NSView {
 
     weak var windowToDrag: NSWindow? {
         didSet { windowDragHandle?.targetWindow = windowToDrag }
+    }
+
+    /// AppDelegate owns lock entry so it can refuse a lock when the configured
+    /// global recovery shortcut is unavailable.
+    var onToggleLockRequest: (() -> Void)?
+
+    /// Reports the height required by the current width. Assigning the callback
+    /// immediately publishes the current preferred height.
+    var onPreferredHeightChange: ((CGFloat) -> Void)? {
+        didSet {
+            onPreferredHeightChange?(preferredHeight)
+        }
+    }
+
+    var preferredHeight: CGFloat {
+        Self.preferredHeight(for: bounds.width)
     }
 
     private var cancellables = Set<AnyCancellable>()
@@ -343,8 +387,8 @@ class ControlBar: NSView {
             fatalError("Could not find content view in ControlBar.xib")
         }
 
-        // Add the loaded view as a subview with PROPER Auto Layout constraints
-        // The XIB has hardcoded width (861px) so we must use constraints to force it to match our bounds
+        // Pin the XIB-authored content to the live overlay width. Runtime row
+        // constraints below replace the XIB canvas size as the layout authority.
         contentView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(contentView)
         NSLayoutConstraint.activate([
@@ -357,8 +401,8 @@ class ControlBar: NSView {
         // Find controls by their XIB identifiers
         findControls(in: contentView)
 
-        // The XIB has fixed-width constraints (priority 1000) on sliders totaling ~861px
-        // We need to lower their priority so they can compress to fit 800px
+        // Let the three XIB-authored slider widths flex inside both responsive
+        // row arrangements while preserving explicit usable minimums.
         makeSliderWidthsFlexible()
 
         // Apply bottom corner radius to match main window's corner radius
@@ -367,10 +411,19 @@ class ControlBar: NSView {
         // Replace opacity icon with FilterMenuButton
         setupFilterButton()
         setupWindowDragHandle()
+        setupResponsiveLayout(in: contentView)
 
         setupActions()
         setupTextFieldDelegates()
         setupTrackingArea()
+    }
+
+    static func layoutMode(for width: CGFloat) -> LayoutMode {
+        width < compactLayoutBreakpoint ? .compact : .regular
+    }
+
+    static func preferredHeight(for width: CGFloat) -> CGFloat {
+        layoutMode(for: width) == .compact ? compactHeight : regularHeight
     }
 
     private func findControls(in view: NSView) {
@@ -439,7 +492,11 @@ class ControlBar: NSView {
         configure(button: stepForwardButton, label: "Next frame", help: "Step forward one decoded video frame")
         configure(button: resetButton, label: "Reset view", help: "Reset zoom and position")
         configure(button: muteButton, label: "Mute", help: "Mute or unmute video audio")
-        configure(button: lockButton, label: "Lock overlay", help: "Lock or unlock global frame stepping")
+        configure(
+            button: lockButton,
+            label: "Lock overlay",
+            help: Self.unlockedLockHelp
+        )
 
         configure(control: timelineSlider, label: "Timeline", help: "Scrub through the video")
         configure(control: opacitySlider, label: "Opacity", help: "Adjust video opacity")
@@ -500,8 +557,8 @@ class ControlBar: NSView {
     }
 
     private func makeSliderWidthsFlexible() {
-        // The XIB has fixed width constraints on sliders that prevent the toolbar from resizing
-        // Lower their priority so the toolbar can compress to match the window width
+        // Lower the authored width priorities so each responsive row can
+        // distribute the remaining window width.
         for slider in [timelineSlider, opacitySlider, volumeSlider] {
             guard let slider = slider else { continue }
             for constraint in slider.constraints {
@@ -513,10 +570,29 @@ class ControlBar: NSView {
             // Also lower compression resistance so the slider can shrink
             slider.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
+
+        timelineSlider?.widthAnchor.constraint(
+            greaterThanOrEqualToConstant: 80
+        ).isActive = true
+        opacitySlider?.widthAnchor.constraint(
+            greaterThanOrEqualToConstant: 52
+        ).isActive = true
+        volumeSlider?.widthAnchor.constraint(
+            greaterThanOrEqualToConstant: 52
+        ).isActive = true
+
+        // The metadata is the only textual description of approximate and
+        // indexing-based frame navigation. Preserve it before compressing the
+        // three sliders.
+        frameTotalLabel?.setContentCompressionResistancePriority(
+            .required,
+            for: .horizontal
+        )
     }
 
     private func applyCornerRadius() {
-        // Only round BOTTOM corners - top edge aligns with main window's bottom
+        // Only round the bottom corners; the composite main view clips the
+        // video/control outer silhouette and keeps their shared seam square.
         // In macOS coordinates (y=0 at bottom):
         // .layerMinXMinYCorner = bottom-left, .layerMaxXMinYCorner = bottom-right
         visualEffectView?.wantsLayer = true
@@ -544,6 +620,9 @@ class ControlBar: NSView {
         stackView.insertArrangedSubview(button, at: index)
 
         filterMenuButton = button
+        filterMenuButton?.identifier = NSUserInterfaceItemIdentifier(
+            "button-filter-menu"
+        )
         filterMenuButton?.setAccessibilityIdentifier("button-filter-menu")
     }
 
@@ -553,6 +632,136 @@ class ControlBar: NSView {
         handle.targetWindow = windowToDrag
         stackView.insertArrangedSubview(handle, at: 0)
         windowDragHandle = handle
+    }
+
+    private func setupResponsiveLayout(in contentView: NSView) {
+        guard let primaryStack = mainStackView,
+              let timelineSlider,
+              let lockButton,
+              let timelineIndex = primaryStack.arrangedSubviews.firstIndex(
+                of: timelineSlider
+              ) else {
+            return
+        }
+
+        let originalViews = primaryStack.arrangedSubviews
+        let primaryEndIndex: Int
+        if originalViews.indices.contains(timelineIndex + 1),
+           originalViews[timelineIndex + 1] is NSBox {
+            primaryEndIndex = timelineIndex + 1
+        } else {
+            primaryEndIndex = timelineIndex
+        }
+
+        var primaryViews = Array(originalViews[...primaryEndIndex])
+        if !primaryViews.contains(where: { $0 === lockButton }) {
+            primaryViews.append(lockButton)
+        }
+        let secondaryViews = originalViews.filter { candidate in
+            !primaryViews.contains(where: { $0 === candidate })
+        }
+
+        for arrangedView in originalViews {
+            primaryStack.removeArrangedSubview(arrangedView)
+            arrangedView.removeFromSuperview()
+        }
+
+        // Remove the XIB's one-row pinning. The exact same controls are then
+        // constrained as one row or two rows without duplicating state.
+        let obsoleteConstraints = contentView.constraints.filter { constraint in
+            (constraint.firstItem as AnyObject?) === primaryStack ||
+                (constraint.secondItem as AnyObject?) === primaryStack
+        }
+        NSLayoutConstraint.deactivate(obsoleteConstraints)
+        primaryStack.removeFromSuperview()
+
+        configureRowStack(primaryStack, identifier: "primary-control-row")
+        for arrangedView in primaryViews {
+            primaryStack.addArrangedSubview(arrangedView)
+        }
+
+        let secondaryStack = NSStackView()
+        configureRowStack(secondaryStack, identifier: "secondary-control-row")
+        for arrangedView in secondaryViews {
+            secondaryStack.addArrangedSubview(arrangedView)
+        }
+        secondaryStackView = secondaryStack
+
+        contentView.addSubview(primaryStack)
+        contentView.addSubview(secondaryStack)
+
+        let primaryHeight = primaryStack.heightAnchor.constraint(
+            equalToConstant: Self.regularHeight
+        )
+        let secondaryHeight = secondaryStack.heightAnchor.constraint(
+            equalToConstant: Self.regularHeight
+        )
+
+        regularLayoutConstraints = [
+            primaryStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            primaryStack.topAnchor.constraint(equalTo: contentView.topAnchor),
+            primaryStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            secondaryStack.leadingAnchor.constraint(equalTo: primaryStack.trailingAnchor),
+            secondaryStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            secondaryStack.topAnchor.constraint(equalTo: contentView.topAnchor),
+            secondaryStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ]
+
+        compactLayoutConstraints = [
+            primaryStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            primaryStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            primaryStack.topAnchor.constraint(equalTo: contentView.topAnchor),
+            secondaryStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            secondaryStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            secondaryStack.topAnchor.constraint(equalTo: primaryStack.bottomAnchor),
+            secondaryStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ]
+
+        NSLayoutConstraint.activate([primaryHeight, secondaryHeight])
+        applyLayoutMode(Self.layoutMode(for: bounds.width), force: true)
+    }
+
+    private func configureRowStack(
+        _ stack: NSStackView,
+        identifier: String
+    ) {
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.distribution = .fill
+        stack.spacing = 5
+        stack.edgeInsets = NSEdgeInsets(top: 5, left: 5, bottom: 3, right: 5)
+        stack.detachesHiddenViews = true
+        stack.identifier = NSUserInterfaceItemIdentifier(identifier)
+        stack.setAccessibilityIdentifier(identifier)
+        stack.setAccessibilityElement(false)
+    }
+
+    private func applyLayoutMode(_ mode: LayoutMode, force: Bool = false) {
+        guard force || mode != layoutMode else { return }
+        layoutMode = mode
+
+        switch mode {
+        case .regular:
+            NSLayoutConstraint.deactivate(compactLayoutConstraints)
+            NSLayoutConstraint.activate(regularLayoutConstraints)
+            mainStackView?.spacing = 5
+            secondaryStackView?.spacing = 5
+        case .compact:
+            NSLayoutConstraint.deactivate(regularLayoutConstraints)
+            NSLayoutConstraint.activate(compactLayoutConstraints)
+            mainStackView?.spacing = 3
+            secondaryStackView?.spacing = 3
+        }
+
+        needsLayout = true
+        onPreferredHeightChange?(preferredHeight)
+    }
+
+    override func layout() {
+        let requiredMode = Self.layoutMode(for: bounds.width)
+        applyLayoutMode(requiredMode)
+        super.layout()
     }
 
     // MARK: - Actions Setup
@@ -677,7 +886,12 @@ class ControlBar: NSView {
     }
 
     @objc private func lockClicked(_ sender: Any?) {
-        videoState?.isLocked.toggle()
+        onToggleLockRequest?()
+        // Toggle-style NSButtons optimistically change their visual state
+        // before sending the action. The guarded owner may reject lock entry
+        // when no exact global recovery shortcut is registered, so always
+        // normalize back to the authoritative model synchronously.
+        updateLockPresentation(isLocked: videoState?.isLocked ?? false)
     }
 
     @objc private func timelineChanged(_ sender: Any?) {
@@ -847,15 +1061,7 @@ class ControlBar: NSView {
         state.$isLocked
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isLocked in
-                self?.windowDragHandle?.isDragEnabled = !isLocked
-                self?.lockButton?.state = isLocked ? .on : .off
-                self?.lockButton?.contentTintColor = isLocked ? .systemRed : nil
-                self?.lockButton?.setAccessibilityLabel(isLocked ? "Unlock overlay" : "Lock overlay")
-                self?.lockButton?.setAccessibilityValue(isLocked ? "Locked" : "Unlocked")
-                self?.lockButton?.toolTip = isLocked ? "Unlock global frame stepping" : "Lock and enable global frame stepping"
-                self?.zoomField?.isEnabled = !isLocked
-                self?.resetButton?.isEnabled = !isLocked
-                self?.updateOpacity()
+                self?.updateLockPresentation(isLocked: isLocked)
             }
             .store(in: &cancellables)
 
@@ -877,6 +1083,22 @@ class ControlBar: NSView {
                 }
             }
             .store(in: &cancellables)
+    }
+
+    private func updateLockPresentation(isLocked: Bool) {
+        windowDragHandle?.isDragEnabled = !isLocked
+        lockButton?.state = isLocked ? .on : .off
+        lockButton?.contentTintColor = isLocked ? .systemRed : nil
+        lockButton?.setAccessibilityLabel(
+            isLocked ? "Unlock overlay" : "Lock overlay"
+        )
+        lockButton?.setAccessibilityValue(isLocked ? "Locked" : "Unlocked")
+        let help = isLocked ? Self.lockedLockHelp : Self.unlockedLockHelp
+        lockButton?.toolTip = help
+        lockButton?.setAccessibilityHelp(help)
+        zoomField?.isEnabled = !isLocked
+        resetButton?.isEnabled = !isLocked
+        updateOpacity()
     }
 
     private func updateFrameNavigationPresentation() {

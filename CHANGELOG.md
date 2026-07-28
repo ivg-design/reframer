@@ -42,6 +42,16 @@ development snapshots, not production releases.
 - Frame navigation uses decoded sample timing instead of rounded nominal-rate
   arithmetic after exact indexing; during indexing or a bounded fallback, the
   UI identifies the constant-rate estimate
+- Video and controls now share one canonical externally managed overlay
+  window, so macOS and third-party window managers move and resize the complete
+  unlocked interface
+- The control bar now uses one 48-point row at widths of 920 points or more and
+  two rows totaling 96 points below that breakpoint. The window prefers 1,060
+  points, supports a 640-point minimum, and keeps every control visible and
+  accessibility-reachable in both layouts
+- The preference formerly labeled Always on Top is now explicitly Always on
+  Top When Unlocked; lock mode independently forces the overlay above ordinary
+  application windows
 - Selecting a replacement video stops playback immediately and the replacement
   lands paused
 - Playback is prepared as a selected-track composition, keeping Core Image
@@ -73,8 +83,24 @@ development snapshots, not production releases.
 - System file/alert sheets and keyboard-scrollable documentation retain their
   native Space, arrow, and navigation-key behavior
 - Command-? opens Reframer documentation instead of AppKit Help-menu search;
-  documentation keeps its native scrolling keys while Escape remains the
-  contextual close command
+  the bundled pages now render as nonblank native AppKit content without a
+  sandboxed WebKit process or network entitlement, keep their native scrolling
+  keys, and retain Escape as the contextual close command
+- Lock mode now applies to the complete overlay, including the control bar:
+  the window uses macOS's public status-bar tier above all ordinary application
+  windows, including normal, floating, modal, and utility windows; ignores
+  pointer input; and cannot be moved or resized until the enabled global lock
+  shortcut restores interaction. System pop-up menus, drag UI, the screen
+  saver, and assistive-technology UI remain above it
+- Lock and unlock now apply their complete window policy synchronously on the
+  AppKit main thread, so a queued Mosaic or Accessibility move/resize cannot
+  slip between the state transition and the frozen/restored window geometry
+- External window managers can no longer target and strand a separate control
+  window while leaving the video behind
+- Whole-overlay click-through cannot be entered unless the exact configured
+  global Lock/Unlock chord is registered. Registration loss, conflict,
+  recording suspension, or disabling global shortcuts automatically unlocks
+  the overlay and presents recovery guidance
 - Escape closes the key/frontmost auxiliary panel instead of an unrelated
   background panel
 - Focused buttons and generic controls no longer swallow plain or Shift-based
@@ -99,6 +125,11 @@ development snapshots, not production releases.
 - Stapled review artifacts recognize Apple’s top-level `CodeResources` ticket
   only when `stapler` validates it, and the final ZIP is extracted and
   rechecked for bundle, signature, ticket, and Gatekeeper integrity
+- Release packaging confines DerivedData to its scoped temporary directory and
+  unregisters intermediate apps during cleanup, preventing old build products
+  from reappearing in LaunchServices or Spotlight; bundle validation also
+  rejects stale build numbers and dirty-stamped release artifacts, while local
+  packaging requires clean `main` source matching `origin/main`
 
 ### Security
 
@@ -106,6 +137,8 @@ development snapshots, not production releases.
 - Replaced broad global keyboard monitoring with exact, exclusive registered
   hot keys that require no Accessibility or Input Monitoring permission
 - Enabled App Sandbox with user-selected, read-only video access
+- Kept bundled documentation offline and native instead of adding a network
+  entitlement to make a sandboxed WebKit helper launch
 - Removed scripts that wrote to privacy databases, restarted privacy services,
   stripped provenance, or re-signed test products
 - Pinned GitHub Actions to reviewed immutable commits, disabled persisted

@@ -35,8 +35,6 @@ class DropZoneView: NSView, ReframerShortcutOwningResponder {
 
     private func setup() {
         wantsLayer = true
-        layer?.cornerRadius = 12
-        layer?.masksToBounds = true
         focusRingType = .exterior
 
         setAccessibilityElement(true)
@@ -54,7 +52,6 @@ class DropZoneView: NSView, ReframerShortcutOwningResponder {
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
         visualEffectView.wantsLayer = true
-        visualEffectView.layer?.cornerRadius = 12
         visualEffectView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(visualEffectView)
 
@@ -119,7 +116,10 @@ class DropZoneView: NSView, ReframerShortcutOwningResponder {
         super.draw(dirtyRect)
 
         if isTargeted || window?.firstResponder === self {
-            let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 12, yRadius: 12)
+            // The composite window owns its outer corner clipping. Keeping the
+            // drop zone rectangular prevents an artificial rounded gap where
+            // the video surface meets the integral control bar.
+            let path = NSBezierPath(rect: bounds.insetBy(dx: 1, dy: 1))
             NSColor.controlAccentColor.setStroke()
             path.lineWidth = 2
             path.stroke()

@@ -1,11 +1,15 @@
 import XCTest
 
-final class GlobalHotKeyIntegrationTests: XCTestCase {
+/// Verifies Carbon registration state transitions exposed by the app.
+///
+/// XCUITest's `typeKey` API targets an application directly, so this suite does
+/// not claim to prove physical cross-application hot-key delivery.
+final class GlobalHotKeyRegistrationIntegrationTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
-    func testRegisteredHotKeyLifecycleAcrossApplicationState() throws {
+    func testCarbonRegistrationLifecycleAcrossApplicationState() throws {
         guard ProcessInfo.processInfo.environment["REFRAMER_UI_RUNNER_AUTHORIZED"] == "1"
         else {
             XCTFail(
@@ -39,7 +43,7 @@ final class GlobalHotKeyIntegrationTests: XCTestCase {
 
         if !isLocked(in: reframer) {
             // Return intentionally ended text editing but left the field as
-            // the focused control. Use the button here so this global-path
+            // the focused control. Use the button here so this registration
             // test does not contradict the native text-input ownership rule.
             reframer.buttons["button-lock"].click()
         }
@@ -67,7 +71,10 @@ final class GlobalHotKeyIntegrationTests: XCTestCase {
         )
 
         reframer.activate()
-        reframer.buttons["button-lock"].click()
+        // The locked overlay is deliberately pointer-transparent. XCUITest
+        // sends this key to the active app, exercising local recovery without
+        // pretending to traverse WindowServer's Carbon delivery path.
+        reframer.typeKey("l", modifierFlags: [])
         XCTAssertTrue(waitForLockState("Unlocked", in: reframer))
 
         reframer.typeKey("h", modifierFlags: [])

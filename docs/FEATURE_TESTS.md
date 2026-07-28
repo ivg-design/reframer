@@ -8,7 +8,7 @@ finds an element is not proof of the action behind it.
 
 | Gate | What a passing result proves | What it does not prove |
 |---|---|---|
-| `scripts/validate_repository.sh` | Metadata, public-doc, project, scheme, XIB, resource, and workflow invariants match the repository contract | Runtime behavior |
+| `scripts/validate_repository.sh` | Metadata, public-doc, project, scheme, XIB, resource, workflow, and synchronous lock-policy source invariants match the repository contract | Runtime behavior |
 | Debug and Release builds | All production sources and resources compile and link in both configurations | A user can complete a workflow |
 | `xcodebuild analyze` | Xcode static analysis reports no blocking issue | Absence of every runtime defect |
 | `TEST_SCOPE=unit scripts/runner_test.sh` | Deterministic model and AppKit contract tests pass | WindowServer event routing, visual output, or another-app shortcuts |
@@ -62,14 +62,34 @@ The unit target currently proves:
   lock-only versus actionable-frame registration lifecycle, AppKit-to-Carbon
   modifier mapping, conflict/retry state, focused-control ownership,
   non-repeat event consumption, incremental registration retention across a
-  held lock chord, system-sheet bypass, native table/document navigation, and
-  active-versus-inactive dispatch policy also have unit coverage.
-- Window recovery, toolbar reservation, attached-panel placement, and invalid
-  geometry handling are checked as pure geometry.
+  held lock chord, exact registered-recovery prerequisite for lock entry,
+  forced unlock after recovery loss, system-sheet bypass, native
+  table/document navigation, and active-versus-inactive dispatch policy also
+  have unit coverage.
+- Window recovery, one-time migration from the former split-window footprint,
+  whole-overlay placement, attached-panel placement, and invalid geometry
+  handling are checked as pure geometry.
+- The locked-window policy matrix proves that lock forces the public status-bar
+  level above all ordinary application windows, including normal, floating,
+  modal, and utility windows; pointer transparency; and
+  nonmovable/nonresizable geometry regardless of the saved Always on Top When
+  Unlocked preference, while unlock restores that preference. It does not
+  claim precedence over higher critical system UI.
+- AppKit hierarchy coverage proves that video and controls share one canonical
+  window with no separately managed control child.
+- Responsive control-bar coverage fixes the preferred width at 1,060 points,
+  the supported minimum at 640, and the layout breakpoint at 920. It checks the
+  48-point one-row and 96-point two-row modes, exact row membership, worst-case
+  visible controls and long metadata, absence of overlap, and the reported
+  preferred-height transition without replacing the accessible controls.
 - Drop-zone actionability, quick-filter menu contents, advanced-filter control
   naming/focus, lock-aware drag-handle state, status text, independently
   reachable ready-state badges, complete slider role/range/orientation, and
   pointer-transparent overlays are checked through AppKit objects.
+- The native documentation loader rejects traversal outside the bundled Help
+  root, renders known nonblank Help text in an AppKit text view, and provides
+  an explicit fallback page for missing content without requiring WebKit or
+  network access.
 
 These checks do not prove that macOS delivered a physical key, pointer, drag,
 display, accessibility, or workspace event to the running app.
@@ -93,6 +113,8 @@ test contract:
   does not pan, step, or toggle playback;
 - H presents the labeled Shortcut Settings group and its labeled Close action
   dismisses it;
+- video and controls are descendants of the named primary overlay window, and
+  no separately targetable controls window is exposed;
 - the Launch Services fixture reaches a ready, enabled timeline and exposes
   frame, zoom, and lock status elements;
 - Space and the Play button advance frames and return to an observable paused
@@ -102,14 +124,17 @@ test contract:
   Command-Page Up, and Command-Shift-Page Up exercise both directions and the
   one/ten-sample factors;
 - zoom entry, arrow increments, 0, and R update the zoom field;
-- lock input updates the lock value and zoom-control enabled state;
+- lock input updates the lock value and zoom-control enabled state; locked
+  controls become disabled and local keyboard unlock restores their
+  actionability;
 - opacity entry and arrow increments update the field;
 - selecting Invert disables its parameter control and shows `On`, while
   Brightness re-enables the adjustable control;
 - mute/unmute updates the exposed audio state and restores the prior slider
   value;
-- F and Command-? open their named panels, documentation keeps native Space
-  input without toggling playback, and Escape closes each panel;
+- F and Command-? open their named panels, documentation exposes known
+  nonblank bundled Help text in a native selectable text view, keeps native
+  Space input without toggling playback, and Escape closes each panel;
 - Space activates a focused Quick Filter button or filter switch without also
   toggling playback;
 - rebinding Play/Pause from Space to J removes the old chord, activates the new
@@ -152,8 +177,25 @@ suite does not measure their result:
 - video-surface pointer pan at 1x and above, including reversal across the drag
   origin;
 - toolbar drag-handle movement, lock suppression, and visible lock/status HUD;
-- resize behavior at minimum size and toolbar attachment while moving;
-- Always on Top, click-through, and recovery/unlock from another app;
+- unlocked macOS and Mosaic move/resize operations targeting the one canonical
+  window—including the configured Command-Shift-Left/Right/Up/Down screen-half
+  shortcuts and minimum-size behavior—with the video and control bar remaining
+  integral;
+- one 48-point control row at 920 points and wider, two rows totaling 96 points
+  below 920 through the 640-point minimum, and every control remaining visible,
+  keyboard-focusable, and accessibility-reachable in both modes;
+- Always on Top When Unlocked restoration after unlock;
+- refusal to enter lock when the exact configured global Lock/Unlock chord is
+  not registered, plus automatic unlock and visible recovery guidance if
+  registration later disappears, conflicts, is suspended during recording, or
+  global shortcuts are disabled;
+- locked public status-bar level above all foreground ordinary application
+  windows, including normal, floating, modal, and utility windows;
+  whole-overlay click-through including the control bar; rejection of
+  move/resize attempts; and recovery with the global lock shortcut from the app
+  underneath;
+- confirmation that system pop-up menus, drag UI, the screen saver, and
+  assistive-technology UI retain their higher critical-system precedence;
 - registered lock and all four frame-step chords physically dispatching once
   from another app, plus unlocked frame chords reaching an observable receiver
   there to prove the unregistered chord was not swallowed;

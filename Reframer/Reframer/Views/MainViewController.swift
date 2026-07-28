@@ -276,7 +276,12 @@ class MainViewController: NSViewController {
 
     // MARK: - Properties
 
+    static let controlBarHeight = ControlBar.regularHeight
+
     let videoState: VideoState
+    private let videoContainerView = NSView()
+    private(set) var controlBar: ControlBar!
+    private var controlBarHeightConstraint: NSLayoutConstraint!
     private var videoView: VideoView!
     private var dropZoneView: DropZoneView!
     private var edgeIndicatorView: EdgeIndicatorView!
@@ -291,6 +296,29 @@ class MainViewController: NSViewController {
     private var cancellables = Set<AnyCancellable>()
     private var filterErrorAnnouncementTracker = AccessibilityErrorAnnouncementTracker()
 
+    weak var windowToDrag: NSWindow? {
+        didSet {
+            controlBar?.windowToDrag = windowToDrag
+        }
+    }
+
+    /// Forwarded to the control bar so AppDelegate can own guarded lock entry.
+    var onToggleLockRequest: (() -> Void)? {
+        didSet {
+            controlBar?.onToggleLockRequest = onToggleLockRequest
+        }
+    }
+
+    /// Reports regular/compact row-height changes. The outer window frame stays
+    /// exactly where macOS or Mosaic placed it; the integral video area absorbs
+    /// the control-bar height change inside that canonical window.
+    var onControlBarPreferredHeightChange: ((CGFloat) -> Void)? {
+        didSet {
+            if let controlBar {
+                onControlBarPreferredHeightChange?(controlBar.preferredHeight)
+            }
+        }
+    }
 
     // MARK: - Initialization
 
@@ -308,11 +336,55 @@ class MainViewController: NSViewController {
 
     override func loadView() {
         view = NSView()
+        view.setAccessibilityIdentifier("overlay-content")
         view.wantsLayer = true
         view.layer?.backgroundColor = .clear
         view.layer?.cornerRadius = 12
-        // Round ALL corners - toolbar is now BELOW the window, not overlapping
         view.layer?.masksToBounds = true
+
+        videoContainerView.translatesAutoresizingMaskIntoConstraints = false
+        videoContainerView.wantsLayer = true
+        videoContainerView.layer?.backgroundColor = .clear
+        videoContainerView.setAccessibilityIdentifier("video-container")
+        view.addSubview(videoContainerView)
+
+        controlBar = ControlBar(
+            frame: NSRect(
+                x: 0,
+                y: 0,
+                width: ControlBar.preferredFullWidth,
+                height: Self.controlBarHeight
+            )
+        )
+        controlBar.translatesAutoresizingMaskIntoConstraints = false
+        controlBar.videoState = videoState
+        controlBar.windowToDrag = windowToDrag
+        controlBar.setAccessibilityIdentifier("control-bar")
+        view.addSubview(controlBar)
+
+        controlBarHeightConstraint = controlBar.heightAnchor.constraint(
+            equalToConstant: Self.controlBarHeight
+        )
+        NSLayoutConstraint.activate([
+            videoContainerView.topAnchor.constraint(equalTo: view.topAnchor),
+            videoContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            videoContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            videoContainerView.bottomAnchor.constraint(equalTo: controlBar.topAnchor),
+
+            controlBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            controlBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            controlBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            controlBarHeightConstraint
+        ])
+
+        controlBar.onToggleLockRequest = onToggleLockRequest
+        controlBar.onPreferredHeightChange = { [weak self] height in
+            guard let self else { return }
+            if abs(self.controlBarHeightConstraint.constant - height) > 0.5 {
+                self.controlBarHeightConstraint.constant = height
+            }
+            self.onControlBarPreferredHeightChange?(height)
+        }
     }
 
     override func viewDidLoad() {
@@ -322,20 +394,20 @@ class MainViewController: NSViewController {
         videoView = VideoView()
         videoView.translatesAutoresizingMaskIntoConstraints = false
         videoView.setAccessibilityIdentifier("video-view")
-        view.addSubview(videoView)
+        videoContainerView.addSubview(videoView)
 
         dropZoneView = DropZoneView()
         dropZoneView.translatesAutoresizingMaskIntoConstraints = false
         dropZoneView.setAccessibilityIdentifier("drop-zone")
-        view.addSubview(dropZoneView)
+        videoContainerView.addSubview(dropZoneView)
 
         loadingView = makeLoadingView()
         loadingView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(loadingView)
+        videoContainerView.addSubview(loadingView)
 
         errorView = makeErrorView()
         errorView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(errorView)
+        videoContainerView.addSubview(errorView)
 
         filterErrorLabel = NSTextField(wrappingLabelWithString: "")
         filterErrorLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -346,15 +418,15 @@ class MainViewController: NSViewController {
         filterErrorLabel.setAccessibilityIdentifier("filter-error")
         filterErrorLabel.setAccessibilityRole(.staticText)
         filterErrorLabel.isHidden = true
-        view.addSubview(filterErrorLabel)
+        videoContainerView.addSubview(filterErrorLabel)
 
         // Edge indicator view for resize hints (pulsing edges when unlocked)
         edgeIndicatorView = EdgeIndicatorView()
         edgeIndicatorView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(edgeIndicatorView)
+        videoContainerView.addSubview(edgeIndicatorView)
 
         statusOverlayView = ReadyStatusOverlayView()
-        view.addSubview(statusOverlayView)
+        videoContainerView.addSubview(statusOverlayView)
 
         // Configure views
         videoView.videoState = videoState
@@ -362,42 +434,69 @@ class MainViewController: NSViewController {
         edgeIndicatorView.videoState = videoState
         statusOverlayView.videoState = videoState
 
-        // Add constraints - content fills entire view (toolbar is now BELOW window)
+        // Video content fills the area above the integral control bar.
         NSLayoutConstraint.activate([
-            videoView.topAnchor.constraint(equalTo: view.topAnchor),
-            videoView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            videoView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            videoView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            videoView.topAnchor.constraint(equalTo: videoContainerView.topAnchor),
+            videoView.leadingAnchor.constraint(equalTo: videoContainerView.leadingAnchor),
+            videoView.trailingAnchor.constraint(equalTo: videoContainerView.trailingAnchor),
+            videoView.bottomAnchor.constraint(equalTo: videoContainerView.bottomAnchor),
 
-            dropZoneView.topAnchor.constraint(equalTo: view.topAnchor),
-            dropZoneView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            dropZoneView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            dropZoneView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            dropZoneView.topAnchor.constraint(equalTo: videoContainerView.topAnchor),
+            dropZoneView.leadingAnchor.constraint(equalTo: videoContainerView.leadingAnchor),
+            dropZoneView.trailingAnchor.constraint(equalTo: videoContainerView.trailingAnchor),
+            dropZoneView.bottomAnchor.constraint(equalTo: videoContainerView.bottomAnchor),
 
-            loadingView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            loadingView.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
-            loadingView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
+            loadingView.centerXAnchor.constraint(equalTo: videoContainerView.centerXAnchor),
+            loadingView.centerYAnchor.constraint(equalTo: videoContainerView.centerYAnchor),
+            loadingView.leadingAnchor.constraint(
+                greaterThanOrEqualTo: videoContainerView.leadingAnchor,
+                constant: 24
+            ),
+            loadingView.trailingAnchor.constraint(
+                lessThanOrEqualTo: videoContainerView.trailingAnchor,
+                constant: -24
+            ),
 
-            errorView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            errorView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            errorView.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
-            errorView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
+            errorView.centerXAnchor.constraint(equalTo: videoContainerView.centerXAnchor),
+            errorView.centerYAnchor.constraint(equalTo: videoContainerView.centerYAnchor),
+            errorView.leadingAnchor.constraint(
+                greaterThanOrEqualTo: videoContainerView.leadingAnchor,
+                constant: 24
+            ),
+            errorView.trailingAnchor.constraint(
+                lessThanOrEqualTo: videoContainerView.trailingAnchor,
+                constant: -24
+            ),
 
-            filterErrorLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 12),
-            filterErrorLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            filterErrorLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 16),
-            filterErrorLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -16),
+            filterErrorLabel.topAnchor.constraint(
+                equalTo: videoContainerView.topAnchor,
+                constant: 12
+            ),
+            filterErrorLabel.centerXAnchor.constraint(equalTo: videoContainerView.centerXAnchor),
+            filterErrorLabel.leadingAnchor.constraint(
+                greaterThanOrEqualTo: videoContainerView.leadingAnchor,
+                constant: 16
+            ),
+            filterErrorLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: videoContainerView.trailingAnchor,
+                constant: -16
+            ),
 
-            edgeIndicatorView.topAnchor.constraint(equalTo: view.topAnchor),
-            edgeIndicatorView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            edgeIndicatorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            edgeIndicatorView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            edgeIndicatorView.topAnchor.constraint(equalTo: videoContainerView.topAnchor),
+            edgeIndicatorView.leadingAnchor.constraint(equalTo: videoContainerView.leadingAnchor),
+            edgeIndicatorView.trailingAnchor.constraint(equalTo: videoContainerView.trailingAnchor),
+            edgeIndicatorView.bottomAnchor.constraint(equalTo: videoContainerView.bottomAnchor),
 
-            statusOverlayView.topAnchor.constraint(equalTo: view.topAnchor, constant: 12),
-            statusOverlayView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            statusOverlayView.topAnchor.constraint(
+                equalTo: videoContainerView.topAnchor,
+                constant: 12
+            ),
+            statusOverlayView.leadingAnchor.constraint(
+                equalTo: videoContainerView.leadingAnchor,
+                constant: 12
+            ),
             statusOverlayView.trailingAnchor.constraint(
-                lessThanOrEqualTo: view.trailingAnchor,
+                lessThanOrEqualTo: videoContainerView.trailingAnchor,
                 constant: -12
             )
         ])

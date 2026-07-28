@@ -10,15 +10,31 @@
   <h1>Lock Mode</h1>
   <p class="subtitle">Work in another app through the reference.</p>
 
-  <p>Press <kbd>L</kbd> or activate the lock control. The video area becomes
-  click-through and moving, resizing, zooming, and panning are disabled.
-  Frame, zoom, and locked-status badges remain visible and never intercept
-  input.</p>
+  <p>Press <kbd>L</kbd> or activate the lock control. The complete overlay,
+  including its video and control bar, uses macOS's public status-bar tier
+  above all ordinary application windows, including normal, floating, modal,
+  and utility windows, and becomes pointer-transparent. Moving, resizing,
+  zooming, and panning are disabled. Frame, zoom, and locked-status badges
+  remain visible and never intercept input.</p>
 
-  <p>When global shortcuts are enabled, <kbd>⌘⇧L</kbd> toggles lock from
-  another app. <kbd>⌘ Page Down</kbd> and <kbd>⌘ Page Up</kbd> step globally
-  only while a video is loaded, Reframer is locked, and exact or estimated
-  sample navigation is available.</p>
+  <p>Critical system pop-up menus, drag UI, the screen saver, and
+  assistive-technology windows remain above the locked overlay.</p>
+
+  <p>Lock mode forces its status-bar tier even when Always on Top When Unlocked
+  is off. Because pointer input also passes through the control bar, use the
+  enabled global lock shortcut—<kbd>⌘⇧L</kbd> by default—to restore
+  interaction from the app underneath. Unlocking returns to the saved
+  unlocked-state preference.</p>
+
+  <p>Reframer refuses to lock unless the exact configured global Lock/Unlock
+  chord is registered. If registration later disappears or conflicts, is
+  suspended while recording a shortcut, or global shortcuts are disabled,
+  Reframer automatically unlocks and reports recovery. Unlocking is always
+  permitted.</p>
+
+  <p><kbd>⌘ Page Down</kbd> and <kbd>⌘ Page Up</kbd> step globally only while a
+  video is loaded, Reframer is locked, and exact or estimated sample navigation
+  is available.</p>
 
   <p>The enabled lock chord stays registered during normal operation. Frame
   chords are registered only in that actionable state and are removed rather

@@ -18,6 +18,7 @@ HELP_INFO="$HELP_BOOK/Contents/Info.plist"
 HELP_RESOURCES="$HELP_BOOK/Contents/Resources"
 SOURCE_ENTITLEMENTS="$REPO_PATH/Reframer/Reframer/Resources/Reframer.entitlements"
 CONTRACT_PATH="$REPO_PATH/docs/product-contract.json"
+PROJECT_FILE="$REPO_PATH/Reframer/Reframer.xcodeproj/project.pbxproj"
 
 if [ ! -f "$INFO_PLIST" ] || [ ! -x "$EXECUTABLE" ]; then
     echo "error: incomplete Reframer bundle at $APP_PATH" >&2
@@ -108,13 +109,26 @@ CONTRACT_VERSION="$(
         'import json,sys; print(json.load(open(sys.argv[1]))["product"]["version"])' \
         "$CONTRACT_PATH"
 )"
+EXPECTED_BUILD="$(
+    sed -n \
+        's/.*CURRENT_PROJECT_VERSION = \([0-9][0-9]*\);.*/\1/p' \
+        "$PROJECT_FILE" |
+        LC_ALL=C sort -u
+)"
 
 if [ "$VERSION" != "$CONTRACT_VERSION" ]; then
     echo "error: bundle version $VERSION does not match contract $CONTRACT_VERSION" >&2
     exit 65
 fi
 
-if ! [[ "$BUILD" =~ ^[0-9]+$ ]] || [ "$MINIMUM_OS" != "15.0" ] || [ "$BUNDLE_ID" != "com.reframer.app" ]; then
+if ! [[ "$EXPECTED_BUILD" =~ ^[0-9]+$ ]]; then
+    echo "error: project does not declare one numeric build version" >&2
+    exit 65
+fi
+
+if [ "$BUILD" != "$EXPECTED_BUILD" ] ||
+   [ "$MINIMUM_OS" != "15.0" ] ||
+   [ "$BUNDLE_ID" != "com.reframer.app" ]; then
     echo "error: bundle metadata does not match the product contract" >&2
     exit 65
 fi
@@ -228,6 +242,12 @@ if ! [[ "$GIT_COMMIT" =~ ^[0-9a-f]{7,40}$ ]] ||
    ! [[ "$BUILD_TIMESTAMP" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] ||
    [[ "$GIT_DIRTY" != "true" && "$GIT_DIRTY" != "false" ]]; then
     echo "error: source build stamp is missing or malformed" >&2
+    exit 65
+fi
+
+if [ "${REQUIRE_CLEAN_BUILD_STAMP:-0}" = "1" ] &&
+   [ "$GIT_DIRTY" != "false" ]; then
+    echo "error: release bundle source stamp is dirty" >&2
     exit 65
 fi
 

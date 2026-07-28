@@ -1,6 +1,5 @@
 import AppKit
 import Carbon
-import WebKit
 import XCTest
 @testable import Reframer
 
@@ -782,6 +781,36 @@ final class ShortcutSettingsTests: XCTestCase {
         XCTAssertEqual(settings.globalRegistrationStatus, .disabled)
     }
 
+    func testLockModeRequiresAnExactRegisteredRecoveryChord() {
+        XCTAssertTrue(LockModeRecoveryPolicy.canToggle(
+            isCurrentlyLocked: false,
+            isRecoveryRegistered: true
+        ))
+        XCTAssertFalse(LockModeRecoveryPolicy.canToggle(
+            isCurrentlyLocked: false,
+            isRecoveryRegistered: false
+        ))
+        XCTAssertTrue(
+            LockModeRecoveryPolicy.canToggle(
+                isCurrentlyLocked: true,
+                isRecoveryRegistered: false
+            ),
+            "Unlocking must remain possible after an external registration loss"
+        )
+        XCTAssertTrue(LockModeRecoveryPolicy.requiresForcedUnlock(
+            isCurrentlyLocked: true,
+            isRecoveryRegistered: false
+        ))
+        XCTAssertFalse(LockModeRecoveryPolicy.requiresForcedUnlock(
+            isCurrentlyLocked: true,
+            isRecoveryRegistered: true
+        ))
+        XCTAssertFalse(LockModeRecoveryPolicy.requiresForcedUnlock(
+            isCurrentlyLocked: false,
+            isRecoveryRegistered: false
+        ))
+    }
+
     func testFocusedButtonsDoNotSwallowPlainOrShiftProductShortcuts() {
         for keyCode in [KeyCode.h, KeyCode.f, KeyCode.l, KeyCode.r, KeyCode.zero] {
             XCTAssertFalse(ShortcutControlRouting.focusedControlOwns(
@@ -861,9 +890,11 @@ final class ShortcutSettingsTests: XCTestCase {
             ShortcutKeystroke(keyCode: KeyCode.pageDown, modifiers: 0)
         ]
         let table = NSTableView()
-        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 320, height: 240))
-        let webContent = NSView(frame: webView.bounds)
-        webView.addSubview(webContent)
+        let documentationContent = DocumentationTextView(
+            frame: NSRect(x: 0, y: 0, width: 320, height: 240)
+        )
+        let embeddedDocumentationSubview = NSView(frame: documentationContent.bounds)
+        documentationContent.addSubview(embeddedDocumentationSubview)
 
         for stroke in nativeStrokes {
             XCTAssertTrue(
@@ -875,7 +906,7 @@ final class ShortcutSettingsTests: XCTestCase {
             XCTAssertTrue(
                 ShortcutControlRouting.focusedResponderOwns(
                     stroke: stroke,
-                    responder: webContent
+                    responder: embeddedDocumentationSubview
                 )
             )
         }
@@ -887,7 +918,7 @@ final class ShortcutSettingsTests: XCTestCase {
         XCTAssertFalse(
             ShortcutControlRouting.focusedResponderOwns(
                 stroke: commandPageDown,
-                responder: webContent
+                responder: embeddedDocumentationSubview
             )
         )
         XCTAssertFalse(
@@ -896,7 +927,7 @@ final class ShortcutSettingsTests: XCTestCase {
                     keyCode: KeyCode.escape,
                     modifiers: 0
                 ),
-                responder: webContent
+                responder: embeddedDocumentationSubview
             ),
             "Escape remains Reframer's advertised frontmost-context close command"
         )

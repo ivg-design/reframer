@@ -16,6 +16,45 @@ enum WindowPlacement {
             && frame.height > 0
     }
 
+    /// Converts the legacy two-window geometry into the single canonical
+    /// overlay window introduced in build 3. The visible footprint does not
+    /// move: the integral control bar occupies the space previously reserved
+    /// by the separate child window.
+    static func frameByEmbeddingControlBar(
+        _ legacyVideoFrame: NSRect,
+        controlBarHeight: CGFloat
+    ) -> NSRect {
+        guard isUsableFrame(legacyVideoFrame) else { return legacyVideoFrame }
+        let safeHeight = controlBarHeight.isFinite ? max(0, controlBarHeight) : 0
+        return NSRect(
+            x: legacyVideoFrame.minX,
+            y: legacyVideoFrame.minY - safeHeight,
+            width: legacyVideoFrame.width,
+            height: legacyVideoFrame.height + safeHeight
+        )
+    }
+
+    /// Resolves the frame persisted by either the legacy two-window model or
+    /// the current integral-control-bar model. The caller persists the
+    /// returned frame and current schema immediately, preventing a legacy
+    /// frame from being embedded more than once after an interrupted launch.
+    static func restoredMainFrame(
+        savedFrameDescription: String?,
+        savedSchema: Int,
+        currentSchema: Int,
+        defaultFrame: NSRect,
+        controlBarHeight: CGFloat
+    ) -> NSRect {
+        guard let savedFrameDescription else { return defaultFrame }
+        let savedFrame = NSRectFromString(savedFrameDescription)
+        guard isUsableFrame(savedFrame) else { return defaultFrame }
+        guard savedSchema < currentSchema else { return savedFrame }
+        return frameByEmbeddingControlBar(
+            savedFrame,
+            controlBarHeight: controlBarHeight
+        )
+    }
+
     static func bestVisibleFrame(for frame: NSRect, among visibleFrames: [NSRect]) -> NSRect? {
         let usableFrames = visibleFrames.filter(isUsableFrame)
         guard !usableFrames.isEmpty else { return nil }
@@ -38,8 +77,8 @@ enum WindowPlacement {
         }
     }
 
-    /// Clamps the video window while reserving room directly below it for the
-    /// attached control window.
+    /// Clamps the main window. `toolbarHeight` remains as a legacy-geometry
+    /// seam for migration tests; the current one-window app passes zero.
     static func clampMainFrame(
         _ frame: NSRect,
         visibleFrames: [NSRect],
@@ -231,5 +270,84 @@ enum WindowPlacement {
         let dx = point.x - nearestX
         let dy = point.y - nearestY
         return dx * dx + dy * dy
+    }
+}
+
+/// Resolves all state that makes the primary overlay act like one coherent
+/// system window. Locking is an effective override; it never mutates the
+/// user's persisted Always on Top preference.
+struct OverlayWindowPolicy: Equatable {
+    let level: NSWindow.Level
+    let ignoresMouseEvents: Bool
+    let isResizable: Bool
+    let isMovable: Bool
+
+    static func resolve(
+        isLocked: Bool,
+        isAlwaysOnTop: Bool
+    ) -> OverlayWindowPolicy {
+        OverlayWindowPolicy(
+            // Lock mode is the marquee overlay: it must remain above ordinary
+            // application, floating-panel, and modal-panel levels while still
+            // yielding to system pop-up menus, drag UI, screen savers, and
+            // assistive technology.
+            level: isLocked
+                ? .statusBar
+                : (isAlwaysOnTop ? .floating : .normal),
+            ignoresMouseEvents: isLocked,
+            isResizable: !isLocked,
+            isMovable: !isLocked
+        )
+    }
+
+    /// Interactive Reframer panels share the locked overlay's level so they
+    /// can be explicitly ordered above it while the main window remains
+    /// click-through.
+    static func auxiliaryLevel(
+        isLocked: Bool,
+        isAlwaysOnTop: Bool
+    ) -> NSWindow.Level {
+        if isLocked {
+            return resolve(
+                isLocked: true,
+                isAlwaysOnTop: isAlwaysOnTop
+            ).level
+        }
+        return isAlwaysOnTop ? .floating : .normal
+    }
+
+    func apply(to window: NSWindow) {
+        window.level = level
+        window.ignoresMouseEvents = ignoresMouseEvents
+        window.isMovable = isMovable
+        if isResizable {
+            window.styleMask.insert(.resizable)
+        } else {
+            window.styleMask.remove(.resizable)
+        }
+    }
+}
+
+/// Captures the exact geometry at the lock transition and rejects subsequent
+/// AppKit or Accessibility writes until the overlay is unlocked.
+struct LockedWindowFrameGuard: Equatable {
+    private(set) var lockedFrame: NSRect?
+
+    mutating func updateLockState(
+        isLocked: Bool,
+        currentFrame: NSRect
+    ) {
+        if isLocked {
+            if lockedFrame == nil, WindowPlacement.isUsableFrame(currentFrame) {
+                lockedFrame = currentFrame
+            }
+        } else {
+            lockedFrame = nil
+        }
+    }
+
+    func restorationFrame(for currentFrame: NSRect) -> NSRect? {
+        guard let lockedFrame, currentFrame != lockedFrame else { return nil }
+        return lockedFrame
     }
 }

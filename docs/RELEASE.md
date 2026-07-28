@@ -7,7 +7,9 @@ environment and time metadata.
 An unsigned or ad hoc signed archive is source-candidate validation evidence,
 not a distribution-ready artifact. A published build must pass the interactive
 UI gate plus Developer ID signing, notarization, stapling, and Gatekeeper
-assessment.
+assessment. Apple distribution acceptance does not prove window interaction,
+click-through behavior, or nonblank Help content; those remain explicit live
+gates for every candidate.
 
 ## Local Apple credentials
 
@@ -92,15 +94,27 @@ The repository validator rebuilds the index in a temporary directory and
 compares its searchable records, so stale Help content cannot pass merely
 because a compiled index file exists.
 
+The shipping documentation window must also be exercised from the candidate
+bundle. It renders those bundled HTML pages with native AppKit, must display
+known nonblank text, and must not require a WebKit helper or network
+entitlement.
+
 ## Packaging guarantees
 
 The packager:
 
-1. refuses a dirty worktree or version mismatch;
-2. archives a universal arm64/x86_64 Release build with Hardened Runtime;
-3. validates bundle metadata, both slices’ deployment target, exact
+1. refuses a dirty worktree or version mismatch; local packaging also requires
+   `main` at the locally fetched `origin/main` commit (the GitHub workflow has
+   its separate immutable event-commit checks);
+2. archives a universal arm64/x86_64 Release build with Hardened Runtime,
+   keeping DerivedData inside its scoped temporary work directory and
+   unregistering intermediate Reframer apps before cleanup;
+3. validates bundle metadata against the current project version and numeric
+   build, requires a clean source stamp for release artifacts, checks both
+   slices’ deployment target, and checks the exact
    Contents/signature/executable/runtime/Help allowlists, absence of symlinks,
-   source stamp, and the source sandbox entitlement allowlist;
+   and the source sandbox entitlement allowlist: App Sandbox plus
+   user-selected, read-only file access, with no network entitlement;
 4. verifies the Developer ID signature and exact embedded release entitlements;
 5. submits to Apple, requires an `Accepted` result, and records the submission
    JSON and ID;
@@ -124,16 +138,40 @@ On macOS 15.0 or later with no Reframer preferences:
 1. verify the checksum, unzip, launch, and confirm Gatekeeper accepts the app;
 2. open known MP4, M4V, and MOV fixtures and verify first-frame rendering;
 3. play, pause, step both directions, step 10, scrub, and replay after end;
-4. zoom, pan, filter, change opacity, mute, move, resize, and toggle Always on
-   Top;
-5. lock, click through, use Command-Page Down and Command-Page Up from another
-   app, then unlock with Command-Shift-L;
-6. confirm an unlocked frame chord remains observable in the foreground app;
-7. confirm Shortcut Settings reports registration without an Accessibility or
-   Input Monitoring prompt;
-8. relaunch and verify persisted preferences;
-9. complete keyboard, VoiceOver, Increase Contrast, Reduce Transparency,
-   Reduce Motion, and multi-display checks.
+4. zoom, pan, filter, change opacity, mute, and move the unlocked overlay with
+   its grip;
+5. use macOS or Mosaic to move and resize the unlocked overlay, confirming the
+   video and control bar remain one integral externally managed window; verify
+   one 48-point control row at 920 points and wider, two rows totaling 96
+   points below 920 through the 640-point minimum, and every control remains
+   visible and accessibility-reachable;
+6. launch at the preferred 1,060-point width, toggle Always on Top When
+   Unlocked, relaunch, and confirm the saved
+   unlocked-state level;
+7. make the configured global Lock/Unlock chord unavailable and confirm lock
+   is refused with recovery guidance; after locking with the chord registered,
+   remove or suspend that registration and confirm Reframer automatically
+   unlocks and reports recovery;
+8. turn Always on Top When Unlocked off, lock, and confirm the complete overlay
+   uses the public status-bar window tier above all foreground ordinary
+   application windows, including normal, floating, modal, and utility
+   windows, ignores pointer input over both video and controls, and cannot be
+   moved or resized;
+9. click a known interactive target beneath both overlay regions to prove
+   pointer delivery, use Command-Page Down and Command-Page Up from that app,
+   then unlock with Command-Shift-L and confirm the saved unlocked window level
+   returns;
+10. confirm system pop-up menus, drag UI, the screen saver, and
+   assistive-technology UI retain precedence over the locked overlay;
+11. confirm an unlocked frame chord remains observable in the foreground app;
+12. open Reframer Documentation from the Help menu and with Command-?, verify
+    known bundled content is visible in the native view, navigate a link and
+    scroll by keyboard, then close with Escape;
+13. confirm Shortcut Settings reports registration without an Accessibility or
+    Input Monitoring prompt;
+14. relaunch and verify persisted preferences and window geometry;
+15. complete keyboard, VoiceOver, Increase Contrast, Reduce Transparency,
+    Reduce Motion, and multi-display checks.
 
 Record the commit, version/build, macOS version, architecture, UI/live results,
 notarization submission ID, and artifact checksum in the GitHub release.

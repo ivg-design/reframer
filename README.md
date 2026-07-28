@@ -14,7 +14,23 @@ while you work in the app underneath.
 - Plays, pauses, scrubs, zooms, pans, filters, mutes, and adjusts opacity
 - Persists opacity, volume, window placement, filter settings, and customized
   shortcuts
-- Locks into a click-through overlay
+- Presents the video and control bar as one canonical overlay window, so
+  macOS and window managers such as Mosaic move and resize the complete
+  unlocked overlay
+- Opens at the preferred 1,060-point width with one 48-point control row;
+  below 920 points the same controls reflow into two rows totaling 96 points,
+  with every control still visible and accessibility-reachable down to the
+  640-point minimum width
+- Locks the complete overlay at macOS's public status-bar window tier, above
+  all ordinary application windows—including normal, floating, modal, and
+  utility windows; makes both the video and control bar pointer-transparent;
+  and disables moving and resizing until the global lock shortcut restores
+  interaction
+- Refuses to enter whole-overlay click-through unless the exact configured
+  global Lock/Unlock chord is registered, and automatically unlocks with a
+  recovery report if that registration later becomes unavailable
+- Treats Always on Top When Unlocked as an unlocked-state preference; lock
+  mode forces the overlay on top regardless of that saved preference
 - Keeps the enabled global lock chord available from any video or lock state
 - Registers global frame-step chords only while a video is loaded, the overlay
   is locked, and exact or estimated sample navigation is available
@@ -60,10 +76,20 @@ exact or estimated sample navigation, so those key combinations remain
 available to other apps in every other state. Global shortcuts use privacy-safe
 registered hot keys and require neither Accessibility nor Input Monitoring
 permission. Registration conflicts are reported in Shortcut Settings with a
-retry action. Defaults can be changed or disabled there.
+retry action. Defaults can be changed or disabled there. Because every pointer
+event passes through the complete locked overlay, use the enabled global lock
+chord—Command-Shift-L by default—to unlock it from the app underneath.
+Reframer will not lock unless that exact configured chord is registered. If
+registration later disappears, conflicts, is suspended during shortcut
+recording, or global shortcuts are disabled, Reframer immediately unlocks and
+reports how to restore recovery before locking again.
+Critical system-owned UI still takes precedence over the overlay, including
+pop-up menus, drag UI, the screen saver, and assistive-technology windows.
 
 Reframer runs in App Sandbox and receives read-only access only to videos the
-user explicitly opens or drops.
+user explicitly opens or drops. Its documentation window renders the bundled
+Help pages with native AppKit, remains fully offline in the sandbox, and does
+not require a network entitlement.
 
 See [Product Contract](docs/PRODUCT_CONTRACT.md) for exact states and guards.
 See [Threat Model](docs/THREAT_MODEL.md) for the keyboard and file-access trust
@@ -93,12 +119,18 @@ Developer ID signing and notarization are handled by
 dirty sources, validates the universal app bundle, submits it for
 notarization, staples and revalidates the ticket-bearing bundle, runs
 Gatekeeper assessment, packages the result, then extracts and rechecks the
-final ZIP.
+final ZIP. Release DerivedData remains inside a scoped temporary directory;
+temporary app registrations are removed during cleanup so packaging does not
+seed older Reframer builds into LaunchServices or Spotlight.
+Local packaging also refuses source that is not clean, on `main`, and equal to
+the locally fetched `origin/main`.
 
-The audit records the historical build-1 review run and the packaging gap it
-exposed. Every later build must repeat the complete pipeline; only its emitted
-Apple result and checksums prove that particular artifact. A local review run
-does not create a version tag, GitHub release, or published distribution.
+The audit records the historical build-1 and build-2 review runs, the packaging
+gap build 1 exposed, and the live product defects found after build 2 passed
+Apple's distribution checks. Build 3 must repeat the complete pipeline; only
+its emitted test, live-interaction, Apple, and checksum evidence proves that
+particular artifact. A local review run does not create a version tag, GitHub
+release, or published distribution.
 
 See [Release Process](docs/RELEASE.md) for the local process and the GitHub
 runner, environment, variable, secret, and source-protection prerequisites.

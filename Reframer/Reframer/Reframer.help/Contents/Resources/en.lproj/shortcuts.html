@@ -38,6 +38,15 @@
   repeatedly. Frame stepping and panning are the intentional repeatable
   actions.</p>
 
+  <p>The entire overlay, including its control bar, ignores pointer input while
+  locked. Keep an enabled global lock binding so <kbd>⌘⇧L</kbd>, or your
+  customized replacement, can restore interaction from the app underneath.</p>
+
+  <p>Reframer refuses to lock unless that exact configured global chord is
+  registered. If registration later disappears or conflicts, is suspended
+  while recording a shortcut, or global shortcuts are disabled, Reframer
+  immediately unlocks and reports recovery. Unlocking is always permitted.</p>
+
   <h2>Customize</h2>
   <p>Open shortcut settings with <kbd>H</kbd>. Change, clear, disable, or reset
   an action. Reframer rejects duplicate, reserved, modifier-collapsing, and

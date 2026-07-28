@@ -30,6 +30,25 @@ struct GlobalHotKeyRegistrationChanges: Equatable {
     }
 }
 
+/// Safety gate for a window that becomes completely pointer-transparent.
+/// Unlocking is unconditional; entering or remaining locked requires the
+/// exact global recovery chord to be registered.
+enum LockModeRecoveryPolicy {
+    static func canToggle(
+        isCurrentlyLocked: Bool,
+        isRecoveryRegistered: Bool
+    ) -> Bool {
+        isCurrentlyLocked || isRecoveryRegistered
+    }
+
+    static func requiresForcedUnlock(
+        isCurrentlyLocked: Bool,
+        isRecoveryRegistered: Bool
+    ) -> Bool {
+        isCurrentlyLocked && !isRecoveryRegistered
+    }
+}
+
 enum GlobalHotKeyPlan {
     static func descriptors(
         for settings: ShortcutSettings,

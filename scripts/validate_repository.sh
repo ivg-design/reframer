@@ -204,6 +204,8 @@ for required_bundle_gate in \
     "_CodeSignature must contain only CodeResources" \
     "Contents/CodeResources is not a valid stapled ticket" \
     "Contents/MacOS must contain only the Reframer executable" \
+    "project does not declare one numeric build version" \
+    "release bundle source stamp is dirty" \
     "runtime resources do not equal the allowlist" \
     "Apple Help files do not equal the allowlist"; do
     if ! grep -Fq "$required_bundle_gate" "$BUNDLE_VALIDATOR"; then
@@ -217,6 +219,12 @@ PACKAGE_BUNDLE_VALIDATION_COUNT="$(
     grep -Fc '"$SCRIPT_DIR/validate_bundle.sh"' "$PACKAGE_SCRIPT"
 )"
 if [ "$PACKAGE_BUNDLE_VALIDATION_COUNT" -lt 3 ] ||
+   [ "$(grep -Fc 'REQUIRE_CLEAN_BUILD_STAMP=1' "$PACKAGE_SCRIPT")" -lt 3 ] ||
+   ! grep -Fq -- '-derivedDataPath "$DERIVED_DATA_PATH"' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq -- '-exec "$LSREGISTER" -u' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'local release packaging requires the main branch' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'local release packaging requires HEAD to equal origin/main' \
+        "$PACKAGE_SCRIPT" ||
    ! grep -Fq 'package-round-trip' "$PACKAGE_SCRIPT" ||
    ! grep -Fq 'xcrun stapler validate "$ROUND_TRIP_APP"' "$PACKAGE_SCRIPT" ||
    ! grep -Fq 'spctl --assess --type execute --verbose=2 "$ROUND_TRIP_APP"' \

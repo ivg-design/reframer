@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "product": {
     "name": "Reframer",
     "bundleIdentifier": "com.reframer.app",
@@ -51,6 +51,10 @@
     "requiresInputMonitoringPermission": false,
     "toggleLockAvailability": "Always during normal operation while global shortcuts and the lock binding are enabled",
     "toggleLockRegistration": "Registered in every video and lock state; suspended only during shortcut recording and removed on shutdown",
+    "lockEntryRequirement": "The exact configured global Lock/Unlock chord must be registered before whole-overlay click-through can begin",
+    "lockEntryFailure": "Lock is refused and recovery guidance identifies the configured chord",
+    "lockRecoveryLoss": "Registration loss, conflict, recording suspension, or disabling global shortcuts while locked immediately unlocks the overlay and reports recovery",
+    "unlockAvailability": "Unlocking is always permitted",
     "frameStepAvailability": "Loaded video with lock mode enabled and exact or estimated sample navigation available",
     "frameStepRegistration": "Registered only while frame stepping is actionable",
     "inactiveFrameStepHandling": "Not registered, received, or swallowed through Reframer's global path while another app is active",
@@ -59,6 +63,50 @@
     "stepBackward": "Command-Page Up",
     "stepMultiplier": 10,
     "failureRecovery": "Shortcut Settings reports conflicts and offers retry"
+  },
+  "overlay": {
+    "managedWindowCount": 1,
+    "windowModel": "One canonical externally managed window contains the video and control bar",
+    "unlockedExternalManagement": "macOS and third-party window managers such as Mosaic move and resize the entire overlay",
+    "layout": {
+      "preferredWidth": 1060,
+      "minimumWidth": 640,
+      "regular": {
+        "minimumWidth": 920,
+        "rows": 1,
+        "controlBarHeight": 48
+      },
+      "compact": {
+        "minimumWidth": 640,
+        "maximumWidthExclusive": 920,
+        "rows": 2,
+        "controlBarHeight": 96
+      },
+      "visibility": "Every control remains visible and accessibility-reachable in both layouts"
+    },
+    "unlockedAlwaysOnTopPreference": "Persisted preference selects floating or normal level only while unlocked",
+    "lockedLevel": "NSWindow.Level.statusBar above all ordinary application windows regardless of the unlocked preference",
+    "lockedAbove": [
+      "normal application windows",
+      "floating application windows",
+      "modal application windows",
+      "utility application windows"
+    ],
+    "lockedYieldsTo": [
+      "system pop-up menus",
+      "system drag UI",
+      "screen saver UI",
+      "assistive-technology UI"
+    ],
+    "lockedPointerInput": "The entire overlay, including video and controls, ignores pointer events",
+    "lockedGeometry": "Moving and resizing are disabled",
+    "unlockRecovery": "The exact configured global Lock/Unlock chord restores interaction from another app; Reframer refuses lock without it and automatically unlocks if it becomes unavailable"
+  },
+  "documentation": {
+    "renderer": "Native AppKit attributed text rendered from bundled Help HTML",
+    "bundledContentOnly": true,
+    "networkAccess": false,
+    "requiresNetworkEntitlement": false
   },
   "privacy": {
     "appSandbox": true,

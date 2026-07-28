@@ -578,16 +578,16 @@ final class SecurityScopedURLLeaseTests: XCTestCase {
             url: url,
             access: access
         )
-        weak var weakLease = owner
+        let weakLease = WeakReference(owner)
         var asyncOwner = owner
 
         XCTAssertNotNil(asyncOwner)
         owner = nil
-        XCTAssertNotNil(weakLease)
+        XCTAssertNotNil(weakLease.value)
         XCTAssertEqual(events.snapshot(), ["start:reframer-lease-success.mov"])
 
         asyncOwner = nil
-        XCTAssertNil(weakLease)
+        XCTAssertNil(weakLease.value)
         XCTAssertEqual(
             events.snapshot(),
             [
@@ -1055,6 +1055,14 @@ private final class LockedEventRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return events
+    }
+}
+
+private final class WeakReference<Object: AnyObject> {
+    weak var value: Object?
+
+    init(_ value: Object?) {
+        self.value = value
     }
 }
 

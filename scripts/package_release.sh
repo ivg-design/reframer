@@ -16,6 +16,23 @@ if [ -n "$(git -C "$REPO_PATH" status --porcelain --untracked-files=normal)" ]; 
     exit 65
 fi
 
+if [ "${GITHUB_ACTIONS:-false}" != "true" ]; then
+    CURRENT_BRANCH="$(git -C "$REPO_PATH" branch --show-current)"
+    if [ "$CURRENT_BRANCH" != "main" ]; then
+        echo "error: local release packaging requires the main branch" >&2
+        exit 65
+    fi
+    if ! git -C "$REPO_PATH" rev-parse --verify --quiet origin/main >/dev/null; then
+        echo "error: local release packaging requires origin/main" >&2
+        exit 65
+    fi
+    if [ "$(git -C "$REPO_PATH" rev-parse HEAD)" != \
+         "$(git -C "$REPO_PATH" rev-parse origin/main)" ]; then
+        echo "error: local release packaging requires HEAD to equal origin/main" >&2
+        exit 65
+    fi
+fi
+
 VERSION="$(
     xcodebuild \
         -project "$PROJECT_PATH" \
@@ -36,8 +53,18 @@ if [ -n "${RELEASE_VERSION:-}" ] && [ "$RELEASE_VERSION" != "$VERSION" ]; then
 fi
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/reframer-release.XXXXXX")"
+DERIVED_DATA_PATH="$WORK_DIR/DerivedData"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 cleanup() {
     if [ -n "${WORK_DIR:-}" ] && [ -d "$WORK_DIR" ]; then
+        if [ -x "$LSREGISTER" ]; then
+            find "$WORK_DIR" \
+                -type d \
+                -name 'Reframer.app' \
+                -prune \
+                -exec "$LSREGISTER" -u '{}' \; \
+                >/dev/null 2>&1 || true
+        fi
         rm -rf "$WORK_DIR"
     fi
 }
@@ -58,6 +85,7 @@ xcodebuild archive \
     -configuration Release \
     -destination 'generic/platform=macOS' \
     -archivePath "$ARCHIVE_PATH" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
     ARCHS='arm64 x86_64' \
     ONLY_ACTIVE_ARCH=NO \
     CODE_SIGN_STYLE=Manual \
@@ -65,7 +93,7 @@ xcodebuild archive \
     DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
     OTHER_CODE_SIGN_FLAGS='--timestamp'
 
-"$SCRIPT_DIR/validate_bundle.sh" "$APP_PATH"
+REQUIRE_CLEAN_BUILD_STAMP=1 "$SCRIPT_DIR/validate_bundle.sh" "$APP_PATH"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
 SIGNATURE_INFO="$(/usr/bin/codesign --display --verbose=4 "$APP_PATH" 2>&1)"
@@ -139,7 +167,7 @@ fi
 
 xcrun stapler staple "$APP_PATH"
 xcrun stapler validate "$APP_PATH"
-"$SCRIPT_DIR/validate_bundle.sh" "$APP_PATH"
+REQUIRE_CLEAN_BUILD_STAMP=1 "$SCRIPT_DIR/validate_bundle.sh" "$APP_PATH"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 /usr/sbin/spctl --assess --type execute --verbose=2 "$APP_PATH"
 
@@ -152,7 +180,7 @@ ROUND_TRIP_DIR="$WORK_DIR/package-round-trip"
 ROUND_TRIP_APP="$ROUND_TRIP_DIR/Reframer.app"
 mkdir -p "$ROUND_TRIP_DIR"
 /usr/bin/ditto -x -k "$FINAL_ZIP" "$ROUND_TRIP_DIR"
-"$SCRIPT_DIR/validate_bundle.sh" "$ROUND_TRIP_APP"
+REQUIRE_CLEAN_BUILD_STAMP=1 "$SCRIPT_DIR/validate_bundle.sh" "$ROUND_TRIP_APP"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$ROUND_TRIP_APP"
 xcrun stapler validate "$ROUND_TRIP_APP"
 /usr/sbin/spctl --assess --type execute --verbose=2 "$ROUND_TRIP_APP"

@@ -171,10 +171,13 @@ class VideoState: ObservableObject {
     @Published var filterSettings: FilterSettings = .defaults { didSet { handleFilterSettingsChange() } }
     @Published var showFilterPanel: Bool = false
 
-    // Lock mode - disables pan/zoom gestures on video, controls remain active
+    // Lock mode makes the complete overlay pointer-transparent and prevents
+    // movement, resizing, zooming, and panning. Use the global lock shortcut
+    // to recover interaction while another app remains active.
     @Published var isLocked: Bool = false
 
-    // Always on top
+    // Persisted unlocked-state preference. Lock mode overrides this with the
+    // public status-bar window tier and restores the preference when unlocked.
     @Published var isAlwaysOnTop: Bool = true { didSet { persistBool(isAlwaysOnTop, key: DefaultsKeys.alwaysOnTop) } }
 
     // Help
@@ -200,6 +203,13 @@ class VideoState: ObservableObject {
     private var isAdjustingMute = false
     private var lastNonZeroVolume: Float = 0.5
     private let defaults: UserDefaults
+
+    /// The single preference store selected for this process. App-owned
+    /// window geometry must use the same store so UI tests never read or
+    /// mutate the user's release preferences.
+    var preferenceStore: UserDefaults {
+        defaults
+    }
 
     // Computed properties
     var zoomPercentage: Int {

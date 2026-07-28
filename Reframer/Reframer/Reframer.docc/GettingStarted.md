@@ -20,16 +20,30 @@ asset is playable and has a usable, decodable video track.
 
 ## Position the reference
 
-Drag the grip at the left edge of the control bar to move the window, including
-on the first click while Reframer is inactive. Focus the grip and use
-Option-Arrow to move one point or add Shift to move ten points; VoiceOver
-offers the same four directions as named actions. Resize from an edge, zoom
-with Shift-scroll, drag the loaded video to pan, and set opacity from 2% through
-100%. The ready surface always shows its current frame, zoom, and lock state
-without intercepting pointer input.
+The video and control bar share one canonical window. Drag the grip at the left
+edge of the control bar to move the complete overlay, including on the first
+click while Reframer is inactive. Focus the grip and use Option-Arrow to move
+one point or add Shift to move ten points; VoiceOver offers the same four
+directions as named actions. macOS and window managers such as Mosaic also
+move and resize the entire unlocked overlay instead of targeting the controls
+separately. Resize from an edge, zoom with Shift-scroll, drag the loaded video
+to pan, and set opacity from 2% through 100%. The ready surface always shows
+its current frame, zoom, and lock state without intercepting pointer input.
+At the preferred 1,060-point width, the controls occupy one 48-point row.
+Below 920 points, they reflow into two rows totaling 96 points; every control
+remains visible and accessibility-reachable through the 640-point minimum.
 
-Press L to lock the overlay. Video-area clicks then pass through to the app
-underneath. Press Command-Shift-L when Reframer is not active to unlock it.
+Press L to lock the overlay. The complete window then uses macOS's public
+status-bar tier above all ordinary application windows, including normal,
+floating, modal, and utility windows; cannot move or resize; and passes pointer
+input through both the video and controls to the app underneath. Critical
+system pop-up menus, drag UI, the screen saver, and assistive-technology
+windows remain above it.
+
+Use the enabled global lock shortcut, Command-Shift-L by default, to restore
+interaction from the app underneath. Reframer refuses to lock unless that
+exact configured chord is registered. If registration later becomes
+unavailable, Reframer automatically unlocks and reports recovery.
 
 ## Learn more
 

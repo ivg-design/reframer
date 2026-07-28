@@ -49,3 +49,11 @@ does not receive or swallow those keys through the global path while another
 app is active. Registered hot keys require no Accessibility or Input Monitoring
 permission. If another app already owns a chord, the same panel identifies the
 failure and offers a retry action.
+
+The complete overlay ignores pointer input while locked, including its control
+bar. Keep an enabled global lock binding so Command-Shift-L, or your customized
+replacement, can restore interaction from the app underneath.
+Reframer will not enter lock unless that exact configured chord is registered.
+Registration loss, conflict, recording suspension, or disabling global
+shortcuts while locked causes an immediate automatic unlock and a recovery
+report. Unlocking is always permitted.

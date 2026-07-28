@@ -15,16 +15,29 @@
     <li>Choose an MP4, M4V, or MOV file.</li>
     <li>Press <kbd>Space</kbd> to play or pause.</li>
     <li>Use <kbd>⌘ Page Down</kbd> and <kbd>⌘ Page Up</kbd> to step.</li>
-    <li>Drag the control-bar grip to move the window, including on the first
-      click while Reframer is inactive. Focus the grip and use
+    <li>The video and controls share one window. Drag the control-bar grip to
+      move the complete overlay, including on the first click while Reframer is
+      inactive. Focus the grip and use
       <kbd>⌥</kbd>Arrow (add <kbd>⇧</kbd> for 10 points), or choose a named
-      VoiceOver direction. Drag the video itself to pan.</li>
-    <li>Set opacity, size, and zoom. Frame, zoom, and lock badges stay visible.</li>
-    <li>Press <kbd>L</kbd> to make the video click-through.</li>
+      VoiceOver direction. macOS and window managers such as Mosaic move and
+      resize the entire unlocked overlay. Drag the video itself to pan.</li>
+    <li>Set opacity, size, and zoom. At 920 points and wider, controls use one
+      48-point row. Below 920 through the 640-point minimum, they use two rows
+      totaling 96 points. Every control remains visible and
+      accessibility-reachable.</li>
+    <li>Press <kbd>L</kbd> to place the complete overlay at the public
+      status-bar tier above all ordinary app windows and make both video and
+      controls click-through. Use <kbd>⌘⇧L</kbd> from the app underneath to
+      restore interaction.</li>
   </ol>
 
   <p>Reframer checks that macOS can decode a usable video track before
   presenting the asset as ready.</p>
+
+  <p>Locking requires the exact configured global Lock/Unlock chord to be
+  registered. Reframer refuses lock without that recovery path and
+  automatically unlocks with guidance if the registration later becomes
+  unavailable.</p>
 
   <div class="nav-links">
     <p><strong>Next:</strong> <a href="loading-videos.html">Loading Videos</a></p>

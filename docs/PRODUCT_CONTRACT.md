@@ -18,6 +18,48 @@ machine-readable counterpart is
   track.
 - Playback is local and offline.
 
+## Overlay window
+
+The video surface and control bar are one canonical, externally managed
+`NSWindow`. Reframer must not expose a separately targetable control window.
+While unlocked, moving or resizing the window through macOS or a third-party
+window manager such as Mosaic moves or resizes the entire overlay.
+
+The preferred initial width is 1,060 points and the minimum supported width is
+640 points. At 920 points or wider, the control bar is one 48-point row. From
+640 points through widths below 920 points, the exact same controls reflow into
+two 48-point rows with a total height of 96 points. No action, field, slider,
+status metadata, or accessibility element may be hidden or made unreachable by
+the layout change.
+
+Always on Top When Unlocked is a persisted preference. It controls whether the
+unlocked overlay uses a floating or normal window level. Lock mode overrides
+that preference and atomically applies all of the following:
+
+- the complete overlay uses the public `NSWindow.Level.statusBar` tier, above
+  all ordinary application windows, including normal, floating, modal, and
+  utility windows;
+- the complete overlay, including its video and control bar, ignores pointer
+  events so input reaches the app underneath;
+- moving and resizing are disabled;
+- the enabled global lock shortcut is the recovery path that restores
+  interaction from another app.
+
+Entering whole-overlay click-through is permitted only when the exact
+configured global Lock/Unlock chord is successfully registered. Unlocking is
+always permitted. If that registration later disappears or conflicts, is
+suspended while Shortcut Settings records a chord, or global shortcuts are
+disabled, Reframer must immediately unlock and present the configured chord
+plus recovery guidance. It must never leave a pointer-transparent overlay
+locked without its registered recovery path.
+
+Lock mode does not cover critical system-owned UI above the public status-bar
+tier. System pop-up menus, drag UI, the screen saver, and assistive-technology
+windows retain precedence.
+
+Unlocking restores pointer interaction and resizability, and returns the
+window level to the saved Always on Top When Unlocked preference.
+
 ## Commands
 
 | Command | Default | Guard |
@@ -32,7 +74,7 @@ machine-readable counterpart is
 | Pan 100 | Command-Shift + Arrow | App active, loaded, unlocked |
 | Reset zoom | 0 | App active, loaded, unlocked |
 | Reset view | R | App active, loaded, unlocked |
-| Toggle lock | L | App active |
+| Toggle lock | L | App active; entering lock also requires the exact configured global Lock/Unlock chord to be registered; unlocking is always allowed |
 | Toggle lock globally | Command-Shift-L | Global shortcuts enabled |
 | Shortcut settings | H | App active |
 | Documentation | Command-? | App active |
@@ -42,9 +84,9 @@ machine-readable counterpart is
 Shift-scroll zooms in 5% steps. Command-Shift-scroll uses 0.1% steps. An
 unmodified scroll over unlocked video steps samples. Primary-button dragging
 the loaded video pans it while unlocked; the dedicated control-bar grip moves
-the overlay window. The grip accepts the first click when Reframer is inactive,
-supports Option-Arrow keyboard movement while focused (add Shift for 10-point
-steps), and exposes directional VoiceOver actions.
+the same canonical overlay window. The grip accepts the first click when
+Reframer is inactive, supports Option-Arrow keyboard movement while focused
+(add Shift for 10-point steps), and exposes directional VoiceOver actions.
 
 Shortcut editing must prevent collisions, reserved system chords, modifier
 collapse, and unsafe unmodified global keys. A customized chord replaces its
@@ -63,10 +105,11 @@ global path while another app is active.
 Registrations are updated incrementally when shortcut settings or the
 actionable playback state changes, retaining unchanged registrations and their
 physical held-key state. They are suspended while the shortcut recorder is
-listening and removed on shutdown. Reframer does not install a broad global
-event monitor and requires neither Accessibility nor Input Monitoring
-permission. Registration conflicts are surfaced in Shortcut Settings with a
-retry action.
+listening and removed on shutdown. Suspending or losing the registered
+Lock/Unlock chord while locked invokes the automatic-unlock safety policy
+above. Reframer does not install a broad global event monitor and requires
+neither Accessibility nor Input Monitoring permission. Registration conflicts
+are surfaced in Shortcut Settings with a retry action.
 
 ## State
 
@@ -91,9 +134,11 @@ retry action.
   use, seeks, filtering, and cooperative cancellation. Replacement acquires the
   next lease before the prior player graph is dismantled.
 
-Opacity, last audible volume, mute, Always on Top, window placement, filter
-settings, and shortcut customization persist. Values are validated and clamped
-when restored.
+Opacity, last audible volume, mute, Always on Top When Unlocked, window
+placement, filter settings, and shortcut customization persist. Values are
+validated and clamped when restored. Restored legacy window geometry is
+migrated once so the formerly separate control-bar footprint becomes part of
+the canonical overlay without moving its top edge.
 
 ## Accessibility and input
 
@@ -114,7 +159,10 @@ A focused text editor retains text and standard editing commands. Other
 controls retain only their conventional activation and navigation keys; they
 do not suppress plain or Shift-based Reframer shortcuts they do not own.
 System file and alert sheets bypass the application shortcut layer, and the
-documentation view retains native Space, arrow, and page navigation.
+documentation view retains native Space, arrow, and page navigation. The
+documentation window renders bundled Help HTML as native AppKit content; it
+does not launch a WebKit web process, fetch network content, or require a
+network entitlement.
 
 ## Release
 
@@ -123,4 +171,5 @@ in App Sandbox with only user-selected, read-only file access. Release
 acceptance requires successful notarization, stapling, Gatekeeper assessment,
 and an internal-document/test-artifact leakage check. Repository, unsigned, or
 ad hoc signed build validation is not evidence that these external Apple gates
-ran.
+ran. The exact release entitlement allowlist remains App Sandbox plus
+user-selected, read-only file access; network access is not included.

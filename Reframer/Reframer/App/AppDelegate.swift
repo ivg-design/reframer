@@ -1,6 +1,5 @@
 import Cocoa
 import Combine
-import WebKit
 
 // Custom window that can become key
 class TransparentWindow: NSWindow {
@@ -116,33 +115,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var globalHotKeyRegistrar: GlobalHotKeyRegistrar?
     private var localShortcutMonitor: Any?
     var mainWindow: TransparentWindow!
-    private var controlWindow: TransparentWindow!
     private var shortcutsWindow: TransparentWindow?  // Keyboard shortcuts panel (H key)
     private weak var shortcutsView: HelpView?
     private var documentationWindow: NSWindow?        // Documentation browser (Help menu)
-    private var documentationWebView: WKWebView?
+    private var documentationView: DocumentationView?
     private var filterPanelWindow: TransparentWindow?
     private weak var filterPanelView: FilterPanelView?
     private var alwaysOnTopMenuItem: NSMenuItem?
 
     let videoState = VideoState()
     private var cancellables = Set<AnyCancellable>()
-    /// Kept in sync with ControlBar.xib so the child window and its content
-    /// have one layout height and never create conflicting constraints.
-    private let controlWindowHeight: CGFloat = 48
+    private let controlBarHeight = MainViewController.controlBarHeight
     private let mainWindowMinimumSize = NSSize(
-        width: ControlBar.minimumUsableWidth,
-        height: 360
+        width: ControlBar.minimumWindowWidth,
+        height: 360 + MainViewController.controlBarHeight
     )
     private let windowFrameDefaultsKey = "VideoOverlay.mainWindowFrame"
+    private let windowFrameSchemaDefaultsKey = "VideoOverlay.mainWindowFrameSchema"
+    private let integralControlBarFrameSchema = 2
     private var windowReclampWorkItem: DispatchWorkItem?
     private var isRepositioningWindows = false
+    private var lockedWindowFrameGuard = LockedWindowFrameGuard()
     private var helpFocusSnapshot: FocusSnapshot?
     private var filterFocusSnapshot: FocusSnapshot?
     private var documentationFocusSnapshot: FocusSnapshot?
 
     private var mainViewController: MainViewController!
-    private var controlBar: ControlBar!
     private var shortcutMenuItems: [
         (item: NSMenuItem, action: ShortcutSettings.Action, factor: Int)
     ] = []
@@ -152,10 +150,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
         createMainWindow()
-        createControlWindow()
         observeWindowFrameChanges()
         setupGlobalShortcuts()
         observeState()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(activeSpaceDidChange),
+            name: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(workspaceApplicationDidActivate),
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
 
         #if DEBUG
         // Development-only convenience hook. The shipping app accepts video
@@ -175,6 +184,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationWillTerminate(_ notification: Notification) {
         windowReclampWorkItem?.cancel()
         NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
         globalHotKeyRegistrar?.invalidate()
         globalHotKeyRegistrar = nil
         if let monitor = localShortcutMonitor {
@@ -184,6 +194,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        reapplyOverlayWindowPolicy()
     }
 
     /// Handle files opened via "Open With" from Finder
@@ -330,7 +344,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             action: .globalToggleLock
         ))
         let alwaysOnTopItem = makeCommandMenuItem(
-            title: "Always on Top",
+            title: "Always on Top When Unlocked",
             command: .toggleAlwaysOnTop
         )
         viewMenu.addItem(alwaysOnTopItem)
@@ -485,11 +499,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let screenFrame = NSScreen.main?.visibleFrame
             ?? visibleFrames.first
             ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-        // Main window is just the video canvas - toolbar will be BELOW it
-        let windowSize = NSSize(width: ControlBar.minimumUsableWidth, height: 560)
+        // The video canvas and controls are one canonical system window. This
+        // ensures macOS and third-party window managers always move and resize
+        // the complete overlay.
+        let windowSize = NSSize(
+            width: ControlBar.preferredFullWidth,
+            height: 560 + controlBarHeight
+        )
         let defaultOrigin = NSPoint(
             x: screenFrame.midX - windowSize.width / 2,
-            y: screenFrame.midY - windowSize.height / 2 + controlWindowHeight / 2
+            y: screenFrame.midY - windowSize.height / 2
         )
         let defaultFrame = NSRect(origin: defaultOrigin, size: windowSize)
         let windowFrame = loadSavedWindowFrame(
@@ -510,7 +529,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
-        window.level = desiredWindowLevel
+        window.level = desiredOverlayWindowLevel
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         // The dedicated, lock-aware control-bar grip owns window movement.
         // Background dragging would steal primary-button video panning.
@@ -522,6 +541,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         mainViewController = MainViewController(videoState: videoState)
         window.contentViewController = mainViewController
+        mainViewController.windowToDrag = window
+        mainViewController.onToggleLockRequest = { [weak self] in
+            _ = self?.dispatch(.toggleLock, origin: .menu)
+        }
 
         // Set frame again after content view controller to ensure size
         window.setFrame(windowFrame, display: true)
@@ -532,107 +555,66 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         mainWindow = window
     }
 
-    private func createControlWindow() {
-        let mainFrame = mainWindow.frame
-        // Position toolbar BELOW the main window (flush against bottom edge)
-        let controlFrame = NSRect(
-            x: mainFrame.minX,
-            y: mainFrame.minY - controlWindowHeight,
-            width: mainFrame.width,
-            height: controlWindowHeight
-        )
-
-        let window = TransparentWindow(
-            contentRect: controlFrame,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = false
-        window.level = mainWindow.level
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.title = "Reframer Controls"
-        window.setAccessibilityIdentifier("window-controls")
-        window.setAccessibilityLabel("Reframer Controls")
-        // NOTE: Do NOT set isMovableByWindowBackground on control window
-        // It's a child window and will move with the main window when main is dragged
-
-        // Create control bar
-        controlBar = ControlBar(frame: controlFrame)
-        controlBar.videoState = videoState
-        controlBar.windowToDrag = mainWindow
-
-        // Wrap in a view controller
-        let viewController = NSViewController()
-        viewController.view = NSView(frame: controlFrame)
-        viewController.view.wantsLayer = true
-        viewController.view.layer?.backgroundColor = .clear
-        viewController.view.addSubview(controlBar)
-
-        controlBar.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            controlBar.leadingAnchor.constraint(equalTo: viewController.view.leadingAnchor),
-            controlBar.trailingAnchor.constraint(equalTo: viewController.view.trailingAnchor),
-            controlBar.topAnchor.constraint(equalTo: viewController.view.topAnchor),
-            controlBar.bottomAnchor.constraint(equalTo: viewController.view.bottomAnchor)
-        ])
-
-        window.contentViewController = viewController
-        controlWindow = window
-        mainWindow.addChildWindow(window, ordered: .above)
-        window.orderFront(nil)
-
-        // Ensure main window stays key for keyboard events
-        mainWindow.makeKeyAndOrderFront(nil)
-    }
-
     private func loadSavedWindowFrame(defaultFrame: NSRect, visibleFrames: [NSRect]) -> NSRect {
-        let candidateFrame: NSRect
-        if let savedString = UserDefaults.standard.string(forKey: windowFrameDefaultsKey) {
-            let savedFrame = NSRectFromString(savedString)
-            candidateFrame = WindowPlacement.isUsableFrame(savedFrame)
-                ? savedFrame
-                : defaultFrame
-        } else {
-            candidateFrame = defaultFrame
-        }
-
-        return WindowPlacement.clampMainFrame(
+        let preferences = videoState.preferenceStore
+        let candidateFrame = WindowPlacement.restoredMainFrame(
+            savedFrameDescription: preferences.string(forKey: windowFrameDefaultsKey),
+            savedSchema: preferences.integer(forKey: windowFrameSchemaDefaultsKey),
+            currentSchema: integralControlBarFrameSchema,
+            defaultFrame: defaultFrame,
+            controlBarHeight: controlBarHeight
+        )
+        let restoredFrame = WindowPlacement.clampMainFrame(
             candidateFrame,
             visibleFrames: visibleFrames,
-            toolbarHeight: controlWindowHeight,
+            toolbarHeight: 0,
             minimumSize: mainWindowMinimumSize
         )
+
+        // Persist the selected frame and schema before presenting the window.
+        // A crash during first launch must not embed the legacy toolbar twice.
+        preferences.set(
+            NSStringFromRect(restoredFrame),
+            forKey: windowFrameDefaultsKey
+        )
+        preferences.set(
+            integralControlBarFrameSchema,
+            forKey: windowFrameSchemaDefaultsKey
+        )
+        return restoredFrame
     }
 
     // MARK: - State Observation
 
     private func observeState() {
-        // Lock mode
-        videoState.$isLocked
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isLocked in
-                guard let window = self?.mainWindow else { return }
-                if isLocked {
-                    window.styleMask.remove(.resizable)
-                    window.ignoresMouseEvents = true
-                } else {
-                    window.styleMask.insert(.resizable)
-                    window.ignoresMouseEvents = false
-                }
+        // Window presentation is one atomic policy. A locked overlay uses the
+        // public status-bar tier, is non-resizable, and is pointer-transparent
+        // regardless of the persisted unlocked-state Always on Top preference.
+        Publishers.CombineLatest(
+            videoState.$isLocked,
+            videoState.$isAlwaysOnTop
+        )
+            .removeDuplicates { lhs, rhs in
+                lhs.0 == rhs.0 && lhs.1 == rhs.1
+            }
+            .sink { [weak self] isLocked, isAlwaysOnTop in
+                // These presentation properties are mutated only by AppKit
+                // commands on the main thread. Keep this sink synchronous:
+                // queuing it would leave a lock/unlock race in which an
+                // external window-manager write could land before the frame
+                // guard and pointer/move/resize policy changed.
+                precondition(Thread.isMainThread)
+                self?.applyOverlayWindowPolicy(
+                    isLocked: isLocked,
+                    isAlwaysOnTop: isAlwaysOnTop
+                )
             }
             .store(in: &cancellables)
 
-        // Always on top
         videoState.$isAlwaysOnTop
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isOnTop in
-                guard let self = self else { return }
-                self.applyWindowLevels(isAlwaysOnTop: isOnTop)
-                self.alwaysOnTopMenuItem?.state = isOnTop ? .on : .off
+                self?.alwaysOnTopMenuItem?.state = isOnTop ? .on : .off
             }
             .store(in: &cancellables)
 
@@ -757,6 +739,68 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             suspended: settings.recordingAction != nil
         )
         settings.setGlobalRegistrationStatus(status)
+
+        // The whole locked window ignores pointer input. Never leave the app
+        // in that state after its exact recovery chord becomes unavailable.
+        if LockModeRecoveryPolicy.requiresForcedUnlock(
+            isCurrentlyLocked: videoState.isLocked,
+            isRecoveryRegistered: isGlobalLockRecoveryRegistered
+        ) {
+            videoState.isLocked = false
+            DispatchQueue.main.async { [weak self] in
+                self?.showLockRecoveryUnavailableAlert(
+                    prefix: "Reframer unlocked the overlay because"
+                )
+            }
+        }
+    }
+
+    private var globalLockRecoveryMatch: ShortcutMatch {
+        ShortcutMatch(action: .globalToggleLock, variant: .primary)
+    }
+
+    private var isGlobalLockRecoveryRegistered: Bool {
+        globalHotKeyRegistrar?.isRegistered(
+            match: globalLockRecoveryMatch
+        ) == true
+    }
+
+    /// Entering lock makes the complete overlay click-through, so an exact
+    /// registered global recovery chord is a prerequisite. Unlocking is
+    /// always permitted, including after an external registration failure.
+    @discardableResult
+    private func toggleLockWithRecoveryGuard() -> Bool {
+        if videoState.isLocked {
+            videoState.isLocked = false
+            return true
+        }
+        guard LockModeRecoveryPolicy.canToggle(
+            isCurrentlyLocked: videoState.isLocked,
+            isRecoveryRegistered: isGlobalLockRecoveryRegistered
+        ) else {
+            showLockRecoveryUnavailableAlert(
+                prefix: "Reframer could not lock the overlay because"
+            )
+            return false
+        }
+        videoState.isLocked = true
+        return true
+    }
+
+    private func showLockRecoveryUnavailableAlert(prefix: String) {
+        let configuredShortcut = videoState.shortcutSettings.displayString(
+            for: .globalToggleLock
+        )
+        showErrorAlert(
+            title: "Global Unlock Shortcut Unavailable",
+            message: """
+            \(prefix) its global unlock shortcut is not registered.
+
+            Configured shortcut: \(configuredShortcut)
+
+            Enable Global Shortcuts, enable the global lock binding, and resolve any registration conflict in Shortcut Settings before locking again.
+            """
+        )
     }
 
     /// Handles recording first, preserves only the native keys a focused
@@ -853,7 +897,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case .resetView:
             videoState.resetView()
         case .toggleLock:
-            videoState.isLocked.toggle()
+            guard toggleLockWithRecoveryGuard() else { return false }
         case .toggleAlwaysOnTop:
             videoState.isAlwaysOnTop.toggle()
         case .toggleShortcutSettings:
@@ -949,17 +993,96 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     // MARK: - Window Frame Updates
 
-    private var desiredWindowLevel: NSWindow.Level {
-        videoState.isAlwaysOnTop ? .floating : .normal
+    private var desiredOverlayWindowLevel: NSWindow.Level {
+        OverlayWindowPolicy.resolve(
+            isLocked: videoState.isLocked,
+            isAlwaysOnTop: videoState.isAlwaysOnTop
+        ).level
     }
 
-    private func applyWindowLevels(isAlwaysOnTop: Bool) {
-        let level: NSWindow.Level = isAlwaysOnTop ? .floating : .normal
-        mainWindow?.level = level
-        controlWindow?.level = level
+    private var desiredAuxiliaryWindowLevel: NSWindow.Level {
+        OverlayWindowPolicy.auxiliaryLevel(
+            isLocked: videoState.isLocked,
+            isAlwaysOnTop: videoState.isAlwaysOnTop
+        )
+    }
+
+    private func applyOverlayWindowPolicy(
+        isLocked: Bool,
+        isAlwaysOnTop: Bool
+    ) {
+        guard let mainWindow else { return }
+        let policy = OverlayWindowPolicy.resolve(
+            isLocked: isLocked,
+            isAlwaysOnTop: isAlwaysOnTop
+        )
+
+        let wasLocked = lockedWindowFrameGuard.lockedFrame != nil
+        lockedWindowFrameGuard.updateLockState(
+            isLocked: isLocked,
+            currentFrame: mainWindow.frame
+        )
+        if isLocked {
+            windowReclampWorkItem?.cancel()
+            windowReclampWorkItem = nil
+        }
+        policy.apply(to: mainWindow)
+
+        if isLocked {
+            // Raising without activation keeps Reframer visible while keyboard
+            // focus stays in the application beneath the click-through overlay.
+            mainWindow.orderFrontRegardless()
+        }
+        applyAuxiliaryWindowLevels(
+            isLocked: isLocked,
+            isAlwaysOnTop: isAlwaysOnTop
+        )
+        orderVisibleAuxiliaryWindowsAboveOverlay()
+
+        if wasLocked && !isLocked {
+            // A display may have disappeared while the frame was intentionally
+            // frozen. Recover it only after interaction is restored.
+            DispatchQueue.main.async { [weak self] in
+                self?.reclampWindowsToVisibleScreens()
+            }
+        }
+    }
+
+    private func reapplyOverlayWindowPolicy() {
+        applyOverlayWindowPolicy(
+            isLocked: videoState.isLocked,
+            isAlwaysOnTop: videoState.isAlwaysOnTop
+        )
+    }
+
+    @objc private func activeSpaceDidChange(_ notification: Notification) {
+        reapplyOverlayWindowPolicy()
+    }
+
+    @objc private func workspaceApplicationDidActivate(_ notification: Notification) {
+        guard videoState.isLocked else { return }
+        reapplyOverlayWindowPolicy()
+    }
+
+    private func applyAuxiliaryWindowLevels(
+        isLocked: Bool,
+        isAlwaysOnTop: Bool
+    ) {
+        let level = OverlayWindowPolicy.auxiliaryLevel(
+            isLocked: isLocked,
+            isAlwaysOnTop: isAlwaysOnTop
+        )
         shortcutsWindow?.level = level
         filterPanelWindow?.level = level
         documentationWindow?.level = level
+    }
+
+    private func orderVisibleAuxiliaryWindowsAboveOverlay() {
+        guard let mainWindow else { return }
+        for window in [shortcutsWindow, filterPanelWindow, documentationWindow]
+        where window?.isVisible == true {
+            window?.order(.above, relativeTo: mainWindow.windowNumber)
+        }
     }
 
     private func currentVisibleScreenFrames() -> [NSRect] {
@@ -997,7 +1120,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @objc private func mainWindowFrameDidChange(_ notification: Notification) {
         guard !isRepositioningWindows else { return }
-        updateControlWindowFrame()
+        if let restorationFrame = lockedWindowFrameGuard.restorationFrame(
+            for: mainWindow.frame
+        ) {
+            isRepositioningWindows = true
+            mainWindow.setFrame(restorationFrame, display: true, animate: false)
+            isRepositioningWindows = false
+            return
+        }
         updateHelpWindowFrame()
         updateFilterPanelWindowFrame()
         saveWindowFrame()
@@ -1013,6 +1143,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func scheduleMainWindowReclamp() {
+        guard !videoState.isLocked else { return }
         windowReclampWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             self?.reclampWindowsToVisibleScreens()
@@ -1022,7 +1153,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func reclampWindowsToVisibleScreens() {
-        guard let mainWindow, !isRepositioningWindows else { return }
+        guard let mainWindow,
+              !isRepositioningWindows,
+              !videoState.isLocked else {
+            return
+        }
         let visibleFrames = currentVisibleScreenFrames()
         guard !visibleFrames.isEmpty else { return }
 
@@ -1034,38 +1169,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let mainFrame = WindowPlacement.clampMainFrame(
             mainWindow.frame,
             visibleFrames: visibleFrames,
-            toolbarHeight: controlWindowHeight,
+            toolbarHeight: 0,
             minimumSize: mainWindowMinimumSize
         )
         if mainFrame != mainWindow.frame {
             mainWindow.setFrame(mainFrame, display: true)
         }
 
-        updateControlWindowFrame()
         updateHelpWindowFrame()
         updateFilterPanelWindowFrame()
         updateDocumentationWindowFrame()
         saveWindowFrame()
     }
 
-    private func updateControlWindowFrame() {
-        guard let mainWindow = mainWindow, let controlWindow = controlWindow else { return }
-        let mainFrame = mainWindow.frame
-        // Position toolbar BELOW the main window (flush against bottom edge)
-        let controlFrame = NSRect(
-            x: mainFrame.minX,
-            y: mainFrame.minY - controlWindowHeight,
-            width: mainFrame.width,
-            height: controlWindowHeight
-        )
-        controlWindow.setFrame(controlFrame, display: true)
-    }
-
     private func saveWindowFrame() {
         guard let mainWindow = mainWindow,
               WindowPlacement.isUsableFrame(mainWindow.frame) else { return }
         let frameString = NSStringFromRect(mainWindow.frame)
-        UserDefaults.standard.set(frameString, forKey: windowFrameDefaultsKey)
+        videoState.preferenceStore.set(frameString, forKey: windowFrameDefaultsKey)
+        videoState.preferenceStore.set(
+            integralControlBarFrameSchema,
+            forKey: windowFrameSchemaDefaultsKey
+        )
     }
 
     private func centeredAuxiliaryFrame(size: NSSize) -> NSRect {
@@ -1130,7 +1255,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = true
-            panel.level = desiredWindowLevel
+            panel.level = desiredAuxiliaryWindowLevel
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isMovableByWindowBackground = true
             panel.title = "Shortcut Settings"
@@ -1205,7 +1330,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = true
-            panel.level = desiredWindowLevel
+            panel.level = desiredAuxiliaryWindowLevel
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isMovableByWindowBackground = true
             panel.title = "Advanced Filters"
@@ -1361,11 +1486,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func openDocumentationWindow() {
-        // Show documentation in a floating window above Reframer
-        guard let resourceURL = Bundle.main.resourceURL else { return }
-        let helpURL = resourceURL
+        let resourceURL = Bundle.main.resourceURL ?? Bundle.main.bundleURL
+        let helpRootURL = resourceURL
             .appendingPathComponent("Reframer.help")
-            .appendingPathComponent("Contents/Resources/en.lproj/index.html")
+            .appendingPathComponent("Contents/Resources/en.lproj")
 
         if documentationWindow?.isVisible != true {
             documentationFocusSnapshot = captureFocus()
@@ -1381,32 +1505,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 defer: false
             )
             window.title = "Reframer Documentation"
-            window.level = desiredWindowLevel
+            window.level = desiredAuxiliaryWindowLevel
             window.isReleasedWhenClosed = false
             window.minSize = NSSize(width: 480, height: 360)
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.delegate = self
             window.setAccessibilityIdentifier("window-documentation")
 
-            let webView = WKWebView(frame: window.contentView!.bounds)
-            webView.autoresizingMask = [.width, .height]
-            webView.setAccessibilityIdentifier("documentation-content")
-            webView.setAccessibilityLabel("Reframer documentation")
-            window.contentView?.addSubview(webView)
+            let documentationView = DocumentationView(rootURL: helpRootURL)
+            let viewController = NSViewController()
+            viewController.view = documentationView
+            window.contentViewController = viewController
 
             documentationWindow = window
-            documentationWebView = webView
+            self.documentationView = documentationView
         }
 
         updateDocumentationWindowFrame()
-        documentationWebView?.loadFileURL(helpURL, allowingReadAccessTo: resourceURL)
+        documentationView?.showHome()
         documentationWindow?.makeKeyAndOrderFront(nil)
         DispatchQueue.main.async { [weak self] in
             guard let self,
                   let window = self.documentationWindow,
                   window.isVisible,
-                  let webView = self.documentationWebView else { return }
-            _ = window.makeFirstResponder(webView)
+                  let documentationView = self.documentationView else { return }
+            _ = window.makeFirstResponder(
+                documentationView.preferredInitialFirstResponder
+            )
         }
     }
 

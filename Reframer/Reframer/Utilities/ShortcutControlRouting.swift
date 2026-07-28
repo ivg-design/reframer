@@ -1,11 +1,14 @@
 import Cocoa
-import WebKit
 
 protocol ReframerShortcutOwningResponder: AnyObject {
     /// Returns true when this responder's documented native interaction owns
     /// the chord before Reframer's configurable command layer sees it.
     func ownsReframerShortcut(_ stroke: ShortcutKeystroke) -> Bool
 }
+
+/// Marks a read-only content surface whose unmodified navigation keys should
+/// remain native while Reframer's modified application shortcuts stay active.
+protocol ReframerNavigableContentResponder: AnyObject {}
 
 enum FocusedControlKind {
     case none
@@ -19,7 +22,7 @@ enum FocusedControlKind {
 
 enum ShortcutControlRouting {
     static func kind(for responder: NSResponder?) -> FocusedControlKind {
-        if responderIsInsideWebView(responder) {
+        if responderIsInsideNavigableContent(responder) {
             return .navigableContent
         }
         switch responder {
@@ -103,12 +106,12 @@ enum ShortcutControlRouting {
         }
     }
 
-    private static func responderIsInsideWebView(
+    private static func responderIsInsideNavigableContent(
         _ responder: NSResponder?
     ) -> Bool {
         var view = responder as? NSView
         while let currentView = view {
-            if currentView is WKWebView {
+            if currentView is ReframerNavigableContentResponder {
                 return true
             }
             view = currentView.superview

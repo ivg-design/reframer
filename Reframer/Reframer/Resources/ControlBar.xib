@@ -89,7 +89,7 @@
                                 <constraint firstAttribute="height" constant="48" id="CYt-bQ-ncr"/>
                             </constraints>
                         </box>
-                        <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="jEj-nH-TYI">
+                        <imageView identifier="icon-frame" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="jEj-nH-TYI">
                             <rect key="frame" x="338" y="3.5" width="24.5" height="33"/>
                             <constraints>
                                 <constraint firstAttribute="width" constant="24" id="05c-bg-Dv2"/>
@@ -128,7 +128,7 @@
                                 <constraint firstAttribute="height" constant="48" id="jlf-0o-mEl"/>
                             </constraints>
                         </box>
-                        <imageView translatesAutoresizingMaskIntoConstraints="NO" id="FN8-If-vwn">
+                        <imageView identifier="icon-zoom" translatesAutoresizingMaskIntoConstraints="NO" id="FN8-If-vwn">
                             <rect key="frame" x="483" y="3" width="24" height="35"/>
                             <constraints>
                                 <constraint firstAttribute="width" constant="24" id="Jjw-9p-J5t"/>
@@ -160,7 +160,7 @@
                                 <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                             </textFieldCell>
                         </textField>
-                        <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="KPZ-yf-Z39">
+                        <box identifier="div-4" horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="KPZ-yf-Z39">
                             <rect key="frame" x="583" y="0.0" width="5" height="40"/>
                             <constraints>
                                 <constraint firstAttribute="height" constant="48" id="RMW-Mx-dEC"/>

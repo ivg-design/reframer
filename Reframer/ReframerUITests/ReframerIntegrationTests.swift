@@ -211,6 +211,26 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["status-lock"].exists)
     }
 
+    func testVideoAndControlsAreOneCanonicalManagedWindow() {
+        let mainWindow = app.windows["window-main"]
+        XCTAssertTrue(
+            mainWindow.waitForExistence(timeout: 2),
+            "The primary overlay window should exist"
+        )
+        XCTAssertTrue(
+            mainWindow.buttons["button-open"].waitForExistence(timeout: 2),
+            "Playback controls must be descendants of the primary overlay window"
+        )
+        XCTAssertTrue(
+            mainWindow.textFields["input-frame"].exists,
+            "Control fields must belong to the same managed window as the video"
+        )
+        XCTAssertFalse(
+            app.windows["window-controls"].exists,
+            "A separately targetable control window must never be exposed to window managers"
+        )
+    }
+
     func testReplacementOpenPanelRetainsNativeKeyboardInput() {
         let initialFrame = getFrameValue()
         let playButton = app.buttons["button-play"]
@@ -487,17 +507,29 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertTrue(waitForValue("Unlocked", in: app.buttons["button-lock"]))
     }
 
-    func testLockButton_TogglesLock() throws {
+    func testLockButtonLocksAndLocalKeyboardUnlocksOverlay() throws {
         ensureUnlocked()
 
         let lockButton = app.buttons["button-lock"]
+        let zoomField = app.textFields["input-zoom"]
         XCTAssertTrue(lockButton.exists)
 
         lockButton.click()
         XCTAssertTrue(waitForValue("Locked", in: lockButton))
+        XCTAssertTrue(
+            waitForEnabled(false, element: zoomField),
+            "Locking must disable overlay controls"
+        )
 
-        lockButton.click()
+        // XCUITest dispatches this key to the active app; this proves the local
+        // recovery path, not cross-application Carbon delivery or WindowServer
+        // click-through. Those behaviors require the separate live-system gate.
+        app.typeKey("l", modifierFlags: [])
         XCTAssertTrue(waitForValue("Unlocked", in: lockButton))
+        XCTAssertTrue(
+            waitForEnabled(true, element: zoomField),
+            "Local keyboard recovery must restore overlay controls"
+        )
     }
 
     // MARK: - F-LK-002: Lock Disables Controls
@@ -679,7 +711,22 @@ final class ReframerIntegrationTests: XCTestCase {
             documentationContent.waitForExistence(timeout: 3),
             "Documentation should expose its keyboard-scrollable content"
         )
-        documentationContent.click()
+        let documentationPage = documentationWindow
+            .textViews["documentation-page"]
+            .firstMatch
+        XCTAssertTrue(
+            documentationPage.waitForExistence(timeout: 3),
+            "Documentation should render as native selectable text"
+        )
+        XCTAssertTrue(
+            ((documentationPage.value as? String) ?? "").contains("Reframer Help"),
+            "The Help window must contain rendered documentation, not an empty browser container"
+        )
+        XCTAssertTrue(
+            ((documentationPage.value as? String) ?? "").contains("Product boundaries"),
+            "The rendered page should include known bundled Help content"
+        )
+        documentationPage.click()
         app.typeKey(" ", modifierFlags: [])
         XCTAssertTrue(
             valueRemains("Paused", in: app.buttons["button-play"]),
