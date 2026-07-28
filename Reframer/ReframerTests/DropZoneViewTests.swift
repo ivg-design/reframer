@@ -70,3 +70,44 @@ final class FilterMenuButtonTests: XCTestCase {
         XCTAssertEqual(button.accessibilityValue() as? String, "None")
     }
 }
+
+@MainActor
+final class FilterPanelAccessibilityTests: XCTestCase {
+    func testAdvancedFilterPanelHasNamedControlsAndDeterministicInitialFocus() {
+        let state = VideoState()
+        let panel = FilterPanelView(frame: NSRect(x: 0, y: 0, width: 320, height: 500))
+        panel.videoState = state
+
+        let brightnessToggle = descendant(
+            withIdentifier: "filter-toggle-brightness",
+            in: panel
+        ) as? NSSwitch
+        let closeButton = descendant(
+            withIdentifier: "filter-panel-close",
+            in: panel
+        ) as? NSButton
+
+        XCTAssertEqual(panel.accessibilityRole(), .group)
+        XCTAssertEqual(panel.accessibilityLabel(), "Advanced filters")
+        XCTAssertTrue(panel.preferredInitialFirstResponder === brightnessToggle)
+        XCTAssertEqual(brightnessToggle?.accessibilityLabel(), "Brightness")
+        XCTAssertFalse(brightnessToggle?.accessibilityHelp()?.isEmpty ?? true)
+        XCTAssertEqual(closeButton?.accessibilityLabel(), "Close advanced filters")
+        XCTAssertFalse(closeButton?.accessibilityHelp()?.isEmpty ?? true)
+    }
+
+    private func descendant(
+        withIdentifier identifier: String,
+        in view: NSView
+    ) -> NSView? {
+        if view.identifier?.rawValue == identifier {
+            return view
+        }
+        for subview in view.subviews {
+            if let match = descendant(withIdentifier: identifier, in: subview) {
+                return match
+            }
+        }
+        return nil
+    }
+}

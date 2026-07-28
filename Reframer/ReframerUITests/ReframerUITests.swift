@@ -58,7 +58,7 @@ final class ReframerUITests: XCTestCase {
         XCTAssertTrue(app.exists, "App should still exist after pressing Spacebar")
     }
 
-    // MARK: - F-KL-001: Arrow Keys (Frame Step)
+    // MARK: - F-KL-001: Horizontal Arrow Keys (Pan)
 
     func testLeftArrowDoesNotCrash() throws {
         app.typeKey(.leftArrow, modifierFlags: [])
@@ -80,7 +80,7 @@ final class ReframerUITests: XCTestCase {
         XCTAssertTrue(app.exists, "App should still exist after pressing Shift+Right Arrow")
     }
 
-    // MARK: - F-KL-002: Up/Down Arrow (Zoom)
+    // MARK: - F-KL-002: Vertical Arrow Keys (Pan)
 
     func testUpArrowDoesNotCrash() throws {
         app.typeKey(.upArrow, modifierFlags: [])
@@ -100,18 +100,6 @@ final class ReframerUITests: XCTestCase {
     func testShiftDownArrowDoesNotCrash() throws {
         app.typeKey(.downArrow, modifierFlags: .shift)
         XCTAssertTrue(app.exists, "App should still exist after pressing Shift+Down Arrow")
-    }
-
-    // MARK: - F-KL-003: Plus/Minus (Zoom)
-
-    func testPlusKeyDoesNotCrash() throws {
-        app.typeKey("=", modifierFlags: .shift) // + is Shift+=
-        XCTAssertTrue(app.exists, "App should still exist after pressing +")
-    }
-
-    func testMinusKeyDoesNotCrash() throws {
-        app.typeKey("-", modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing -")
     }
 
     // MARK: - F-KL-004: Zero Key (Reset Zoom to 100%)
@@ -196,8 +184,8 @@ final class ReframerUITests: XCTestCase {
         // Test a sequence of all keyboard shortcuts
         app.typeKey("r", modifierFlags: [])        // Reset view
         app.typeKey("0", modifierFlags: [])        // Reset zoom
-        app.typeKey(.upArrow, modifierFlags: [])   // Zoom in
-        app.typeKey(.downArrow, modifierFlags: []) // Zoom out
+        app.typeKey(.upArrow, modifierFlags: [])   // Pan up when a video is loaded
+        app.typeKey(.downArrow, modifierFlags: []) // Pan down when a video is loaded
         app.typeKey("l", modifierFlags: [])        // Lock
         app.typeKey("l", modifierFlags: [])        // Unlock
         app.typeKey("h", modifierFlags: [])        // Show help

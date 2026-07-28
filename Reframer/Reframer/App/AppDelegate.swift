@@ -17,6 +17,16 @@ class TransparentWindow: NSWindow {
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
 
+    private final class FocusSnapshot {
+        weak var window: NSWindow?
+        weak var responder: NSResponder?
+
+        init(window: NSWindow?, responder: NSResponder?) {
+            self.window = window
+            self.responder = responder
+        }
+    }
+
     override init() {
         super.init()
     }
@@ -35,16 +45,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var mainWindow: TransparentWindow!
     private var controlWindow: TransparentWindow!
     private var shortcutsWindow: TransparentWindow?  // Keyboard shortcuts panel (H key)
+    private weak var shortcutsView: HelpView?
     private var documentationWindow: NSWindow?        // Documentation browser (Help menu)
     private var documentationWebView: WKWebView?
     private var filterPanelWindow: TransparentWindow?
+    private weak var filterPanelView: FilterPanelView?
+    private var alwaysOnTopMenuItem: NSMenuItem?
 
     let videoState = VideoState()
     private var cancellables = Set<AnyCancellable>()
     /// Kept in sync with ControlBar.xib so the child window and its content
     /// have one layout height and never create conflicting constraints.
     private let controlWindowHeight: CGFloat = 48
+    private let mainWindowMinimumSize = NSSize(width: 640, height: 360)
     private let windowFrameDefaultsKey = "VideoOverlay.mainWindowFrame"
+    private var windowReclampWorkItem: DispatchWorkItem?
+    private var isRepositioningWindows = false
+    private var helpFocusSnapshot: FocusSnapshot?
+    private var filterFocusSnapshot: FocusSnapshot?
+    private var documentationFocusSnapshot: FocusSnapshot?
 
     private var mainViewController: MainViewController!
     private var controlBar: ControlBar!
@@ -53,7 +72,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
-        NSApp.appearance = NSAppearance(named: .darkAqua)
         createMainWindow()
         createControlWindow()
         observeWindowFrameChanges()
@@ -76,6 +94,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        windowReclampWorkItem?.cancel()
+        NotificationCenter.default.removeObserver(self)
         if let monitor = globalShortcutMonitor {
             NSEvent.removeMonitor(monitor)
         }
@@ -167,6 +187,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let lockItem = NSMenuItem(title: "Toggle Lock", action: #selector(toggleLock(_:)), keyEquivalent: "L")
         lockItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(lockItem)
+        let alwaysOnTopItem = NSMenuItem(
+            title: "Always on Top",
+            action: #selector(toggleAlwaysOnTop(_:)),
+            keyEquivalent: ""
+        )
+        alwaysOnTopItem.target = self
+        alwaysOnTopItem.state = videoState.isAlwaysOnTop ? .on : .off
+        viewMenu.addItem(alwaysOnTopItem)
+        alwaysOnTopMenuItem = alwaysOnTopItem
 
         // Filter menu (single selection like toolbar, simple filters only)
         let filterMenuItem = NSMenuItem()
@@ -221,8 +250,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Window Creation
 
     private func createMainWindow() {
-        // Get screen frame for proper centering
-        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let visibleFrames = currentVisibleScreenFrames()
+        let screenFrame = NSScreen.main?.visibleFrame
+            ?? visibleFrames.first
+            ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         // Main window is just the video canvas - toolbar will be BELOW it
         let windowSize = NSSize(width: 800, height: 560)
         let defaultOrigin = NSPoint(
@@ -230,7 +261,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             y: screenFrame.midY - windowSize.height / 2 + controlWindowHeight / 2
         )
         let defaultFrame = NSRect(origin: defaultOrigin, size: windowSize)
-        let windowFrame = loadSavedWindowFrame(defaultFrame: defaultFrame, screenFrame: screenFrame)
+        let windowFrame = loadSavedWindowFrame(
+            defaultFrame: defaultFrame,
+            visibleFrames: visibleFrames.isEmpty ? [screenFrame] : visibleFrames
+        )
 
         let window = TransparentWindow(
             contentRect: windowFrame,
@@ -245,9 +279,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
-        window.level = .floating
+        window.level = desiredWindowLevel
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = true  // Enable window dragging
+        window.minSize = mainWindowMinimumSize
 
         mainViewController = MainViewController(videoState: videoState)
         window.contentViewController = mainViewController
@@ -314,43 +349,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow.makeKeyAndOrderFront(nil)
     }
 
-    private func loadSavedWindowFrame(defaultFrame: NSRect, screenFrame: NSRect) -> NSRect {
-        guard let savedString = UserDefaults.standard.string(forKey: windowFrameDefaultsKey) else {
-            return defaultFrame
+    private func loadSavedWindowFrame(defaultFrame: NSRect, visibleFrames: [NSRect]) -> NSRect {
+        let candidateFrame: NSRect
+        if let savedString = UserDefaults.standard.string(forKey: windowFrameDefaultsKey) {
+            let savedFrame = NSRectFromString(savedString)
+            candidateFrame = WindowPlacement.isUsableFrame(savedFrame)
+                ? savedFrame
+                : defaultFrame
+        } else {
+            candidateFrame = defaultFrame
         }
 
-        let savedFrame = NSRectFromString(savedString)
-        if savedFrame.width <= 0 || savedFrame.height <= 0 {
-            return defaultFrame
-        }
-
-        return sanitizeWindowFrame(savedFrame, screenFrame: screenFrame)
-    }
-
-    private func sanitizeWindowFrame(_ frame: NSRect, screenFrame: NSRect) -> NSRect {
-        var adjusted = frame
-
-        if adjusted.width > screenFrame.width {
-            adjusted.size.width = screenFrame.width
-        }
-        if adjusted.height > screenFrame.height {
-            adjusted.size.height = screenFrame.height
-        }
-
-        if adjusted.minX < screenFrame.minX {
-            adjusted.origin.x = screenFrame.minX
-        }
-        if adjusted.maxX > screenFrame.maxX {
-            adjusted.origin.x = screenFrame.maxX - adjusted.width
-        }
-        if adjusted.minY < screenFrame.minY {
-            adjusted.origin.y = screenFrame.minY
-        }
-        if adjusted.maxY > screenFrame.maxY {
-            adjusted.origin.y = screenFrame.maxY - adjusted.height
-        }
-
-        return adjusted
+        return WindowPlacement.clampMainFrame(
+            candidateFrame,
+            visibleFrames: visibleFrames,
+            toolbarHeight: controlWindowHeight,
+            minimumSize: mainWindowMinimumSize
+        )
     }
 
     // MARK: - State Observation
@@ -376,10 +391,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isOnTop in
                 guard let self = self else { return }
-                let level: NSWindow.Level = isOnTop ? .floating : .normal
-                self.mainWindow?.level = level
-                self.controlWindow?.level = level
-                self.shortcutsWindow?.level = level
+                self.applyWindowLevels(isAlwaysOnTop: isOnTop)
+                self.alwaysOnTopMenuItem?.state = isOnTop ? .on : .off
             }
             .store(in: &cancellables)
 
@@ -664,6 +677,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Window Frame Updates
 
+    private var desiredWindowLevel: NSWindow.Level {
+        videoState.isAlwaysOnTop ? .floating : .normal
+    }
+
+    private func applyWindowLevels(isAlwaysOnTop: Bool) {
+        let level: NSWindow.Level = isAlwaysOnTop ? .floating : .normal
+        mainWindow?.level = level
+        controlWindow?.level = level
+        shortcutsWindow?.level = level
+        filterPanelWindow?.level = level
+        documentationWindow?.level = level
+    }
+
+    private func currentVisibleScreenFrames() -> [NSRect] {
+        NSScreen.screens
+            .map(\.visibleFrame)
+            .filter(WindowPlacement.isUsableFrame)
+    }
+
     private func observeWindowFrameChanges() {
         NotificationCenter.default.addObserver(
             self,
@@ -677,12 +709,70 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: NSWindow.didResizeNotification,
             object: mainWindow
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(mainWindowScreenDidChange),
+            name: NSWindow.didChangeScreenNotification,
+            object: mainWindow
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenConfigurationDidChange),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
     }
 
     @objc private func mainWindowFrameDidChange(_ notification: Notification) {
+        guard !isRepositioningWindows else { return }
         updateControlWindowFrame()
         updateHelpWindowFrame()
         updateFilterPanelWindowFrame()
+        saveWindowFrame()
+        scheduleMainWindowReclamp()
+    }
+
+    @objc private func mainWindowScreenDidChange(_ notification: Notification) {
+        reclampWindowsToVisibleScreens()
+    }
+
+    @objc private func screenConfigurationDidChange(_ notification: Notification) {
+        reclampWindowsToVisibleScreens()
+    }
+
+    private func scheduleMainWindowReclamp() {
+        windowReclampWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.reclampWindowsToVisibleScreens()
+        }
+        windowReclampWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
+    }
+
+    private func reclampWindowsToVisibleScreens() {
+        guard let mainWindow, !isRepositioningWindows else { return }
+        let visibleFrames = currentVisibleScreenFrames()
+        guard !visibleFrames.isEmpty else { return }
+
+        windowReclampWorkItem?.cancel()
+        windowReclampWorkItem = nil
+        isRepositioningWindows = true
+        defer { isRepositioningWindows = false }
+
+        let mainFrame = WindowPlacement.clampMainFrame(
+            mainWindow.frame,
+            visibleFrames: visibleFrames,
+            toolbarHeight: controlWindowHeight,
+            minimumSize: mainWindowMinimumSize
+        )
+        if mainFrame != mainWindow.frame {
+            mainWindow.setFrame(mainFrame, display: true)
+        }
+
+        updateControlWindowFrame()
+        updateHelpWindowFrame()
+        updateFilterPanelWindowFrame()
+        updateDocumentationWindowFrame()
         saveWindowFrame()
     }
 
@@ -700,24 +790,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func saveWindowFrame() {
-        guard let mainWindow = mainWindow else { return }
+        guard let mainWindow = mainWindow,
+              WindowPlacement.isUsableFrame(mainWindow.frame) else { return }
         let frameString = NSStringFromRect(mainWindow.frame)
         UserDefaults.standard.set(frameString, forKey: windowFrameDefaultsKey)
+    }
+
+    private func centeredAuxiliaryFrame(size: NSSize) -> NSRect {
+        let mainFrame = mainWindow.frame
+        let desiredFrame = NSRect(
+            x: mainFrame.midX - size.width / 2,
+            y: mainFrame.midY - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
+        let visibleFrames = currentVisibleScreenFrames()
+        let anchorScreen = WindowPlacement.bestVisibleFrame(
+            for: mainFrame,
+            among: visibleFrames
+        )
+        return WindowPlacement.clampAuxiliaryFrame(
+            desiredFrame,
+            visibleFrames: visibleFrames,
+            preferredScreenFrame: anchorScreen
+        )
+    }
+
+    private func captureFocus() -> FocusSnapshot {
+        let window = NSApp.keyWindow ?? mainWindow
+        return FocusSnapshot(window: window, responder: window?.firstResponder)
+    }
+
+    private func restoreFocus(from snapshot: FocusSnapshot?) {
+        let targetWindow: NSWindow
+        if let window = snapshot?.window, window.isVisible, !window.isMiniaturized {
+            targetWindow = window
+        } else {
+            targetWindow = mainWindow
+        }
+
+        targetWindow.makeKeyAndOrderFront(nil)
+        if let responder = snapshot?.responder,
+           targetWindow.makeFirstResponder(responder) {
+            return
+        }
+        _ = targetWindow.makeFirstResponder(mainViewController)
     }
 
     // MARK: - Help Window
 
     private func showHelpWindow() {
+        if shortcutsWindow?.isVisible != true {
+            helpFocusSnapshot = captureFocus()
+        }
+
         if shortcutsWindow == nil {
-            let mainFrame = mainWindow.frame
             let size = NSSize(width: 360, height: 500)
-            let origin = NSPoint(
-                x: mainFrame.midX - size.width / 2,
-                y: mainFrame.midY - size.height / 2
-            )
+            let frame = centeredAuxiliaryFrame(size: size)
 
             let panel = TransparentWindow(
-                contentRect: NSRect(origin: origin, size: size),
+                contentRect: frame,
                 styleMask: [.borderless],
                 backing: .buffered,
                 defer: false
@@ -726,7 +858,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = true
-            panel.level = mainWindow.level
+            panel.level = desiredWindowLevel
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isMovableByWindowBackground = true
 
@@ -740,41 +872,56 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             helpView.setAccessibilityIdentifier("modal-help")
 
             shortcutsWindow = panel
+            shortcutsView = helpView
             mainWindow.addChildWindow(panel, ordered: .above)
         }
 
-        shortcutsWindow?.orderFront(nil)
+        updateHelpWindowFrame()
+        shortcutsWindow?.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  let panel = self.shortcutsWindow,
+                  panel.isVisible,
+                  let initialResponder = self.shortcutsView?.preferredInitialFirstResponder else {
+                return
+            }
+            _ = panel.makeFirstResponder(initialResponder)
+        }
     }
 
     private func hideHelpWindow() {
+        let shouldRestoreFocus = shortcutsWindow?.isKeyWindow == true
         shortcutsWindow?.orderOut(nil)
+        let snapshot = helpFocusSnapshot
+        helpFocusSnapshot = nil
+        if shouldRestoreFocus {
+            restoreFocus(from: snapshot)
+        }
     }
 
     private func updateHelpWindowFrame() {
         guard let shortcutsWindow = shortcutsWindow else { return }
-        let mainFrame = mainWindow.frame
-        let size = shortcutsWindow.frame.size
-        let origin = NSPoint(
-            x: mainFrame.midX - size.width / 2,
-            y: mainFrame.midY - size.height / 2
-        )
-        shortcutsWindow.setFrameOrigin(origin)
+        let frame = centeredAuxiliaryFrame(size: shortcutsWindow.frame.size)
+        shortcutsWindow.setFrame(frame, display: shortcutsWindow.isVisible)
     }
 
     // MARK: - Filter Panel Window
 
     private func showFilterPanelWindow() {
+        if filterPanelWindow?.isVisible != true {
+            filterFocusSnapshot = captureFocus()
+        }
+
         if filterPanelWindow == nil {
-            let mainFrame = mainWindow.frame
             let size = NSSize(width: 320, height: 500)
-            // Position to the right of main window
-            let origin = NSPoint(
-                x: mainFrame.maxX + 10,
-                y: mainFrame.midY - size.height / 2
+            let frame = WindowPlacement.attachedPanelFrame(
+                size: size,
+                anchorFrame: mainWindow.frame,
+                visibleFrames: currentVisibleScreenFrames()
             )
 
             let panel = TransparentWindow(
-                contentRect: NSRect(origin: origin, size: size),
+                contentRect: frame,
                 styleMask: [.borderless],
                 backing: .buffered,
                 defer: false
@@ -783,40 +930,67 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = true
-            panel.level = mainWindow.level
+            panel.level = desiredWindowLevel
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isMovableByWindowBackground = true
 
-            let filterPanelView = FilterPanelView(frame: NSRect(origin: .zero, size: size))
-            filterPanelView.videoState = videoState
+            let panelView = FilterPanelView(frame: NSRect(origin: .zero, size: size))
+            panelView.videoState = videoState
 
             let viewController = NSViewController()
-            viewController.view = filterPanelView
+            viewController.view = panelView
             panel.contentViewController = viewController
 
             panel.setAccessibilityIdentifier("window-filter-panel")
-            filterPanelView.setAccessibilityIdentifier("panel-filter-settings")
+            panelView.setAccessibilityIdentifier("panel-filter-settings")
 
             filterPanelWindow = panel
+            filterPanelView = panelView
             mainWindow.addChildWindow(panel, ordered: .above)
         }
 
-        filterPanelWindow?.orderFront(nil)
+        updateFilterPanelWindowFrame()
+        filterPanelWindow?.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  let panel = self.filterPanelWindow,
+                  panel.isVisible,
+                  let initialResponder = self.filterPanelView?.preferredInitialFirstResponder else {
+                return
+            }
+            _ = panel.makeFirstResponder(initialResponder)
+        }
     }
 
     private func hideFilterPanelWindow() {
+        let shouldRestoreFocus = filterPanelWindow?.isKeyWindow == true
         filterPanelWindow?.orderOut(nil)
+        let snapshot = filterFocusSnapshot
+        filterFocusSnapshot = nil
+        if shouldRestoreFocus {
+            restoreFocus(from: snapshot)
+        }
     }
 
     private func updateFilterPanelWindowFrame() {
         guard let filterPanelWindow = filterPanelWindow else { return }
-        let mainFrame = mainWindow.frame
-        let size = filterPanelWindow.frame.size
-        let origin = NSPoint(
-            x: mainFrame.maxX + 10,
-            y: mainFrame.midY - size.height / 2
+        let frame = WindowPlacement.attachedPanelFrame(
+            size: filterPanelWindow.frame.size,
+            anchorFrame: mainWindow.frame,
+            visibleFrames: currentVisibleScreenFrames()
         )
-        filterPanelWindow.setFrameOrigin(origin)
+        filterPanelWindow.setFrame(frame, display: filterPanelWindow.isVisible)
+    }
+
+    private func updateDocumentationWindowFrame() {
+        guard let documentationWindow else { return }
+        let visibleFrames = currentVisibleScreenFrames()
+        guard !visibleFrames.isEmpty else { return }
+        let frame = WindowPlacement.clampAuxiliaryFrame(
+            documentationWindow.frame,
+            visibleFrames: visibleFrames
+        )
+        documentationWindow.setFrame(frame, display: documentationWindow.isVisible)
     }
 
     // MARK: - File Operations
@@ -902,29 +1076,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .appendingPathComponent("Reframer.help")
             .appendingPathComponent("Contents/Resources/en.lproj/index.html")
 
+        if documentationWindow?.isVisible != true {
+            documentationFocusSnapshot = captureFocus()
+        }
+
         // Create or reuse documentation window
         if documentationWindow == nil {
+            let frame = centeredAuxiliaryFrame(size: NSSize(width: 700, height: 600))
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 700, height: 600),
+                contentRect: frame,
                 styleMask: [.titled, .closable, .resizable],
                 backing: .buffered,
                 defer: false
             )
             window.title = "Reframer Documentation"
-            window.level = .floating + 1  // Above Reframer's floating level
+            window.level = desiredWindowLevel
             window.isReleasedWhenClosed = false
+            window.minSize = NSSize(width: 480, height: 360)
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            window.delegate = self
+            window.setAccessibilityIdentifier("window-documentation")
 
             let webView = WKWebView(frame: window.contentView!.bounds)
             webView.autoresizingMask = [.width, .height]
+            webView.setAccessibilityIdentifier("documentation-content")
+            webView.setAccessibilityLabel("Reframer documentation")
             window.contentView?.addSubview(webView)
 
             documentationWindow = window
             documentationWebView = webView
         }
 
+        updateDocumentationWindowFrame()
         documentationWebView?.loadFileURL(helpURL, allowingReadAccessTo: resourceURL)
-        documentationWindow?.center()
         documentationWindow?.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  let window = self.documentationWindow,
+                  window.isVisible,
+                  let webView = self.documentationWebView else { return }
+            _ = window.makeFirstResponder(webView)
+        }
     }
 
     @IBAction func selectFilter(_ sender: NSMenuItem) {
@@ -1008,6 +1200,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                message: "Please drag Reframer into /Applications manually.\n\n\(error.localizedDescription)")
             }
         }
+    }
+}
+
+// MARK: - NSWindowDelegate
+
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === documentationWindow else { return }
+        let snapshot = documentationFocusSnapshot
+        documentationFocusSnapshot = nil
+        restoreFocus(from: snapshot)
     }
 }
 

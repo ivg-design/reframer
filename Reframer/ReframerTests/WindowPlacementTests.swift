@@ -95,4 +95,53 @@ final class WindowPlacementTests: XCTestCase {
 
         XCTAssertTrue(secondary.contains(result))
     }
+
+    func testNonFiniteSavedMainFrameRecoversToUsableGeometry() {
+        let invalid = NSRect(
+            x: CGFloat.nan,
+            y: CGFloat.infinity,
+            width: -CGFloat.infinity,
+            height: 0
+        )
+
+        let result = WindowPlacement.clampMainFrame(
+            invalid,
+            visibleFrames: [primary],
+            toolbarHeight: 48,
+            minimumSize: NSSize(width: 640, height: 360)
+        )
+
+        XCTAssertTrue(WindowPlacement.isUsableFrame(result))
+        XCTAssertTrue(primary.contains(result))
+        XCTAssertGreaterThanOrEqual(result.minY - 48, primary.minY)
+    }
+
+    func testInvalidVisibleFramesAreIgnored() {
+        let invalidScreen = NSRect(
+            x: CGFloat.nan,
+            y: 0,
+            width: 1920,
+            height: 1080
+        )
+        let frame = NSRect(x: 1500, y: 200, width: 500, height: 400)
+
+        XCTAssertEqual(
+            WindowPlacement.bestVisibleFrame(
+                for: frame,
+                among: [invalidScreen, primary, secondary]
+            ),
+            secondary
+        )
+    }
+
+    func testAttachedPanelWithNonFiniteInputStillFitsVisibleScreen() {
+        let result = WindowPlacement.attachedPanelFrame(
+            size: NSSize(width: CGFloat.infinity, height: CGFloat.nan),
+            anchorFrame: NSRect(x: CGFloat.nan, y: 0, width: 0, height: 0),
+            visibleFrames: [primary]
+        )
+
+        XCTAssertTrue(WindowPlacement.isUsableFrame(result))
+        XCTAssertTrue(primary.contains(result))
+    }
 }

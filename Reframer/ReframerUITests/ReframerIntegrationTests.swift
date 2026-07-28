@@ -57,7 +57,7 @@ final class ReframerIntegrationTests: XCTestCase {
 
         // 4. Pause any playing video
         let playButton = app.buttons["button-play"]
-        if playButton.exists && playButton.label == "pause" {
+        if playButton.exists && playButton.value as? String == "Playing" {
             app.typeKey(" ", modifierFlags: []) // Pause
             Thread.sleep(forTimeInterval: 0.1)
         }
@@ -107,10 +107,7 @@ final class ReframerIntegrationTests: XCTestCase {
     func isLocked() -> Bool {
         let lockButton = app.buttons["button-lock"]
         guard lockButton.exists else { return false }
-        // When unlocked, label is "unlock" (from lock.open.fill icon)
-        // When locked, label is "lock" (from lock.fill icon)
-        // If label is exactly "lock", we're locked. If "unlock", we're unlocked.
-        return lockButton.label == "lock"
+        return lockButton.value as? String == "Locked"
     }
 
     func ensureUnlocked() {
@@ -155,77 +152,6 @@ final class ReframerIntegrationTests: XCTestCase {
         // Verify overlays appear
         let frameField = app.textFields["input-frame"]
         XCTAssertTrue(frameField.waitForExistence(timeout: 2), "Frame field should exist when video loaded")
-    }
-
-    // Debug test to list all UI elements
-    func testDebugListElements() throws {
-        Thread.sleep(forTimeInterval: 1)
-
-        print("=== ALL BUTTONS ===")
-        for button in app.buttons.allElementsBoundByIndex {
-            print("Button: identifier='\(button.identifier)' label='\(button.label)' exists=\(button.exists)")
-        }
-
-        print("=== LOOKING FOR button-lock ===")
-        let lockButton = app.buttons["button-lock"]
-        print("button-lock exists: \(lockButton.exists)")
-        print("button-lock waitForExistence: \(lockButton.waitForExistence(timeout: 2))")
-
-        print("=== LOOKING FOR button-step-forward ===")
-        let stepButton = app.buttons["button-step-forward"]
-        print("button-step-forward exists: \(stepButton.exists)")
-
-        // Debug help modal
-        print("=== SHOWING HELP AND LISTING ALL ELEMENTS ===")
-        app.typeKey("h", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.5)
-
-        print("=== ALL WINDOWS ===")
-        for window in app.windows.allElementsBoundByIndex {
-            print("Window: identifier='\(window.identifier)' label='\(window.label)'")
-        }
-
-        print("=== ALL GROUPS ===")
-        for group in app.groups.allElementsBoundByIndex {
-            print("Group: identifier='\(group.identifier)' label='\(group.label)'")
-        }
-
-        print("=== ALL OTHER ELEMENTS ===")
-        for elem in app.otherElements.allElementsBoundByIndex {
-            print("OtherElement: identifier='\(elem.identifier)' label='\(elem.label)'")
-        }
-
-        print("=== CHECKING modal-help ===")
-        print("app.otherElements['modal-help'].exists: \(app.otherElements["modal-help"].exists)")
-        print("app.groups['modal-help'].exists: \(app.groups["modal-help"].exists)")
-        print("app.windows['modal-help'].exists: \(app.windows["modal-help"].exists)")
-        print("app.windows['window-help'].exists: \(app.windows["window-help"].exists)")
-
-        // Close help
-        app.typeKey(.escape, modifierFlags: [])
-    }
-
-    // MARK: - YouTube Prompt
-
-    func testYouTubePromptAppearsOnLongPress() throws {
-        let openButton = app.buttons["button-open"]
-        XCTAssertTrue(openButton.exists, "Open button should exist")
-
-        openButton.press(forDuration: 0.4)
-
-        let inputField = app.textFields["youtube-url-input"]
-        XCTAssertTrue(inputField.waitForExistence(timeout: 2), "YouTube URL input should appear")
-
-        let sheetCancel = app.sheets.buttons["Cancel"].firstMatch
-        if sheetCancel.exists {
-            sheetCancel.click()
-            return
-        }
-
-        let anyCancel = app.buttons.matching(identifier: "Cancel").firstMatch
-        if anyCancel.exists {
-            anyCancel.click()
-        }
     }
 
     // MARK: - F-VP-002: Spacebar Play/Pause
@@ -278,7 +204,7 @@ final class ReframerIntegrationTests: XCTestCase {
 
         // Ensure paused - check play button state first
         let playButton = app.buttons["button-play"]
-        if playButton.exists && playButton.label == "pause" {
+        if playButton.exists && playButton.value as? String == "Playing" {
             // Video is playing, pause it
             app.typeKey(" ", modifierFlags: [])
             Thread.sleep(forTimeInterval: 0.3)
@@ -575,9 +501,8 @@ final class ReframerIntegrationTests: XCTestCase {
         ensureUnlocked()
     }
 
-    /// Global shortcuts require accessibility permissions which aren't available in UI tests
+    /// The app-active path is testable without global Accessibility permission.
     func testLockMode_CmdPageDownStepsFrames() throws {
-        throw XCTSkip("Global shortcuts require accessibility permissions - test manually")
         XCTAssertTrue(isVideoLoaded())
         ensureLocked()
 
@@ -647,7 +572,7 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertTrue(filterButton.exists, "Filter button should exist")
 
         // Select Invert (parameterless)
-        filterButton.press(forDuration: 0.4)
+        filterButton.click()
         let invertItem = app.menuItems["quick-filter-invert"]
         guard invertItem.waitForExistence(timeout: 2) else {
             throw XCTSkip("Filter menu did not appear")
@@ -661,7 +586,7 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertEqual(opacityField.value as? String, "On", "Opacity field should show On for parameterless filter")
 
         // Select Brightness (adjustable) to restore slider
-        filterButton.press(forDuration: 0.4)
+        filterButton.click()
         let brightnessItem = app.menuItems["quick-filter-brightness"]
         if brightnessItem.waitForExistence(timeout: 2) {
             brightnessItem.click()

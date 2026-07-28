@@ -7,10 +7,21 @@ import AppKit
 enum WindowPlacement {
     static let panelGap: CGFloat = 10
 
-    static func bestVisibleFrame(for frame: NSRect, among visibleFrames: [NSRect]) -> NSRect? {
-        guard !visibleFrames.isEmpty else { return nil }
+    static func isUsableFrame(_ frame: NSRect) -> Bool {
+        frame.origin.x.isFinite
+            && frame.origin.y.isFinite
+            && frame.size.width.isFinite
+            && frame.size.height.isFinite
+            && frame.width > 0
+            && frame.height > 0
+    }
 
-        let ranked = visibleFrames.map { visibleFrame -> (frame: NSRect, area: CGFloat) in
+    static func bestVisibleFrame(for frame: NSRect, among visibleFrames: [NSRect]) -> NSRect? {
+        let usableFrames = visibleFrames.filter(isUsableFrame)
+        guard !usableFrames.isEmpty else { return nil }
+        guard isUsableFrame(frame) else { return usableFrames[0] }
+
+        let ranked = usableFrames.map { visibleFrame -> (frame: NSRect, area: CGFloat) in
             let intersection = frame.intersection(visibleFrame)
             let area = intersection.isNull ? 0 : intersection.width * intersection.height
             return (visibleFrame, area)
@@ -22,7 +33,7 @@ enum WindowPlacement {
         }
 
         let center = NSPoint(x: frame.midX, y: frame.midY)
-        return visibleFrames.min { lhs, rhs in
+        return usableFrames.min { lhs, rhs in
             squaredDistance(from: center, to: lhs) < squaredDistance(from: center, to: rhs)
         }
     }
@@ -35,20 +46,47 @@ enum WindowPlacement {
         toolbarHeight: CGFloat,
         minimumSize: NSSize
     ) -> NSRect {
-        guard !visibleFrames.isEmpty else { return frame }
+        let usableFrames = visibleFrames.filter(isUsableFrame)
+        guard !usableFrames.isEmpty else { return frame }
 
-        let safeToolbarHeight = max(0, toolbarHeight)
+        let safeToolbarHeight = toolbarHeight.isFinite ? max(0, toolbarHeight) : 0
+        let safeMinimumSize = NSSize(
+            width: finitePositive(minimumSize.width),
+            height: finitePositive(minimumSize.height)
+        )
+        let candidateFrame: NSRect
+        if isUsableFrame(frame) {
+            candidateFrame = frame.standardized
+        } else {
+            let visibleFrame = usableFrames[0]
+            let reservedToolbarHeight = min(
+                safeToolbarHeight,
+                max(0, visibleFrame.height - 1)
+            )
+            let availableMainHeight = max(1, visibleFrame.height - reservedToolbarHeight)
+            let size = NSSize(
+                width: min(safeMinimumSize.width, visibleFrame.width),
+                height: min(safeMinimumSize.height, availableMainHeight)
+            )
+            candidateFrame = NSRect(
+                x: visibleFrame.midX - size.width / 2,
+                y: visibleFrame.midY - size.height / 2 + reservedToolbarHeight / 2,
+                width: size.width,
+                height: size.height
+            )
+        }
+
         let compositeFrame = NSRect(
-            x: frame.minX,
-            y: frame.minY - safeToolbarHeight,
-            width: frame.width,
-            height: frame.height + safeToolbarHeight
+            x: candidateFrame.minX,
+            y: candidateFrame.minY - safeToolbarHeight,
+            width: candidateFrame.width,
+            height: candidateFrame.height + safeToolbarHeight
         )
         guard let visibleFrame = bestVisibleFrame(
             for: compositeFrame,
-            among: visibleFrames
+            among: usableFrames
         ) else {
-            return frame
+            return candidateFrame
         }
 
         let reservedToolbarHeight = min(
@@ -57,13 +95,13 @@ enum WindowPlacement {
         )
         let availableMainHeight = max(1, visibleFrame.height - reservedToolbarHeight)
 
-        var adjusted = frame.standardized
+        var adjusted = candidateFrame
         adjusted.size.width = min(
-            max(adjusted.width, min(minimumSize.width, visibleFrame.width)),
+            max(adjusted.width, min(safeMinimumSize.width, visibleFrame.width)),
             visibleFrame.width
         )
         adjusted.size.height = min(
-            max(adjusted.height, min(minimumSize.height, availableMainHeight)),
+            max(adjusted.height, min(safeMinimumSize.height, availableMainHeight)),
             availableMainHeight
         )
 
@@ -86,12 +124,26 @@ enum WindowPlacement {
         visibleFrames: [NSRect],
         preferredScreenFrame: NSRect? = nil
     ) -> NSRect {
-        guard !visibleFrames.isEmpty else { return frame }
-        let visibleFrame = preferredScreenFrame
+        let usableFrames = visibleFrames.filter(isUsableFrame)
+        guard !usableFrames.isEmpty else { return frame }
+        let preferredFrame = preferredScreenFrame.flatMap {
+            isUsableFrame($0) ? $0 : nil
+        }
+        let visibleFrame = preferredFrame
             ?? bestVisibleFrame(for: frame, among: visibleFrames)
-            ?? visibleFrames[0]
+            ?? usableFrames[0]
 
-        var adjusted = frame.standardized
+        var adjusted: NSRect
+        if isUsableFrame(frame) {
+            adjusted = frame.standardized
+        } else {
+            adjusted = NSRect(
+                x: visibleFrame.midX - 0.5,
+                y: visibleFrame.midY - 0.5,
+                width: 1,
+                height: 1
+            )
+        }
         adjusted.size.width = min(max(1, adjusted.width), visibleFrame.width)
         adjusted.size.height = min(max(1, adjusted.height), visibleFrame.height)
         adjusted.origin.x = clamp(
@@ -115,33 +167,42 @@ enum WindowPlacement {
         visibleFrames: [NSRect],
         gap: CGFloat = panelGap
     ) -> NSRect {
-        guard !visibleFrames.isEmpty else {
+        let usableFrames = visibleFrames.filter(isUsableFrame)
+        let safeGap = gap.isFinite ? max(0, gap) : panelGap
+        let safeSize = NSSize(
+            width: finitePositive(size.width),
+            height: finitePositive(size.height)
+        )
+        guard !usableFrames.isEmpty else {
             return NSRect(
-                x: anchorFrame.maxX + gap,
-                y: anchorFrame.midY - size.height / 2,
-                width: size.width,
-                height: size.height
+                x: anchorFrame.maxX + safeGap,
+                y: anchorFrame.midY - safeSize.height / 2,
+                width: safeSize.width,
+                height: safeSize.height
             )
         }
 
-        let visibleFrame = bestVisibleFrame(for: anchorFrame, among: visibleFrames)
-            ?? visibleFrames[0]
-        let y = anchorFrame.midY - size.height / 2
+        let safeAnchorFrame = isUsableFrame(anchorFrame)
+            ? anchorFrame.standardized
+            : usableFrames[0]
+        let visibleFrame = bestVisibleFrame(for: safeAnchorFrame, among: usableFrames)
+            ?? usableFrames[0]
+        let y = safeAnchorFrame.midY - safeSize.height / 2
         let right = NSRect(
-            x: anchorFrame.maxX + gap,
+            x: safeAnchorFrame.maxX + safeGap,
             y: y,
-            width: size.width,
-            height: size.height
+            width: safeSize.width,
+            height: safeSize.height
         )
         if visibleFrame.contains(right) {
             return right
         }
 
         let left = NSRect(
-            x: anchorFrame.minX - gap - size.width,
+            x: safeAnchorFrame.minX - safeGap - safeSize.width,
             y: y,
-            width: size.width,
-            height: size.height
+            width: safeSize.width,
+            height: safeSize.height
         )
         if visibleFrame.contains(left) {
             return left
@@ -149,9 +210,14 @@ enum WindowPlacement {
 
         return clampAuxiliaryFrame(
             right,
-            visibleFrames: visibleFrames,
+            visibleFrames: usableFrames,
             preferredScreenFrame: visibleFrame
         )
+    }
+
+    private static func finitePositive(_ value: CGFloat) -> CGFloat {
+        guard value.isFinite else { return 1 }
+        return max(1, value)
     }
 
     private static func clamp(_ value: CGFloat, lower: CGFloat, upper: CGFloat) -> CGFloat {

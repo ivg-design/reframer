@@ -6,6 +6,7 @@ class HelpView: NSView {
 
     private weak var videoState: VideoState?
     private let visualEffectView = NSVisualEffectView()
+    private let closeButton = NSButton()
     private var shortcutSettings: ShortcutSettings
     private var cancellables = Set<AnyCancellable>()
 
@@ -32,6 +33,10 @@ class HelpView: NSView {
         return nil
     }
 
+    var preferredInitialFirstResponder: NSView {
+        closeButton
+    }
+
     private func observeSettings() {
         shortcutSettings.$shortcuts
             .receive(on: DispatchQueue.main)
@@ -55,11 +60,13 @@ class HelpView: NSView {
         setAccessibilityIdentifier("modal-help")
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
+        setAccessibilityLabel("Keyboard shortcuts")
 
         // Glass background
-        visualEffectView.material = .hudWindow
+        visualEffectView.material = .popover
         visualEffectView.blendingMode = .behindWindow
-        visualEffectView.state = .active
+        visualEffectView.state = .followsWindowActiveState
+        visualEffectView.setAccessibilityElement(false)
         visualEffectView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(visualEffectView)
 
@@ -80,13 +87,23 @@ class HelpView: NSView {
         titleLabel.font = NSFont.boldSystemFont(ofSize: 14)
 
         let closeImage = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Close") ?? NSImage(named: NSImage.stopProgressTemplateName)!
-        let closeButton = NSButton(image: closeImage, target: self, action: #selector(closeHelp))
+        closeButton.image = closeImage
+        closeButton.target = self
+        closeButton.action = #selector(closeHelp)
         closeButton.bezelStyle = .inline
         closeButton.isBordered = false
         closeButton.contentTintColor = .secondaryLabelColor
+        closeButton.setAccessibilityElement(true)
+        closeButton.setAccessibilityRole(.button)
+        closeButton.setAccessibilityIdentifier("help-close")
+        closeButton.setAccessibilityLabel("Close keyboard shortcuts")
+        closeButton.setAccessibilityHelp("Close this panel and return to the previous control")
+        closeButton.toolTip = "Close keyboard shortcuts"
 
         headerStack.addArrangedSubview(titleLabel)
-        headerStack.addArrangedSubview(NSView()) // Spacer
+        let headerSpacer = NSView()
+        headerSpacer.setAccessibilityElement(false)
+        headerStack.addArrangedSubview(headerSpacer)
         headerStack.addArrangedSubview(closeButton)
         addSubview(headerStack)
 
