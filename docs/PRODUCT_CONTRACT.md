@@ -20,8 +20,8 @@ machine-readable counterpart is
 |---|---|---|
 | Open video | Command-O | App active |
 | Play / Pause | Space | App active, video loaded |
-| Step forward 1 | Command-Page Down | App active; global only when loaded and locked |
-| Step backward 1 | Command-Page Up | App active; global only when loaded and locked |
+| Step forward 1 | Command-Page Down | App active with sample navigation; global only when loaded, locked, and sample navigation is available |
+| Step backward 1 | Command-Page Up | App active with sample navigation; global only when loaded, locked, and sample navigation is available |
 | Step forward / backward 10 | Add Shift | Same guard as frame step |
 | Pan 1 | Arrow keys | App active, loaded, unlocked |
 | Pan 10 | Shift + Arrow | App active, loaded, unlocked |
@@ -47,11 +47,18 @@ collapse, and unsafe unmodified global keys. A customized chord replaces its
 old chord completely and fires once. Clearing or disabling an action survives
 relaunch.
 
-Global actions use exclusive system-registered hot keys. Reframer registers
-only enabled global lock and frame-step variants, re-registers when settings
-change, and unregisters on shutdown. It does not install a broad global event
-monitor and requires neither Accessibility nor Input Monitoring permission.
-Registration conflicts are surfaced in Shortcut Settings with a retry action.
+Global actions use exclusive system-registered hot keys. During normal
+operation, the enabled global lock chord stays registered in every video and
+lock state. The four enabled frame-step variants are registered only while a
+video is loaded, the overlay is locked, and exact or estimated sample
+navigation is available. They are unregistered outside that actionable state,
+so Reframer neither receives nor swallows those key combinations then.
+
+Registrations are rebuilt when shortcut settings or the actionable playback
+state changes. They are suspended while the shortcut recorder is listening and
+removed on shutdown. Reframer does not install a broad global event monitor and
+requires neither Accessibility nor Input Monitoring permission. Registration
+conflicts are surfaced in Shortcut Settings with a retry action.
 
 ## State
 
@@ -82,7 +89,9 @@ do not suppress plain or Shift-based Reframer shortcuts they do not own.
 
 ## Release
 
-The shipping app is a universal, Hardened Runtime Developer ID build in App
-Sandbox with only user-selected, read-only file access. It is notarized,
-stapled, Gatekeeper-assessed, and checked for internal-document or
-test-artifact leakage.
+A shippable candidate must be a universal, Hardened Runtime Developer ID build
+in App Sandbox with only user-selected, read-only file access. Release
+acceptance requires successful notarization, stapling, Gatekeeper assessment,
+and an internal-document/test-artifact leakage check. Repository, unsigned, or
+ad hoc signed build validation is not evidence that these external Apple gates
+ran.

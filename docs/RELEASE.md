@@ -2,6 +2,12 @@
 
 Reframer releases are reproducible from a clean tagged commit.
 
+This page defines external release-acceptance steps. The remediation run
+implemented and locally validated the pipeline, but it did not have Apple
+distribution credentials and did not record a Developer ID distribution
+signature, notarization submission, staple, or Gatekeeper acceptance. An
+unsigned or ad hoc signed archive is not a release candidate.
+
 ## Required Apple credentials
 
 - Developer ID Application certificate

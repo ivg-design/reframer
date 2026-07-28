@@ -29,4 +29,5 @@ Drag the timeline for responsive preview seeks. Releasing it resolves the
 exact target sample. The frame field accepts a sample number directly.
 
 The global step chords work while another app is active only when Reframer has
-a loaded video and lock mode is enabled.
+a loaded, locked video with exact or estimated sample navigation. They are not
+registered or swallowed in any other state.

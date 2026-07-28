@@ -25,18 +25,24 @@ successful result bundle.
 The unit target currently proves:
 
 - MP4, M4V, and MOV are the only advertised extensions and content types, and
-  preflight accepts a known playable fixture while rejecting a missing file.
-- Frame lookup uses presentation timestamps, including an in-memory
-  variable-timing table. Packaged media exercises 29.97 and 60 fps sample
-  indexing. First/last clamping, repeated generations, 1/10-frame direction,
-  and rapid burst accumulation are deterministic model checks.
+  preflight accepts a known playable fixture while rejecting a missing file,
+  corrupt data with a supported extension, and a valid audio-only MP4.
+- Frame lookup uses presentation timestamps. Packaged media exercises exact
+  23.976, 29.97, 59.94, and 60.00 fps sample indexing plus a real
+  variable-frame-rate fixture with irregular intervals. An in-memory table
+  covers additional variable timing, while the estimated-timeline tests cover
+  fractional-rate fallback.
+- First/last clamping, repeated generations, 1/10-frame direction, rapid burst
+  accumulation, preview cancellation, structured indexing cancellation, load
+  replacement, and unload-during-load are deterministic checks.
 - Playback, scrub, zoom, opacity, mute, filter, and persistence state
   transitions obey their model contracts.
 - Shortcut defaults, local/global scope, 1/10/100 multipliers, repeat policy,
   collision/reserved-key rejection, migration, clear/disable/re-enable, and
   persistence resolve to typed commands. The exact Carbon registration plan,
-  AppKit-to-Carbon modifier mapping, conflict/retry state, focused-control
-  ownership, and active-versus-inactive dispatch policy also have unit coverage.
+  lock-only versus actionable-frame registration lifecycle, AppKit-to-Carbon
+  modifier mapping, conflict/retry state, focused-control ownership, and
+  active-versus-inactive dispatch policy also have unit coverage.
 - Window recovery, toolbar reservation, attached-panel placement, and invalid
   geometry handling are checked as pure geometry.
 - Drop-zone actionability, quick-filter menu contents, advanced-filter control
@@ -48,37 +54,58 @@ display, accessibility, or workspace event to the running app.
 
 ## XCUITest evidence contract
 
-The serial UI target launches a new app process for every test and opens its
-fixture through Launch Services, exercising the same user-selected read-only
-sandbox extension as Finder's Open With flow. A passing execution proves these
-observable outcomes:
+The serial UI target launches a new app process with an isolated preference
+suite for every test. It opens its fixture through Launch Services, exercising
+the same user-selected read-only sandbox-extension path as Finder's Open With
+flow.
+
+Current evidence status (2026-07-28): `build-for-testing` compiled the complete
+unit and UI targets, but the UI tests were not executed in this remediation
+session. The runner acknowledgment was not present, so
+`scripts/ui_test_preflight.sh` correctly exited 77; a separate live-app attempt
+could not start because the macOS desktop was locked. The bullets below
+therefore describe what a passing execution will prove, not results already
+recorded:
 
 - the empty state exposes a labeled, enabled Open video action;
 - clicking the empty state and pressing Command-O each present a cancellable
   system file picker, and Cancel restores the empty state;
 - H presents the labeled Shortcut Settings group and its labeled Close action
   dismisses it;
-- the staged fixture reaches a ready, enabled timeline and exposes frame, zoom,
-  and lock status elements;
+- the Launch Services fixture reaches a ready, enabled timeline and exposes
+  frame, zoom, and lock status elements;
 - Space and the Play button advance frames and return to an observable paused
   state;
-- step buttons, frame entry, timeline adjustment, and active-app locked
-  Command-Page Down update the frame field;
+- step buttons, frame entry, and timeline adjustment update the frame field;
+- while Reframer is active, Command-Page Down, Command-Shift-Page Down,
+  Command-Page Up, and Command-Shift-Page Up exercise both directions and the
+  one/ten-sample factors;
 - zoom entry, arrow increments, 0, and R update the zoom field;
 - lock input updates the lock value and zoom-control enabled state;
 - opacity entry and arrow increments update the field;
 - selecting Invert disables its parameter control and shows `On`, while
   Brightness re-enables the adjustable control;
-- mute/unmute updates the exposed audio state and restores the prior slider value;
-- while Finder is active, each enabled registered hotkey appears exactly once,
-  Command-Page Down advances exactly one frame while locked, Command-Shift-L
-  unlocks, and further background stepping is rejected while unlocked.
+- mute/unmute updates the exposed audio state and restores the prior slider
+  value;
+- F and Command-? open their named panels, and Escape closes each one;
+- Space activates a focused Quick Filter button or filter switch without also
+  toggling playback;
+- rebinding Play/Pause from Space to J removes the old chord, activates the new
+  chord, survives relaunch, can be disabled, and remains disabled after another
+  relaunch;
+- while Finder is active, all four frame-step variants dispatch exactly once
+  in both directions and at one/ten-sample factors while loaded and locked;
+- the actionable state reports five registered defaults (lock plus four frame
+  variants), global Command-Shift-L unlocks, the unlocked state reports only
+  the lock registration, and Command-Page Down is neither delivered to
+  Reframer nor swallowed then.
 
 `ZoomScreenshotTest` always asserts the 100% to 200% zoom transition.
 `UITEST_SCREENSHOTS=1` only adds retained PNG evidence; omitting that variable
 does not skip the behavioral assertions.
 
-Run the target only in a logged-in, pre-authorized session:
+Run the target only in a logged-in session whose operator has acknowledged
+Xcode UI automation:
 
 ```bash
 REFRAMER_UI_RUNNER_AUTHORIZED=1 \
@@ -102,8 +129,8 @@ suite does not measure their result:
 - toolbar drag-handle movement, lock suppression, and visible lock/status HUD;
 - resize behavior at minimum size and toolbar attachment while moving;
 - Always on Top, click-through, and recovery/unlock from another app;
-- registered global shortcuts while Reframer is inactive, including
-  registration-conflict reporting and exactly-once dispatch;
+- an actual registration conflict with another owner and the visible retry
+  recovery path;
 - multi-display placement, display removal, and visible-frame clamping;
 - keyboard-only traversal and focus restoration for shortcut, filter, and
   documentation panels;
@@ -118,6 +145,8 @@ claim. Do not mark a row passed from a build log or from an element-existence
 assertion.
 
 The release workflow requires both the deterministic quality job and an
-executed self-hosted UI job before signing and notarization. The live checks
-above remain release evidence that must be attached to the candidate when
-their behavior changes.
+executed self-hosted UI job before signing and notarization. No Developer ID
+distribution signing, notarization submission, staple, or Gatekeeper
+assessment ran during this remediation session. The live checks above remain
+release evidence that must be attached to a future candidate when their
+behavior changes.

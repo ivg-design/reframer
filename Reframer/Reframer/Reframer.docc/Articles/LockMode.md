@@ -12,10 +12,12 @@ When locked:
 - moving, resizing, zooming, and panning are disabled;
 - the frame, zoom, and locked-status badges remain visible without intercepting
   input;
-- Command-Page Down and Command-Page Up can step a loaded video globally.
+- Command-Page Down and Command-Page Up can step globally when exact or
+  estimated sample navigation is available.
 
-Global frame stepping is ignored when no video is loaded or the overlay is
-unlocked. Reframer registers only these exact global chords, so it requires no
-Accessibility or Input Monitoring permission. Shortcut Settings reports a
-registration conflict and provides a retry action when another app owns a
-chord.
+The enabled global lock chord stays registered during normal operation. Frame
+chords are registered only while the video is loaded, navigation is available,
+and the overlay is locked. They are removed rather than swallowed in all other
+states. Registered hot keys require no Accessibility or Input Monitoring
+permission. Shortcut Settings reports a registration conflict and provides a
+retry action when another app owns a chord.

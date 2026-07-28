@@ -43,10 +43,12 @@ historical investigations are not product claims.
 - Shortcut defaults can be changed, cleared, disabled, or restored.
 - Invalid, reserved, duplicate, and unsafe global chords are rejected with an
   explanation.
-- Only enabled global lock and frame-step variants are registered with macOS.
-  Conflicts are reported with an accessible retry action; broad keyboard
-  monitoring and privacy permission prompts are not used.
-- Global stepping is active only with a loaded video in lock mode.
+- The enabled global lock chord remains registered during normal operation.
+  Frame-step variants are registered only with a loaded, locked video whose
+  exact or estimated sample navigation is available, and are not consumed
+  otherwise.
+- Registration conflicts are reported with an accessible retry action; broad
+  keyboard monitoring and privacy permission prompts are not used.
 - Custom controls expose task-oriented VoiceOver labels, values, state, and
   actions; keyboard focus enters and returns from panels predictably.
 - Motion and focus treatments honor Reduce Motion and remain fully visible.
@@ -57,8 +59,9 @@ historical investigations are not product claims.
 - App Sandbox with user-selected, read-only video access.
 - Explicit runtime-resource allowlist.
 - Hardened Runtime with only the two allowlisted sandbox entitlements.
-- Universal Developer ID release, notarization, stapling, and Gatekeeper
-  verification.
+- Release acceptance requires a universal Developer ID build, notarization,
+  stapling, and Gatekeeper verification. These external Apple checks are not
+  implied by a repository or unsigned-build pass.
 
 The machine-readable authority is
 [`product-contract.json`](product-contract.json).

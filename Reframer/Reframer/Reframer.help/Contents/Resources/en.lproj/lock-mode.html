@@ -17,9 +17,12 @@
 
   <p>When global shortcuts are enabled, <kbd>⌘⇧L</kbd> toggles lock from
   another app. <kbd>⌘ Page Down</kbd> and <kbd>⌘ Page Up</kbd> step globally
-  only while a video is loaded and Reframer is locked.</p>
+  only while a video is loaded, Reframer is locked, and exact or estimated
+  sample navigation is available.</p>
 
-  <p>These exact chords are registered with macOS and require no Accessibility
+  <p>The enabled lock chord stays registered during normal operation. Frame
+  chords are registered only in that actionable state and are removed rather
+  than swallowed at other times. Registered hot keys require no Accessibility
   or Input Monitoring permission. Shortcut settings report registration
   conflicts and provide a retry action.</p>
 

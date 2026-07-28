@@ -28,7 +28,9 @@ development snapshots, not production releases.
 - Minimum system and public documentation are aligned at macOS 15.0
 - Shipping containers are explicitly MP4, M4V, and MOV through AVFoundation
 - Page Down advances and Page Up reverses
-- Global frame stepping requires a loaded video and lock mode
+- Global frame-step chords are registered only for a loaded, locked video with
+  exact or estimated sample navigation, so inactive chords remain available to
+  other apps
 - Frame navigation uses decoded sample timing instead of rounded nominal-rate
   arithmetic
 - Quick filters use a conventional primary-click menu with a separate advanced

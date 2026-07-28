@@ -14,10 +14,10 @@ while you work in the app underneath.
 - Persists opacity, volume, window placement, filter settings, and customized
   shortcuts
 - Locks into a click-through overlay
-- Supports guarded global frame stepping while a video is loaded and the
-  overlay is locked
-- Registers only the configured global chords with macOS; it never monitors
-  general keyboard input
+- Keeps the enabled global lock chord available from any video or lock state
+- Registers global frame-step chords only while a video is loaded, the overlay
+  is locked, and exact or estimated sample navigation is available
+- Never monitors general keyboard input or reserves inactive frame-step chords
 - Exposes keyboard and VoiceOver names, values, state, and actions
 
 Reframer does not stream media or download executable components. A file whose
@@ -46,11 +46,13 @@ track; the app reports that failure instead of claiming the load succeeded.
 | Filters | F |
 | Help and shortcut settings | H |
 
-The frame-step chords work outside Reframer only when a video is loaded and
-lock mode is enabled. Global shortcuts use privacy-safe registered hot keys and
-require neither Accessibility nor Input Monitoring permission. Registration
-conflicts are reported in Shortcut Settings with a retry action. Defaults can
-be changed or disabled there.
+The enabled global lock chord stays registered during normal operation. The
+four frame-step variants are registered only when a loaded, locked video has
+exact or estimated sample navigation, so those key combinations remain
+available to other apps in every other state. Global shortcuts use privacy-safe
+registered hot keys and require neither Accessibility nor Input Monitoring
+permission. Registration conflicts are reported in Shortcut Settings with a
+retry action. Defaults can be changed or disabled there.
 
 Reframer runs in App Sandbox and receives read-only access only to videos the
 user explicitly opens or drops.
@@ -73,7 +75,8 @@ scripts/runner_test.sh
 
 The normal CI suite builds Debug and Release, runs static analysis, validates
 the product and bundle contracts, builds DocC, and runs unit tests. The UI suite
-runs separately on a logged-in, pre-authorized macOS runner.
+runs separately in a logged-in macOS session whose operator has explicitly
+acknowledged Xcode UI automation.
 
 ## Release
 
@@ -82,6 +85,11 @@ Developer ID signing and notarization are handled by
 dirty sources, validates the universal app bundle, submits it for
 notarization, staples the ticket, runs Gatekeeper assessment, and packages the
 result.
+
+Those are external release-acceptance gates, not results of the remediation
+run. No Developer ID distribution signing, Apple notarization submission,
+stapling, or Gatekeeper assessment has been recorded without the required Apple
+credentials.
 
 See [Release Process](docs/RELEASE.md).
 
