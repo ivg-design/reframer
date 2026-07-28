@@ -76,9 +76,9 @@
                             </constraints>
                         </button>
                         <slider identifier="slider-timeline" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="slider-timeline" customClass="TimelineSlider" customModule="Reframer" customModuleProvider="target">
-                            <rect key="frame" x="127" y="12" width="200" height="16"/>
+                            <rect key="frame" x="127" y="12" width="200" height="24"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="16" id="timeline-slider-h"/>
+                                <constraint firstAttribute="height" constant="24" id="timeline-slider-h"/>
                                 <constraint firstAttribute="width" constant="200" id="yb9-Nt-6gb"/>
                             </constraints>
                             <sliderCell key="cell" controlSize="mini" continuous="YES" alignment="left" maxValue="1" tickMarkPosition="below" sliderType="linear" id="slider-timeline-cell"/>
@@ -178,9 +178,9 @@
                             </imageCell>
                         </imageView>
                         <slider identifier="slider-opacity" verticalHuggingPriority="750" horizontalCompressionResistancePriority="751" translatesAutoresizingMaskIntoConstraints="NO" id="slider-opacity">
-                            <rect key="frame" x="620" y="12" width="100" height="16"/>
+                            <rect key="frame" x="620" y="12" width="100" height="24"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="16" id="opacity-slider-h"/>
+                                <constraint firstAttribute="height" constant="24" id="opacity-slider-h"/>
                                 <constraint firstAttribute="width" constant="100" id="opacity-slider-w"/>
                             </constraints>
                             <sliderCell key="cell" controlSize="mini" continuous="YES" alignment="left" minValue="0.02" maxValue="1" doubleValue="1" tickMarkPosition="below" sliderType="linear" id="slider-opacity-cell"/>
@@ -217,9 +217,9 @@
                             </constraints>
                         </button>
                         <slider identifier="slider-volume" hidden="YES" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="slider-volume">
-                            <rect key="frame" x="0.0" y="12" width="100" height="16"/>
+                            <rect key="frame" x="0.0" y="12" width="100" height="24"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="16" id="volume-slider-h"/>
+                                <constraint firstAttribute="height" constant="24" id="volume-slider-h"/>
                                 <constraint firstAttribute="width" constant="100" id="volume-slider-w"/>
                             </constraints>
                             <sliderCell key="cell" controlSize="mini" continuous="YES" alignment="left" maxValue="1" doubleValue="0.5" tickMarkPosition="below" sliderType="linear" id="slider-volume-cell"/>

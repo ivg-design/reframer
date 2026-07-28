@@ -302,6 +302,11 @@ final class ControlBarLayoutRegressionTests: XCTestCase {
                 slider.intrinsicContentSize.height,
                 "\(identifier) must not clip its intrinsic slider content"
             )
+            XCTAssertGreaterThanOrEqual(
+                slider.bounds.height,
+                24,
+                "\(identifier) must retain the cross-toolchain clipping margin"
+            )
         }
 
         guard let totalLabel = descendant(
