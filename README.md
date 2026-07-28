@@ -91,13 +91,14 @@ operator has explicitly acknowledged Xcode UI automation.
 Developer ID signing and notarization are handled by
 [`scripts/package_release.sh`](scripts/package_release.sh). The script refuses
 dirty sources, validates the universal app bundle, submits it for
-notarization, staples the ticket, runs Gatekeeper assessment, and packages the
-result.
+notarization, staples and revalidates the ticket-bearing bundle, runs
+Gatekeeper assessment, packages the result, then extracts and rechecks the
+final ZIP.
 
-Those are external release-acceptance gates, not results of the remediation
-run. No Developer ID distribution signing, Apple notarization submission,
-stapling, or Gatekeeper assessment has been recorded without the required Apple
-credentials.
+The audit records the historical build-1 review run and the packaging gap it
+exposed. Every later build must repeat the complete pipeline; only its emitted
+Apple result and checksums prove that particular artifact. A local review run
+does not create a version tag, GitHub release, or published distribution.
 
 See [Release Process](docs/RELEASE.md) for the local process and the GitHub
 runner, environment, variable, secret, and source-protection prerequisites.

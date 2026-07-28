@@ -96,6 +96,9 @@ development snapshots, not production releases.
   without relying on empty-array behavior that differs in macOS Bash
 - Repository validation uses stock macOS system tools and no longer assumes a
   separately installed `ripgrep` executable on hosted runners
+- Stapled review artifacts recognize Apple’s top-level `CodeResources` ticket
+  only when `stapler` validates it, and the final ZIP is extracted and
+  rechecked for bundle, signature, ticket, and Gatekeeper integrity
 
 ### Security
 

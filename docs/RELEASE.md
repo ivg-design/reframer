@@ -106,7 +106,9 @@ The packager:
    JSON and ID;
 6. staples and validates the ticket, re-verifies the signature, and runs
    Gatekeeper assessment;
-7. writes:
+7. validates the post-staple bundle contract, extracts the final ZIP, and
+   repeats bundle, signature, ticket, and Gatekeeper verification;
+8. writes:
    - `dist/Reframer-<version>-macOS.zip`;
    - `dist/Reframer-<version>-notarization.json`;
    - `dist/SHA256SUMS.txt`.

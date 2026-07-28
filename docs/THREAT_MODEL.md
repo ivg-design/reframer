@@ -60,6 +60,8 @@ only allowed entitlements are `com.apple.security.app-sandbox` and
 `com.apple.security.files.user-selected.read-only`. Repository and release
 validators reject broad global event monitors, privacy-database mutation, and
 unexpected entitlements. The remediation run did not have Apple distribution
-credentials, so Developer ID signing, notarization, stapling, and Gatekeeper
-acceptance remain external release evidence rather than completed local
-checks.
+credentials initially. A later local build-1 review run demonstrated Developer
+ID signing, notarization, stapling, and Gatekeeper acceptance, then exposed a
+post-staple ZIP validation gap corrected in build-2 source. Local credentials
+and review evidence do not replace the protected GitHub release environment,
+self-hosted UI gate, tag controls, or per-artifact Apple verification.

@@ -13,8 +13,8 @@ finds an element is not proof of the action behind it.
 | `xcodebuild analyze` | Xcode static analysis reports no blocking issue | Absence of every runtime defect |
 | `TEST_SCOPE=unit scripts/runner_test.sh` | Deterministic model and AppKit contract tests pass | WindowServer event routing, visual output, or another-app shortcuts |
 | `xcodebuild docbuild` | DocC compiles; bundle validation separately checks Apple Help packaging | Documentation accuracy beyond the validated contract |
-| `scripts/validate_bundle.sh` | The universal unsigned bundle matches the version, per-slice deployment target, exact Contents/signature/executable/runtime/Help allowlists, modern Help index, source stamp, source privacy allowlist, and contains no symlinks | Embedded release entitlements, Developer ID trust, notarization, or Gatekeeper acceptance |
-| Release packaging workflow | The exact artifact passed signing verification, notarization, stapling, and Gatekeeper assessment | Behavior not exercised by the preceding test jobs |
+| `scripts/validate_bundle.sh` | The universal bundle matches the version, per-slice deployment target, exact Contents/signature/executable/runtime/Help allowlists, modern Help index, source stamp, source privacy allowlist, and contains no symlinks; an optional top-level stapled ticket must validate with `stapler` | Embedded release entitlements, Developer ID trust, notarization, or Gatekeeper acceptance when no ticket is present |
+| Release packaging workflow | The extracted final ZIP passed bundle, signing, notarization-ticket, and Gatekeeper verification after the source app passed the same post-staple gates | Behavior not exercised by the preceding test jobs |
 
 `build-for-testing` is a compile gate for both test targets. It is not recorded
 as a UI-test pass unless `xcodebuild test` executes the tests and produces a

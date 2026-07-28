@@ -36,6 +36,9 @@ EXPECTED_CONTENTS="$(
         MacOS \
         PkgInfo \
         Resources
+    if [ -e "$APP_PATH/Contents/CodeResources" ]; then
+        printf '%s\n' CodeResources
+    fi
     if [ -d "$APP_PATH/Contents/_CodeSignature" ]; then
         printf '%s\n' _CodeSignature
     fi
@@ -67,6 +70,19 @@ if [ -d "$SIGNATURE_DIRECTORY" ]; then
         echo "error: _CodeSignature must contain only CodeResources" >&2
         echo "actual:" >&2
         echo "$ACTUAL_SIGNATURE_FILES" >&2
+        exit 65
+    fi
+fi
+
+STAPLED_TICKET="$APP_PATH/Contents/CodeResources"
+if [ -e "$STAPLED_TICKET" ]; then
+    if [ ! -f "$STAPLED_TICKET" ] || [ ! -s "$STAPLED_TICKET" ]; then
+        echo "error: stapled ticket must be a non-empty regular file" >&2
+        exit 65
+    fi
+    if ! STAPLER_OUTPUT="$(xcrun stapler validate "$APP_PATH" 2>&1)"; then
+        echo "$STAPLER_OUTPUT" >&2
+        echo "error: Contents/CodeResources is not a valid stapled ticket" >&2
         exit 65
     fi
 fi

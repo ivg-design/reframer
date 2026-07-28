@@ -139,12 +139,24 @@ fi
 
 xcrun stapler staple "$APP_PATH"
 xcrun stapler validate "$APP_PATH"
+"$SCRIPT_DIR/validate_bundle.sh" "$APP_PATH"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 /usr/sbin/spctl --assess --type execute --verbose=2 "$APP_PATH"
 
 mkdir -p "$DIST_DIR"
+/bin/rm -f "$FINAL_ZIP" "$NOTARY_RECORD" "$CHECKSUM_FILE"
 /usr/bin/ditto -c -k --keepParent "$APP_PATH" "$FINAL_ZIP"
 /usr/bin/install -m 0644 "$NOTARY_RESULT" "$NOTARY_RECORD"
+
+ROUND_TRIP_DIR="$WORK_DIR/package-round-trip"
+ROUND_TRIP_APP="$ROUND_TRIP_DIR/Reframer.app"
+mkdir -p "$ROUND_TRIP_DIR"
+/usr/bin/ditto -x -k "$FINAL_ZIP" "$ROUND_TRIP_DIR"
+"$SCRIPT_DIR/validate_bundle.sh" "$ROUND_TRIP_APP"
+/usr/bin/codesign --verify --deep --strict --verbose=2 "$ROUND_TRIP_APP"
+xcrun stapler validate "$ROUND_TRIP_APP"
+/usr/sbin/spctl --assess --type execute --verbose=2 "$ROUND_TRIP_APP"
+
 (
     cd "$DIST_DIR"
     /usr/bin/shasum -a 256 \

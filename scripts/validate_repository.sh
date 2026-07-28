@@ -202,6 +202,7 @@ for required_bundle_gate in \
     "release bundle must not contain symbolic links" \
     "app Contents do not equal the executable/resource allowlist" \
     "_CodeSignature must contain only CodeResources" \
+    "Contents/CodeResources is not a valid stapled ticket" \
     "Contents/MacOS must contain only the Reframer executable" \
     "runtime resources do not equal the allowlist" \
     "Apple Help files do not equal the allowlist"; do
@@ -210,6 +211,19 @@ for required_bundle_gate in \
         exit 65
     fi
 done
+
+PACKAGE_SCRIPT="scripts/package_release.sh"
+PACKAGE_BUNDLE_VALIDATION_COUNT="$(
+    grep -Fc '"$SCRIPT_DIR/validate_bundle.sh"' "$PACKAGE_SCRIPT"
+)"
+if [ "$PACKAGE_BUNDLE_VALIDATION_COUNT" -lt 3 ] ||
+   ! grep -Fq 'package-round-trip' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'xcrun stapler validate "$ROUND_TRIP_APP"' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'spctl --assess --type execute --verbose=2 "$ROUND_TRIP_APP"' \
+        "$PACKAGE_SCRIPT"; then
+    echo "error: release packager must validate the app before and after stapling and after ZIP extraction" >&2
+    exit 65
+fi
 
 HELP_SOURCE="Reframer/Reframer/Reframer.help/Contents/Resources/en.lproj"
 HELP_INDEX="$HELP_SOURCE/search.cshelpindex"
