@@ -1,6 +1,31 @@
 import Cocoa
 import Combine
 
+struct AccessibilityErrorAnnouncementTracker {
+    private(set) var lastMessage: String?
+
+    mutating func newMessageToAnnounce(_ message: String?) -> String? {
+        let normalized = message.flatMap { value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        guard normalized != lastMessage else { return nil }
+        lastMessage = normalized
+        return normalized
+    }
+}
+
+func postAccessibilityErrorAnnouncement(_ message: String, from element: Any) {
+    NSAccessibility.post(
+        element: element,
+        notification: .announcementRequested,
+        userInfo: [
+            .announcement: message,
+            .priority: NSAccessibilityPriorityLevel.high.rawValue
+        ]
+    )
+}
+
 struct ReadyStatusOverlaySnapshot: Equatable {
     let frameText: String
     let zoomText: String
@@ -36,15 +61,17 @@ private final class StatusBadgeView: NSView {
         wantsLayer = true
         layer?.cornerRadius = 7
         layer?.borderWidth = 0.5
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityIdentifier(identifier)
+        self.identifier = NSUserInterfaceItemIdentifier(identifier)
+        setAccessibilityLabel(accessibilityLabel)
 
         label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         label.lineBreakMode = .byClipping
         label.setContentHuggingPriority(.required, for: .horizontal)
-        label.setAccessibilityElement(true)
-        label.setAccessibilityIdentifier(identifier)
-        label.identifier = NSUserInterfaceItemIdentifier(identifier)
-        label.setAccessibilityLabel(accessibilityLabel)
+        label.setAccessibilityElement(false)
         addSubview(label)
 
         NSLayoutConstraint.activate([
@@ -54,7 +81,6 @@ private final class StatusBadgeView: NSView {
             label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -7)
         ])
 
-        setAccessibilityElement(false)
         updateAppearance()
     }
 
@@ -66,7 +92,7 @@ private final class StatusBadgeView: NSView {
         if displayedText != text {
             displayedText = text
             label.stringValue = text
-            label.setAccessibilityValue(text)
+            setAccessibilityValue(text)
         }
         if isAccent != accent {
             isAccent = accent
@@ -162,9 +188,9 @@ final class ReadyStatusOverlayView: NSView {
     private func setup() {
         translatesAutoresizingMaskIntoConstraints = false
         identifier = NSUserInterfaceItemIdentifier("status-overlay")
-        setAccessibilityElement(true)
-        setAccessibilityRole(.group)
-        setAccessibilityLabel("Video status")
+        // Keep the container transparent to accessibility so its three
+        // explicitly labelled status children remain individually reachable.
+        setAccessibilityElement(false)
 
         let stack = NSStackView(views: [frameBadge, zoomBadge, lockBadge])
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -263,6 +289,7 @@ class MainViewController: NSViewController {
     private var statusOverlayView: ReadyStatusOverlayView!
     private var presentationState: MainPresentationState = .empty
     private var cancellables = Set<AnyCancellable>()
+    private var filterErrorAnnouncementTracker = AccessibilityErrorAnnouncementTracker()
 
 
     // MARK: - Initialization
@@ -403,8 +430,16 @@ class MainViewController: NSViewController {
         videoState.$filterErrorMessage
             .receive(on: DispatchQueue.main)
             .sink { [weak self] message in
-                self?.filterErrorLabel.stringValue = message ?? ""
-                self?.filterErrorLabel.isHidden = message == nil
+                guard let self, let filterErrorLabel = self.filterErrorLabel else { return }
+                filterErrorLabel.stringValue = message ?? ""
+                filterErrorLabel.isHidden = message == nil
+                if let announcement = self.filterErrorAnnouncementTracker
+                    .newMessageToAnnounce(message) {
+                    postAccessibilityErrorAnnouncement(
+                        announcement,
+                        from: filterErrorLabel
+                    )
+                }
             }
             .store(in: &cancellables)
 

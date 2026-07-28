@@ -12,5 +12,5 @@ panel moves keyboard focus into it; Escape closes it and returns focus to the
 invoking control.
 
 Filter parameters are clamped and persisted. Replacing a filter composition
-cancels stale asynchronous work so an older render cannot overwrite the newer
-choice.
+invalidates stale asynchronous results so an older render cannot overwrite the
+newer choice.

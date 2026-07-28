@@ -18,10 +18,15 @@
   </ul>
 
   <h2>Compatibility</h2>
-  <p>The file must contain a video track that AVFoundation can decode. A
-  recognized extension does not guarantee that every embedded codec is
-  compatible. Reframer reports unsupported, missing, or corrupt tracks without
-  replacing a working video with a false loaded state.</p>
+  <p>The file must contain a usable video track that AVFoundation can decode.
+  For multi-track media, playback, Core Image filters, dimensions, and frame
+  navigation use the same selected track. A recognized extension does not
+  guarantee that every
+  embedded codec is compatible.</p>
+
+  <p>Selecting a replacement stops playback and the new video lands paused. A
+  failed load leaves the player empty with an actionable error; Reframer never
+  presents an unsupported, missing, or corrupt track as ready.</p>
 
   <div class="tip">
     <strong>Portable choice</strong>

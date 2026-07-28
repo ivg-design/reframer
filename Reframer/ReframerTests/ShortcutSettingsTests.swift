@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import WebKit
 import XCTest
 @testable import Reframer
 
@@ -103,6 +104,143 @@ final class ShortcutSettingsTests: XCTestCase {
             ),
             scope: .global
         ))
+    }
+
+    func testRepeatedNonRepeatingShortcutIsConsumedBeforeMenuFallback() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+
+        XCTAssertEqual(
+            settings.eventResolution(
+                stroke: ShortcutKeystroke(
+                    keyCode: KeyCode.space,
+                    modifiers: 0,
+                    isRepeat: true
+                ),
+                scope: .local
+            ),
+            .consumeWithoutDispatch(
+                ShortcutMatch(action: .playPause, variant: .primary)
+            )
+        )
+        XCTAssertEqual(
+            settings.eventResolution(
+                stroke: ShortcutKeystroke(
+                    keyCode: KeyCode.l,
+                    modifiers: 0,
+                    isRepeat: true
+                ),
+                scope: .local
+            ),
+            .consumeWithoutDispatch(
+                ShortcutMatch(action: .toggleLock, variant: .primary)
+            )
+        )
+    }
+
+    func testCommandQuestionMarkRoutesToDocumentationBeforeHelpMenuSearch() {
+        let modifiers = NSEvent.ModifierFlags([.command, .shift]).rawValue
+        let stroke = ShortcutKeystroke(
+            keyCode: KeyCode.questionMark,
+            modifiers: modifiers
+        )
+
+        XCTAssertEqual(
+            FixedCommandShortcutRouting.eventResolution(stroke: stroke),
+            .dispatch(.openDocumentation)
+        )
+        XCTAssertEqual(
+            FixedCommandShortcutRouting.eventResolution(stroke: ShortcutKeystroke(
+                keyCode: KeyCode.questionMark,
+                modifiers: modifiers,
+                isRepeat: true
+            )),
+            .consumeWithoutDispatch
+        )
+        XCTAssertEqual(
+            FixedCommandShortcutRouting.eventResolution(stroke: ShortcutKeystroke(
+                keyCode: KeyCode.questionMark,
+                modifiers: NSEvent.ModifierFlags.command.rawValue
+            )),
+            .unmatched
+        )
+    }
+
+    func testFocusedEditorReceivesRecognizedNonRepeatingAutorepeat() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+        let stroke = ShortcutKeystroke(
+            keyCode: KeyCode.h,
+            modifiers: 0,
+            isRepeat: true
+        )
+        let resolution = settings.eventResolution(
+            stroke: stroke,
+            scope: .local
+        )
+
+        XCTAssertEqual(
+            resolution,
+            .consumeWithoutDispatch(
+                ShortcutMatch(action: .showHelp, variant: .primary)
+            )
+        )
+        XCTAssertTrue(
+            ShortcutControlRouting.focusedControlOwns(
+                stroke: stroke,
+                kind: .textEditor
+            )
+        )
+        XCTAssertEqual(
+            FocusedShortcutEventRouting.decision(
+                resolution: resolution,
+                focusedResponderOwnsStroke: true
+            ),
+            .deliverToFocusedResponder
+        )
+        XCTAssertEqual(
+            FocusedShortcutEventRouting.decision(
+                resolution: resolution,
+                focusedResponderOwnsStroke: false
+            ),
+            .consumeWithoutDispatch
+        )
+    }
+
+    func testRepeatedEligibleShortcutStillDispatches() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+        let command = NSEvent.ModifierFlags.command.rawValue
+
+        XCTAssertEqual(
+            settings.eventResolution(
+                stroke: ShortcutKeystroke(
+                    keyCode: KeyCode.pageDown,
+                    modifiers: command,
+                    isRepeat: true
+                ),
+                scope: .local
+            ),
+            .dispatch(
+                ShortcutMatch(
+                    action: .frameStepForward,
+                    variant: .primary
+                )
+            )
+        )
+        XCTAssertEqual(
+            settings.eventResolution(
+                stroke: ShortcutKeystroke(
+                    keyCode: KeyCode.leftArrow,
+                    modifiers: 0,
+                    isRepeat: true
+                ),
+                scope: .local
+            ),
+            .dispatch(
+                ShortcutMatch(
+                    action: .panLeft,
+                    variant: .primary
+                )
+            )
+        )
     }
 
     func testValidationRejectsDuplicatesReservedAndUnsafeGlobalKeys() {
@@ -288,6 +426,176 @@ final class ShortcutSettingsTests: XCTestCase {
         XCTAssertNil(settings.binding(for: .panLeft).shortcut)
     }
 
+    func testRecordingPersistsLayoutCharacterForDisplayAndMenu() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+        settings.beginRecording(for: .playPause)
+
+        XCTAssertEqual(
+            settings.record(
+                stroke: ShortcutKeystroke(
+                    keyCode: 0,
+                    modifiers: 0,
+                    charactersIgnoringModifiers: "q"
+                )
+            ),
+            .saved
+        )
+        XCTAssertEqual(settings.displayString(for: .playPause), "Q")
+        XCTAssertEqual(
+            settings.binding(for: .playPause).shortcut?.menuKeyEquivalent,
+            "q"
+        )
+
+        let restored = ShortcutSettings(userDefaults: defaults)
+        XCTAssertEqual(restored.displayString(for: .playPause), "Q")
+        XCTAssertEqual(
+            restored.binding(for: .playPause).shortcut?.menuKeyEquivalent,
+            "q"
+        )
+    }
+
+    func testRecordingPreservesShiftedCharactersForMenuDispatch() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+        let shift = NSEvent.ModifierFlags.shift.rawValue
+        settings.beginRecording(for: .playPause)
+
+        XCTAssertEqual(
+            settings.record(
+                stroke: ShortcutKeystroke(
+                    keyCode: 18,
+                    modifiers: shift,
+                    charactersIgnoringModifiers: "!"
+                )
+            ),
+            .saved
+        )
+        XCTAssertEqual(settings.displayString(for: .playPause), "⇧!")
+        XCTAssertEqual(
+            settings.binding(for: .playPause).shortcut?.menuKeyEquivalent,
+            "!"
+        )
+
+        settings.beginRecording(for: .playPause)
+        XCTAssertEqual(
+            settings.record(
+                stroke: ShortcutKeystroke(
+                    keyCode: 12,
+                    modifiers: shift,
+                    charactersIgnoringModifiers: "Q"
+                )
+            ),
+            .saved
+        )
+        XCTAssertEqual(settings.displayString(for: .playPause), "⇧Q")
+        XCTAssertEqual(
+            settings.binding(for: .playPause).shortcut?.menuKeyEquivalent,
+            "Q"
+        )
+    }
+
+    func testRecordingLiteralSpaceUsesCanonicalSpaceKey() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+        settings.beginRecording(for: .playPause)
+
+        XCTAssertEqual(
+            settings.record(
+                stroke: ShortcutKeystroke(
+                    keyCode: KeyCode.space,
+                    modifiers: 0,
+                    charactersIgnoringModifiers: " "
+                )
+            ),
+            .saved
+        )
+        let shortcut = settings.binding(for: .playPause).shortcut
+        XCTAssertNil(shortcut?.recordedCharacter)
+        XCTAssertEqual(settings.displayString(for: .playPause), "Space")
+        XCTAssertEqual(shortcut?.menuKeyEquivalent, " ")
+    }
+
+    func testTabCannotOverrideKeyboardFocusTraversal() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+        settings.beginRecording(for: .playPause)
+
+        XCTAssertEqual(
+            settings.record(
+                stroke: ShortcutKeystroke(
+                    keyCode: KeyCode.tab,
+                    modifiers: 0,
+                    charactersIgnoringModifiers: "\t"
+                )
+            ),
+            .rejected(.unsupportedKey)
+        )
+        XCTAssertEqual(settings.recordingAction, .playPause)
+
+        assertFailure(
+            .unsupportedKey,
+            from: settings.setShortcut(
+                ShortcutSettings.Shortcut(
+                    keyCode: KeyCode.tab,
+                    modifiers: NSEvent.ModifierFlags.shift.rawValue
+                ),
+                for: .playPause
+            )
+        )
+    }
+
+    func testAcceptedFunctionAndNavigationKeysHaveMenuEquivalents() {
+        let acceptedSpecialKeys: [UInt16] = [
+            122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111,
+            KeyCode.home,
+            KeyCode.end,
+            KeyCode.pageUp,
+            KeyCode.pageDown,
+            KeyCode.leftArrow,
+            KeyCode.rightArrow,
+            KeyCode.upArrow,
+            KeyCode.downArrow,
+            KeyCode.delete,
+            KeyCode.forwardDelete
+        ]
+
+        for keyCode in acceptedSpecialKeys {
+            XCTAssertNotNil(
+                ShortcutSettings.menuKeyEquivalent(for: keyCode),
+                "Expected a menu equivalent for accepted key code \(keyCode)"
+            )
+        }
+    }
+
+    func testAuxiliaryPanelRoutingPrefersKeyThenFrontmostVisiblePanel() {
+        let allPanels: Set<AuxiliaryPanelKind> = [
+            .shortcutSettings,
+            .filters,
+            .documentation
+        ]
+
+        XCTAssertEqual(
+            AuxiliaryPanelRouting.target(
+                keyPanel: .filters,
+                orderedVisiblePanels: [.documentation, .shortcutSettings, .filters],
+                visiblePanels: allPanels
+            ),
+            .filters
+        )
+        XCTAssertEqual(
+            AuxiliaryPanelRouting.target(
+                keyPanel: nil,
+                orderedVisiblePanels: [.documentation, .shortcutSettings],
+                visiblePanels: [.documentation, .shortcutSettings]
+            ),
+            .documentation
+        )
+        XCTAssertNil(
+            AuxiliaryPanelRouting.target(
+                keyPanel: nil,
+                orderedVisiblePanels: [],
+                visiblePanels: []
+            )
+        )
+    }
+
     func testGlobalHotKeyPlanRegistersOnlyEnabledGlobalVariants() {
         let settings = ShortcutSettings(userDefaults: defaults)
 
@@ -346,6 +654,110 @@ final class ShortcutSettingsTests: XCTestCase {
         }
         XCTAssertEqual(forward?.carbonModifiers, UInt32(cmdKey))
         XCTAssertEqual(forwardTen?.carbonModifiers, UInt32(cmdKey | shiftKey))
+    }
+
+    func testHeldNonRepeatingGlobalHotKeySurvivesEquivalentReconfiguration() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+        let previousDescriptors = Dictionary(
+            uniqueKeysWithValues: GlobalHotKeyPlan.descriptors(for: settings)
+                .map { ($0.identifier, $0) }
+        )
+        let currentDescriptors = Dictionary(
+            uniqueKeysWithValues: GlobalHotKeyPlan.descriptors(
+                for: settings,
+                includeFrameSteps: false
+            ).map { ($0.identifier, $0) }
+        )
+        let lockIdentifier: UInt32 = 5
+        let changes = GlobalHotKeyRegistrationChanges.between(
+            current: previousDescriptors,
+            desired: currentDescriptors
+        )
+        var state = GlobalHotKeyPressState()
+
+        XCTAssertEqual(changes.retainedIdentifiers, [lockIdentifier])
+        XCTAssertEqual(changes.removedIdentifiers, [1, 2, 3, 4])
+        XCTAssertTrue(changes.addedIdentifiers.isEmpty)
+        XCTAssertTrue(
+            state.shouldDeliverPress(
+                identifier: lockIdentifier,
+                allowsRepeat: false
+            )
+        )
+        XCTAssertEqual(
+            state.pressedNonRepeatingIdentifiers,
+            [lockIdentifier]
+        )
+        XCTAssertFalse(
+            state.shouldDeliverPress(
+                identifier: lockIdentifier,
+                allowsRepeat: false
+            ),
+            "Re-registering after the lock transition must not turn a held key into a new press"
+        )
+
+        state.release(identifier: lockIdentifier)
+        XCTAssertTrue(state.pressedNonRepeatingIdentifiers.isEmpty)
+        XCTAssertTrue(
+            state.shouldDeliverPress(
+                identifier: lockIdentifier,
+                allowsRepeat: false
+            ),
+            "A physical release must allow the next lock press"
+        )
+    }
+
+    func testChangedOrRemovedGlobalHotKeyIsReplacedAndClearsHeldState() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+        let descriptors = Dictionary(
+            uniqueKeysWithValues: GlobalHotKeyPlan.descriptors(for: settings)
+                .map { ($0.identifier, $0) }
+        )
+        let lockIdentifier: UInt32 = 5
+        let lockDescriptor = try! XCTUnwrap(descriptors[lockIdentifier])
+        let changedLockDescriptor = GlobalHotKeyDescriptor(
+            identifier: lockDescriptor.identifier,
+            match: lockDescriptor.match,
+            keyCode: lockDescriptor.keyCode,
+            carbonModifiers: lockDescriptor.carbonModifiers | UInt32(optionKey),
+            displayString: "⌘⇧⌥L",
+            allowsRepeat: lockDescriptor.allowsRepeat
+        )
+        let replacement = [lockIdentifier: changedLockDescriptor]
+        let changes = GlobalHotKeyRegistrationChanges.between(
+            current: descriptors,
+            desired: replacement
+        )
+        var state = GlobalHotKeyPressState()
+
+        XCTAssertTrue(changes.retainedIdentifiers.isEmpty)
+        XCTAssertEqual(changes.removedIdentifiers, [1, 2, 3, 4, 5])
+        XCTAssertEqual(changes.addedIdentifiers, [lockIdentifier])
+        XCTAssertTrue(
+            state.shouldDeliverPress(
+                identifier: lockIdentifier,
+                allowsRepeat: false
+            )
+        )
+        for identifier in changes.removedIdentifiers {
+            state.release(identifier: identifier)
+        }
+        XCTAssertTrue(
+            state.pressedNonRepeatingIdentifiers.isEmpty,
+            "Replacing a registration must not carry held state to the new chord"
+        )
+
+        XCTAssertTrue(
+            state.shouldDeliverPress(
+                identifier: lockIdentifier,
+                allowsRepeat: false
+            )
+        )
+        state.reset()
+        XCTAssertTrue(
+            state.pressedNonRepeatingIdentifiers.isEmpty,
+            "Disabling, suspending, or invalidating registrations must clear held state"
+        )
     }
 
     func testGlobalRegistrationStatusExposesConflictRecovery() {
@@ -421,6 +833,75 @@ final class ShortcutSettingsTests: XCTestCase {
         ))
     }
 
+    func testSystemSheetsBypassApplicationShortcutRouting() {
+        XCTAssertTrue(
+            ShortcutWindowRouting.shouldBypassApplicationShortcuts(
+                isSystemSavePanel: true,
+                hasSheetParent: false
+            )
+        )
+        XCTAssertTrue(
+            ShortcutWindowRouting.shouldBypassApplicationShortcuts(
+                isSystemSavePanel: false,
+                hasSheetParent: true
+            )
+        )
+        XCTAssertFalse(
+            ShortcutWindowRouting.shouldBypassApplicationShortcuts(
+                isSystemSavePanel: false,
+                hasSheetParent: false
+            )
+        )
+    }
+
+    func testTableAndDocumentationContentRetainNativeNavigation() {
+        let nativeStrokes = [
+            ShortcutKeystroke(keyCode: KeyCode.space, modifiers: 0),
+            ShortcutKeystroke(keyCode: KeyCode.downArrow, modifiers: 0),
+            ShortcutKeystroke(keyCode: KeyCode.pageDown, modifiers: 0)
+        ]
+        let table = NSTableView()
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 320, height: 240))
+        let webContent = NSView(frame: webView.bounds)
+        webView.addSubview(webContent)
+
+        for stroke in nativeStrokes {
+            XCTAssertTrue(
+                ShortcutControlRouting.focusedResponderOwns(
+                    stroke: stroke,
+                    responder: table
+                )
+            )
+            XCTAssertTrue(
+                ShortcutControlRouting.focusedResponderOwns(
+                    stroke: stroke,
+                    responder: webContent
+                )
+            )
+        }
+
+        let commandPageDown = ShortcutKeystroke(
+            keyCode: KeyCode.pageDown,
+            modifiers: NSEvent.ModifierFlags.command.rawValue
+        )
+        XCTAssertFalse(
+            ShortcutControlRouting.focusedResponderOwns(
+                stroke: commandPageDown,
+                responder: webContent
+            )
+        )
+        XCTAssertFalse(
+            ShortcutControlRouting.focusedResponderOwns(
+                stroke: ShortcutKeystroke(
+                    keyCode: KeyCode.escape,
+                    modifiers: 0
+                ),
+                responder: webContent
+            ),
+            "Escape remains Reframer's advertised frontmost-context close command"
+        )
+    }
+
     func testTextEditorRetainsTextAndStandardEditingButNotAppCommands() {
         XCTAssertTrue(ShortcutControlRouting.focusedControlOwns(
             stroke: ShortcutKeystroke(keyCode: KeyCode.h, modifiers: 0),
@@ -470,6 +951,11 @@ final class ShortcutSettingsTests: XCTestCase {
 
         let activeOrigin = RegisteredHotKeyRouting.origin(isApplicationActive: true)
         XCTAssertEqual(activeOrigin, .localShortcut)
+        XCTAssertFalse(
+            RegisteredHotKeyRouting.shouldDeliverCarbonEvent(
+                isApplicationActive: true
+            )
+        )
         XCTAssertTrue(ReframerCommandAvailability.isAvailable(
             command,
             origin: activeOrigin,
@@ -478,6 +964,11 @@ final class ShortcutSettingsTests: XCTestCase {
 
         let inactiveOrigin = RegisteredHotKeyRouting.origin(isApplicationActive: false)
         XCTAssertEqual(inactiveOrigin, .globalShortcut)
+        XCTAssertTrue(
+            RegisteredHotKeyRouting.shouldDeliverCarbonEvent(
+                isApplicationActive: false
+            )
+        )
         XCTAssertFalse(ReframerCommandAvailability.isAvailable(
             command,
             origin: inactiveOrigin,

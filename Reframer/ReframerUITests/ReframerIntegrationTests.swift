@@ -99,6 +99,22 @@ final class ReframerIntegrationTests: XCTestCase {
         return slider.exists && slider.isEnabled
     }
 
+    private func hittableMenuItem(titled title: String) -> XCUIElement? {
+        let matches = app.menuItems.matching(
+            NSPredicate(format: "title == %@", title)
+        )
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                matches.allElementsBoundByIndex.contains(where: \.isHittable)
+            },
+            object: nil
+        )
+        guard XCTWaiter.wait(for: [expectation], timeout: 2) == .completed else {
+            return nil
+        }
+        return matches.allElementsBoundByIndex.first(where: \.isHittable)
+    }
+
     private func waitForValue(
         _ expected: String,
         in element: XCUIElement,
@@ -193,6 +209,48 @@ final class ReframerIntegrationTests: XCTestCase {
         )
         XCTAssertTrue(app.staticTexts["status-zoom"].exists)
         XCTAssertTrue(app.staticTexts["status-lock"].exists)
+    }
+
+    func testReplacementOpenPanelRetainsNativeKeyboardInput() {
+        let initialFrame = getFrameValue()
+        let playButton = app.buttons["button-play"]
+        XCTAssertTrue(waitForValue("Paused", in: playButton))
+
+        app.typeKey("o", modifierFlags: .command)
+        let openPanel = app.sheets.firstMatch
+        XCTAssertTrue(
+            openPanel.waitForExistence(timeout: 5),
+            "Command-O should present a replacement file-picker sheet"
+        )
+        let cancelButton = openPanel.buttons["Cancel"].firstMatch
+        XCTAssertTrue(
+            cancelButton.waitForExistence(timeout: 5),
+            "Command-O should present the replacement file picker"
+        )
+
+        app.typeKey(.downArrow, modifierFlags: [])
+        app.typeKey(" ", modifierFlags: [])
+        XCTAssertEqual(
+            getFrameValue(),
+            initialFrame,
+            "File-panel navigation must not pan or step the loaded video"
+        )
+        XCTAssertTrue(
+            valueRemains("Paused", in: playButton),
+            "Space in the file panel must not toggle playback"
+        )
+
+        // Space is a native Quick Look command in an open panel. Toggle it
+        // back off before verifying the panel's native Escape dismissal.
+        app.typeKey(" ", modifierFlags: [])
+        app.typeKey(.escape, modifierFlags: [])
+        if openPanel.exists {
+            app.typeKey(.escape, modifierFlags: [])
+        }
+        XCTAssertTrue(
+            waitForHittable(false, element: openPanel),
+            "Escape should dismiss the replacement file picker"
+        )
     }
 
     // MARK: - F-VP-002: Spacebar Play/Pause
@@ -526,6 +584,7 @@ final class ReframerIntegrationTests: XCTestCase {
         app.typeText("50")
         app.typeKey(.return, modifierFlags: [])
         XCTAssertTrue(waitForNumericValue(50, in: opacityField))
+        opacityField.click()
         app.typeKey(.upArrow, modifierFlags: .shift)
         XCTAssertTrue(
             waitForNumericValue(60, in: opacityField),
@@ -538,16 +597,18 @@ final class ReframerIntegrationTests: XCTestCase {
     func testQuickFilterParameterlessDisablesSlider() throws {
         XCTAssertTrue(isVideoLoaded())
 
-        let filterButton = app.buttons["button-filter-menu"]
-        XCTAssertTrue(filterButton.exists, "Filter button should exist")
+        let filterButton = app.popUpButtons["button-filter-menu"]
+        XCTAssertTrue(
+            filterButton.waitForExistence(timeout: 5),
+            "Filter pop-up should exist"
+        )
 
         // Select Invert (parameterless)
         filterButton.click()
-        let invertItem = app.menuItems["quick-filter-invert"]
-        XCTAssertTrue(
-            invertItem.waitForExistence(timeout: 2),
-            "The quick-filter button should present the Invert menu item"
-        )
+        guard let invertItem = hittableMenuItem(titled: "Invert") else {
+            XCTFail("The quick-filter button should present the Invert menu item")
+            return
+        }
         invertItem.click()
 
         let opacitySlider = app.sliders["slider-opacity"]
@@ -563,11 +624,10 @@ final class ReframerIntegrationTests: XCTestCase {
 
         // Select Brightness (adjustable) to restore slider
         filterButton.click()
-        let brightnessItem = app.menuItems["quick-filter-brightness"]
-        XCTAssertTrue(
-            brightnessItem.waitForExistence(timeout: 2),
-            "The quick-filter button should present the Brightness menu item"
-        )
+        guard let brightnessItem = hittableMenuItem(titled: "Brightness") else {
+            XCTFail("The quick-filter button should present the Brightness menu item")
+            return
+        }
         brightnessItem.click()
         XCTAssertTrue(
             waitForEnabled(true, element: opacitySlider),
@@ -612,6 +672,19 @@ final class ReframerIntegrationTests: XCTestCase {
             documentationWindow.waitForExistence(timeout: 3),
             "Command-? should open Reframer documentation"
         )
+        let documentationContent = documentationWindow
+            .descendants(matching: .any)["documentation-content"]
+            .firstMatch
+        XCTAssertTrue(
+            documentationContent.waitForExistence(timeout: 3),
+            "Documentation should expose its keyboard-scrollable content"
+        )
+        documentationContent.click()
+        app.typeKey(" ", modifierFlags: [])
+        XCTAssertTrue(
+            valueRemains("Paused", in: app.buttons["button-play"]),
+            "Space in documentation must remain native scroll input"
+        )
         app.typeKey(.escape, modifierFlags: [])
         XCTAssertTrue(
             waitForHittable(false, element: documentationWindow),
@@ -619,14 +692,49 @@ final class ReframerIntegrationTests: XCTestCase {
         )
     }
 
+    func testEscapeClosesFrontmostPanelBeforeBackgroundPanel() {
+        app.typeKey("h", modifierFlags: [])
+        let shortcutSettings = app.groups["modal-help"]
+        XCTAssertTrue(
+            shortcutSettings.waitForExistence(timeout: 3),
+            "H should open Shortcut Settings"
+        )
+
+        app.typeKey("f", modifierFlags: [])
+        let filterWindow = app.windows["window-filter-panel"]
+        XCTAssertTrue(
+            filterWindow.waitForExistence(timeout: 3),
+            "F should open Advanced Filters above Shortcut Settings"
+        )
+
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(
+            waitForHittable(false, element: filterWindow),
+            "The first Escape should close the frontmost Advanced Filters panel"
+        )
+        XCTAssertTrue(
+            shortcutSettings.isHittable,
+            "Closing Advanced Filters must not close background Shortcut Settings"
+        )
+
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(
+            waitForHittable(false, element: shortcutSettings),
+            "The second Escape should close Shortcut Settings"
+        )
+    }
+
     func testFocusedFilterControlsKeepNativeSpaceActivation() {
         let playButton = app.buttons["button-play"]
         XCTAssertTrue(waitForValue("Paused", in: playButton))
 
-        let filterButton = app.buttons["button-filter-menu"]
+        let filterButton = app.popUpButtons["button-filter-menu"]
+        XCTAssertTrue(filterButton.waitForExistence(timeout: 5))
         filterButton.click()
-        let invertItem = app.menuItems["quick-filter-invert"]
-        XCTAssertTrue(invertItem.waitForExistence(timeout: 2))
+        guard let invertItem = hittableMenuItem(titled: "Invert") else {
+            XCTFail("Quick Filter should present Invert")
+            return
+        }
         app.typeKey(.escape, modifierFlags: [])
 
         app.typeKey(" ", modifierFlags: [])
@@ -675,7 +783,7 @@ final class ReframerIntegrationTests: XCTestCase {
         )
         app.typeKey("j", modifierFlags: [])
         XCTAssertTrue(waitForValue("Playing", in: playButton))
-        app.typeKey("j", modifierFlags: [])
+        playButton.click()
         XCTAssertTrue(waitForValue("Paused", in: playButton))
 
         relaunchPreservingIsolatedPreferences()
@@ -687,7 +795,7 @@ final class ReframerIntegrationTests: XCTestCase {
         )
         app.typeKey("j", modifierFlags: [])
         XCTAssertTrue(waitForValue("Playing", in: relaunchedPlayButton))
-        app.typeKey("j", modifierFlags: [])
+        relaunchedPlayButton.click()
         XCTAssertTrue(waitForValue("Paused", in: relaunchedPlayButton))
 
         app.typeKey("h", modifierFlags: [])

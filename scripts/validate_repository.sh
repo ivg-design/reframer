@@ -28,10 +28,22 @@ python3 scripts/validate_product_contract.py
 plutil -lint \
     Reframer/Reframer.xcodeproj/project.pbxproj \
     Reframer/Reframer/Resources/Info.plist \
-    Reframer/Reframer/Resources/Reframer.entitlements
+    Reframer/Reframer/Resources/Reframer.entitlements \
+    Reframer/Reframer/Reframer.help/Contents/Info.plist
 
 python3 -m json.tool Reframer/Reframer.xctestplan >/dev/null
 python3 -m json.tool docs/product-contract.json >/dev/null
+
+if ! grep -Fq '"key" : "REFRAMER_UI_RUNNER_AUTHORIZED"' \
+        Reframer/Reframer.xctestplan ||
+   ! grep -Fq '"value" : "$(REFRAMER_UI_RUNNER_AUTHORIZED)"' \
+        Reframer/Reframer.xctestplan ||
+   ! grep -Fq \
+        '"REFRAMER_UI_RUNNER_AUTHORIZED=$REFRAMER_UI_RUNNER_AUTHORIZED"' \
+        scripts/runner_test.sh; then
+    echo "error: UI-runner authorization is not forwarded to XCTest" >&2
+    exit 65
+fi
 
 xmllint --noout \
     Reframer/Reframer.xcodeproj/xcshareddata/xcschemes/Reframer.xcscheme
@@ -88,19 +100,182 @@ if rg -n \
     exit 65
 fi
 
+CHECKOUT_ACTION="actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
+UPLOAD_ACTION="actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+while IFS= read -r action_reference; do
+    if ! [[ "$action_reference" =~ @[0-9a-f]{40}$ ]]; then
+        echo "error: workflow action is not pinned to a full commit SHA: $action_reference" >&2
+        exit 65
+    fi
+done < <(
+    rg --no-filename -o 'uses:[[:space:]]+[^[:space:]#]+' .github/workflows |
+        awk '{ print $2 }'
+)
+
+while IFS= read -r action_reference; do
+    if [ "$action_reference" != "$CHECKOUT_ACTION" ] &&
+       [ "$action_reference" != "$UPLOAD_ACTION" ]; then
+        echo "error: workflow action is not pinned to the reviewed SHA: $action_reference" >&2
+        exit 65
+    fi
+done < <(
+    rg --no-filename -o 'actions/(checkout|upload-artifact)@[A-Za-z0-9._-]+' \
+        .github/workflows
+)
+
+for workflow in .github/workflows/*.yml; do
+    if ! grep -A1 '^permissions:$' "$workflow" |
+        grep -Fxq '  contents: read'; then
+        echo "error: workflow must default to contents: read: $workflow" >&2
+        exit 65
+    fi
+    if ! grep -Fq "uses: $CHECKOUT_ACTION" "$workflow" ||
+       ! grep -Fq "uses: $UPLOAD_ACTION" "$workflow"; then
+        echo "error: workflow is missing a reviewed action pin: $workflow" >&2
+        exit 65
+    fi
+done
+
+CHECKOUT_COUNT="$(
+    rg -c "uses: $CHECKOUT_ACTION" .github/workflows/*.yml |
+        awk -F: '{ total += $2 } END { print total + 0 }'
+)"
+NONPERSISTENT_CHECKOUT_COUNT="$(
+    rg -c 'persist-credentials: false' .github/workflows/*.yml |
+        awk -F: '{ total += $2 } END { print total + 0 }'
+)"
+if [ "$CHECKOUT_COUNT" -ne "$NONPERSISTENT_CHECKOUT_COUNT" ]; then
+    echo "error: every checkout must disable persisted credentials" >&2
+    exit 65
+fi
+
 RELEASE_WORKFLOW=".github/workflows/release.yml"
 for required_release_gate in \
     "needs: [quality, ui]" \
+    "environment: release" \
+    "contents: write" \
+    "name: Verify release source" \
+    "checkout did not provide origin/main" \
+    "release source is not on origin/main" \
+    "git merge-base --is-ancestor" \
+    "release tag does not resolve to the event commit" \
+    "name: Reverify release checkout" \
+    "release checkout does not match the event commit" \
+    "remote release tag no longer resolves to the event commit" \
+    "--target \"\$GITHUB_SHA\"" \
+    "changelog must contain exactly one" \
+    "is still Unreleased" \
+    "changelog entry for" \
+    "umask 077" \
+    "reframer-notary-key.p8" \
+    "rm -f" \
     "name: Unit tests" \
     "name: Static analysis" \
     "name: Build documentation" \
     "name: Run UI tests serially" \
     "name: Package release"; do
-    if ! grep -Fq "$required_release_gate" "$RELEASE_WORKFLOW"; then
+    if ! grep -Fq -- "$required_release_gate" "$RELEASE_WORKFLOW"; then
         echo "error: release workflow is missing gate: $required_release_gate" >&2
         exit 65
     fi
 done
+
+if ! grep -Fq \
+    "github.event.pull_request.head.repo.full_name == github.repository" \
+    .github/workflows/ui-tests.yml; then
+    echo "error: self-hosted PR UI tests must reject forked source" >&2
+    exit 65
+fi
+
+for universal_workflow in .github/workflows/ci.yml .github/workflows/release.yml; do
+    if ! grep -Fq "ARCHS='arm64 x86_64'" "$universal_workflow" ||
+       ! grep -Fq "ONLY_ACTIVE_ARCH=NO" "$universal_workflow"; then
+        echo "error: Release build is not explicitly universal: $universal_workflow" >&2
+        exit 65
+    fi
+done
+
+BUNDLE_VALIDATOR="scripts/validate_bundle.sh"
+for required_bundle_gate in \
+    "release bundle must not contain symbolic links" \
+    "app Contents do not equal the executable/resource allowlist" \
+    "_CodeSignature must contain only CodeResources" \
+    "Contents/MacOS must contain only the Reframer executable" \
+    "runtime resources do not equal the allowlist" \
+    "Apple Help files do not equal the allowlist"; do
+    if ! grep -Fq "$required_bundle_gate" "$BUNDLE_VALIDATOR"; then
+        echo "error: bundle validator is missing gate: $required_bundle_gate" >&2
+        exit 65
+    fi
+done
+
+HELP_SOURCE="Reframer/Reframer/Reframer.help/Contents/Resources/en.lproj"
+HELP_INDEX="$HELP_SOURCE/search.cshelpindex"
+if [ ! -s "$HELP_INDEX" ] || [ -e "$HELP_SOURCE/search.helpindex" ]; then
+    echo "error: Apple Help must contain only the modern CoreSpotlight index" >&2
+    exit 65
+fi
+if ! /usr/bin/file -b "$HELP_INDEX" | grep -Fq 'compressed tables'; then
+    echo "error: Apple Help search index is not a compiled Help index" >&2
+    exit 65
+fi
+HELP_INDEX_LOG="$TEMP_DIR/help-index.log"
+if ! hiutil \
+    -I corespotlight \
+    -C \
+    -agv \
+    -s en \
+    -l en_US \
+    -f "$TEMP_DIR/search.cshelpindex" \
+    "$HELP_SOURCE" >"$HELP_INDEX_LOG" 2>&1; then
+    cat "$HELP_INDEX_LOG"
+    echo "error: Apple Help search index could not be regenerated" >&2
+    exit 65
+fi
+
+TRACKED_HELP_PLIST="$TEMP_DIR/tracked-help-index.plist"
+FRESH_HELP_PLIST="$TEMP_DIR/fresh-help-index.plist"
+if ! /usr/bin/compression_tool \
+        -decode \
+        -i "$HELP_INDEX" \
+        -o "$TRACKED_HELP_PLIST" ||
+   ! /usr/bin/compression_tool \
+        -decode \
+        -i "$TEMP_DIR/search.cshelpindex" \
+        -o "$FRESH_HELP_PLIST"; then
+    echo "error: Apple Help search index could not be decoded" >&2
+    exit 65
+fi
+
+python3 - "$TRACKED_HELP_PLIST" "$FRESH_HELP_PLIST" <<'PY'
+import hashlib
+import plistlib
+import re
+import sys
+
+uuid_pattern = re.compile(
+    rb"[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}"
+)
+
+
+def searchable_item_hashes(path: str) -> list[str]:
+    with open(path, "rb") as index_file:
+        archive = plistlib.load(index_file)
+    chunks = [
+        uuid_pattern.sub(b"<UUID>", value)
+        for value in archive.get("$objects", [])
+        if isinstance(value, bytes)
+    ]
+    return sorted(hashlib.sha256(chunk).hexdigest() for chunk in chunks)
+
+
+tracked = searchable_item_hashes(sys.argv[1])
+fresh = searchable_item_hashes(sys.argv[2])
+if not tracked or tracked != fresh:
+    raise SystemExit(
+        "error: Apple Help search index is stale; regenerate it with hiutil"
+    )
+PY
 
 if [ -e default.profraw ] &&
    git ls-files --error-unmatch default.profraw >/dev/null 2>&1; then

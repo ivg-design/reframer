@@ -31,6 +31,13 @@
       }
     ],
     "decoder": "AVFoundation",
+    "trackSelection": "First enabled usable video track, otherwise first usable video track; playback, Core Image filtering, metadata, and navigation use the same track",
+    "replacementStartsPaused": true,
+    "frameNavigation": {
+      "exactSource": "Presentation timestamps from the selected video track",
+      "estimatedFallback": "Clearly labeled constant-rate estimate while indexing, when exact sample cursors are unavailable, or when the exact-sample limit is exceeded",
+      "maximumExactSamples": 2000000
+    },
     "frameStep": {
       "forward": "Page Down",
       "backward": "Page Up",
@@ -46,7 +53,7 @@
     "toggleLockRegistration": "Registered in every video and lock state; suspended only during shortcut recording and removed on shutdown",
     "frameStepAvailability": "Loaded video with lock mode enabled and exact or estimated sample navigation available",
     "frameStepRegistration": "Registered only while frame stepping is actionable",
-    "inactiveFrameStepHandling": "Not registered, received, or swallowed by Reframer",
+    "inactiveFrameStepHandling": "Not registered, received, or swallowed through Reframer's global path while another app is active",
     "toggleLock": "Command-Shift-L",
     "stepForward": "Command-Page Down",
     "stepBackward": "Command-Page Up",

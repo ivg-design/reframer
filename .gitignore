@@ -23,6 +23,10 @@ Thumbs.db
 *.swo
 *~
 
+# Python validation caches
+__pycache__/
+*.py[cod]
+
 # Swift Package Manager
 .build/
 Package.resolved

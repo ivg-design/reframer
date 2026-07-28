@@ -10,18 +10,26 @@ concurrency:
   group: ui-tests-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   ui-tests:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'run-ui-tests')
+      (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 'run-ui-tests')
+      )
     name: Interactive macOS UI suite
     runs-on: [self-hosted, macOS, reframer-ui]
     timeout-minutes: 45
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Runner preflight
         run: scripts/ui_test_preflight.sh
@@ -38,7 +46,7 @@ jobs:
 
       - name: Upload UI test diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: reframer-ui-test-diagnostics
           path: ${{ runner.temp }}/reframer-ui-test-artifacts

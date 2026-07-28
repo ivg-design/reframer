@@ -31,6 +31,11 @@ has exact or estimated sample navigation. Focused controls keep only the
 activation and navigation keys they normally own, so H, F, L, R, 0, and
 customized plain or Shift chords continue to work from buttons and other
 unrelated controls. Text editors retain normal typing and editing.
+System file and alert sheets bypass Reframer commands, and the documentation
+view keeps native Space, arrow, and page scrolling.
+
+Holding a toggle, panel, reset, or open shortcut does not fire it repeatedly.
+Frame stepping and panning are the intentional repeatable actions.
 
 ## Customize
 
@@ -40,6 +45,7 @@ global chords. A replacement survives relaunch and the old chord no longer
 fires. Global shortcuts can be disabled independently. During normal operation,
 the enabled lock chord stays registered in every video and lock state. The
 frame-step variants are registered only in their actionable state, so Reframer
-does not receive or swallow those keys at other times. Registered hot keys
-require no Accessibility or Input Monitoring permission. If another app already
-owns a chord, the same panel identifies the failure and offers a retry action.
+does not receive or swallow those keys through the global path while another
+app is active. Registered hot keys require no Accessibility or Input Monitoring
+permission. If another app already owns a chord, the same panel identifies the
+failure and offers a retry action.

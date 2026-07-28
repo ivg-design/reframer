@@ -1,8 +1,11 @@
 import Cocoa
 import Combine
 
-/// Custom button that shows quick filter icon and opens dropdown for single-filter selection
-class FilterMenuButton: NSView, ReframerShortcutOwningResponder {
+/// Native pop-up button for single-filter selection. Using NSPopUpButton keeps
+/// the menu in AppKit's keyboard and accessibility hierarchy instead of
+/// presenting a transient menu from an NSView that merely advertises a
+/// pop-up-button role.
+class FilterMenuButton: NSPopUpButton, ReframerShortcutOwningResponder {
 
     // MARK: - Properties
 
@@ -11,12 +14,11 @@ class FilterMenuButton: NSView, ReframerShortcutOwningResponder {
     }
 
     private var cancellables = Set<AnyCancellable>()
-    private let imageView = NSImageView()
 
     // MARK: - Initialization
 
     override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
+        super.init(frame: frameRect, pullsDown: false)
         setup()
     }
 
@@ -25,29 +27,18 @@ class FilterMenuButton: NSView, ReframerShortcutOwningResponder {
         setup()
     }
 
-    override var acceptsFirstResponder: Bool { true }
-
     private func setup() {
-        wantsLayer = true
         setAccessibilityElement(true)
         setAccessibilityRole(.popUpButton)
         setAccessibilityLabel("Quick filter")
         setAccessibilityHelp("Choose a quick video filter or open advanced filters")
         setAccessibilityIdentifier("quick-filter-menu")
+        setAccessibilityEnabled(true)
+        isBordered = false
+        bezelStyle = .inline
+        imagePosition = .imageOnly
+        imageScaling = .scaleProportionallyDown
         focusRingType = .exterior
-
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.imageScaling = .scaleProportionallyDown
-        imageView.contentTintColor = .secondaryLabelColor
-        imageView.setAccessibilityElement(false)
-        addSubview(imageView)
-
-        NSLayoutConstraint.activate([
-            imageView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            imageView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            imageView.widthAnchor.constraint(equalToConstant: 20),
-            imageView.heightAnchor.constraint(equalToConstant: 20)
-        ])
 
         updateIcon()
     }
@@ -67,32 +58,30 @@ class FilterMenuButton: NSView, ReframerShortcutOwningResponder {
     }
 
     private func updateIcon() {
-        guard let state = videoState else {
-            imageView.image = NSImage(systemSymbolName: "checkerboard.rectangle", accessibilityDescription: "Opacity")
-            imageView.contentTintColor = .secondaryLabelColor
-            return
-        }
+        let state = videoState
+        menu = makeFilterMenu()
 
-        if let filter = state.quickFilter {
+        if let filter = state?.quickFilter {
             // Quick filter active - show that filter's icon
-            imageView.image = NSImage(systemSymbolName: filter.iconName, accessibilityDescription: filter.rawValue)
-            imageView.contentTintColor = .controlAccentColor
+            selectItem(withTitle: filter.rawValue)
+            image = NSImage(
+                systemSymbolName: filter.iconName,
+                accessibilityDescription: filter.rawValue
+            )
+            contentTintColor = .controlAccentColor
             toolTip = "Quick filter: \(filter.rawValue)"
             setAccessibilityValue(filter.rawValue)
         } else {
             // No quick filter - show opacity icon (checkerboard)
-            imageView.image = NSImage(systemSymbolName: "checkerboard.rectangle", accessibilityDescription: "Opacity")
-            imageView.contentTintColor = .secondaryLabelColor
+            selectItem(withTitle: "None")
+            image = NSImage(
+                systemSymbolName: "checkerboard.rectangle",
+                accessibilityDescription: "Opacity"
+            )
+            contentTintColor = .secondaryLabelColor
             toolTip = "Quick filter: None"
             setAccessibilityValue("None")
         }
-    }
-
-    // MARK: - Mouse Handling
-
-    override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
-        showFilterMenu()
     }
 
     private func resetFilterToDefault() {
@@ -104,6 +93,7 @@ class FilterMenuButton: NSView, ReframerShortcutOwningResponder {
             // Reset opacity to 100%
             state.opacity = 1.0
         }
+        updateIcon()
     }
 
     // MARK: - Filter Menu (Single Select, Simple Filters Only)
@@ -136,6 +126,7 @@ class FilterMenuButton: NSView, ReframerShortcutOwningResponder {
             item.action = #selector(filterSelected(_:))
             item.representedObject = filter
             item.identifier = quickFilterIdentifier(for: filter)
+            item.setAccessibilityLabel("Quick filter: \(filter.rawValue)")
 
             // Radio-style: checkmark on active filter only
             if videoState?.quickFilter == filter {
@@ -144,8 +135,8 @@ class FilterMenuButton: NSView, ReframerShortcutOwningResponder {
                 item.state = .off
             }
 
-        menu.addItem(item)
-    }
+            menu.addItem(item)
+        }
 
         let resetItem = NSMenuItem(
             title: videoState?.quickFilter == nil ? "Reset Opacity" : "Reset Filter Strength",
@@ -166,12 +157,6 @@ class FilterMenuButton: NSView, ReframerShortcutOwningResponder {
         return menu
     }
 
-    private func showFilterMenu() {
-        let menu = makeFilterMenu()
-        let location = NSPoint(x: 0, y: bounds.height)
-        menu.popUp(positioning: nil, at: location, in: self)
-    }
-
     @objc private func resetCurrentValue(_ sender: Any?) {
         resetFilterToDefault()
     }
@@ -187,32 +172,10 @@ class FilterMenuButton: NSView, ReframerShortcutOwningResponder {
 
     @objc func showAdvancedFilters(_ sender: Any?) {
         videoState?.showFilterPanel = true
-    }
-
-    // MARK: - Right Click
-
-    override func rightMouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
-        showFilterMenu()
-    }
-
-    // MARK: - Accessibility
-
-    override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        case 36, 49, 76: // Return, Space, keypad Enter
-            showFilterMenu()
-        default:
-            super.keyDown(with: event)
-        }
+        updateIcon()
     }
 
     func ownsReframerShortcut(_ stroke: ShortcutKeystroke) -> Bool {
         stroke.modifiers == 0 && [36, 49, 76].contains(stroke.keyCode)
-    }
-
-    override func accessibilityPerformPress() -> Bool {
-        showFilterMenu()
-        return true
     }
 }

@@ -8,8 +8,9 @@ while you work in the app underneath.
 ## What it does
 
 - Loads local `.mp4`, `.m4v`, and `.mov` files through AVFoundation
-- Steps from one decoded video sample to the next, including fractional-rate
-  and variable-timing media
+- Indexes decoded presentation samples for exact fractional-rate and
+  variable-timing navigation, with a clearly labeled bounded estimate when
+  exact indexing is unavailable
 - Plays, pauses, scrubs, zooms, pans, filters, mutes, and adjusts opacity
 - Persists opacity, volume, window placement, filter settings, and customized
   shortcuts
@@ -17,12 +18,18 @@ while you work in the app underneath.
 - Keeps the enabled global lock chord available from any video or lock state
 - Registers global frame-step chords only while a video is loaded, the overlay
   is locked, and exact or estimated sample navigation is available
-- Never monitors general keyboard input or reserves inactive frame-step chords
-- Exposes keyboard and VoiceOver names, values, state, and actions
+- Never monitors general keyboard input from other apps or reserves inactive
+  global frame-step chords
+- Exposes keyboard and VoiceOver names, values, state, and actions, including
+  complete slider ranges/orientation and independently reachable ready-state
+  badges
 
 Reframer does not stream media or download executable components. A file whose
-container is accepted can still be rejected when macOS cannot decode its video
-track; the app reports that failure instead of claiming the load succeeded.
+container is accepted can still be rejected when macOS cannot decode a usable
+video track; the app reports that failure instead of claiming the load
+succeeded. When a file contains multiple video tracks, the enabled usable track
+selected for playback and Core Image filtering is also the source of
+dimensions and frame navigation.
 
 ## Requirements
 
@@ -44,7 +51,8 @@ track; the app reports that failure instead of claiming the load succeeded.
 | Reset zoom / view | 0 / R |
 | Toggle lock locally / globally | L / Command-Shift-L |
 | Filters | F |
-| Help and shortcut settings | H |
+| Shortcut settings | H |
+| Documentation | Command-? |
 
 The enabled global lock chord stays registered during normal operation. The
 four frame-step variants are registered only when a loaded, locked video has
@@ -73,10 +81,10 @@ xcodebuild build \
 scripts/runner_test.sh
 ```
 
-The normal CI suite builds Debug and Release, runs static analysis, validates
-the product and bundle contracts, builds DocC, and runs unit tests. The UI suite
-runs separately in a logged-in macOS session whose operator has explicitly
-acknowledged Xcode UI automation.
+The normal CI suite builds Debug and universal Release, runs static analysis,
+validates the product and bundle contracts, builds DocC, and runs unit tests.
+The UI suite runs separately in an unlocked, logged-in macOS session whose
+operator has explicitly acknowledged Xcode UI automation.
 
 ## Release
 
@@ -91,7 +99,10 @@ run. No Developer ID distribution signing, Apple notarization submission,
 stapling, or Gatekeeper assessment has been recorded without the required Apple
 credentials.
 
-See [Release Process](docs/RELEASE.md).
+See [Release Process](docs/RELEASE.md) for the local process and the GitHub
+runner, environment, variable, secret, and source-protection prerequisites.
+The latest verification record is
+[Audit and Release Readiness](docs/AUDIT_2026-07-28.md).
 
 ## License
 

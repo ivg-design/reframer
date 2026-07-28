@@ -77,6 +77,12 @@ a:hover {
     text-decoration: underline;
 }
 
+a:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 3px;
+}
+
 ul, ol {
     margin: 0 0 16px 0;
     padding-left: 24px;
@@ -164,7 +170,7 @@ code {
     text-decoration: none;
 }
 
-.topic-card h3 {
+.topic-card h2 {
     margin: 0 0 4px 0;
     font-size: 15px;
 }
@@ -186,4 +192,48 @@ code {
 .tip strong {
     display: block;
     margin-bottom: 4px;
+}
+
+@media (max-width: 520px) {
+    body {
+        padding: 20px 16px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+
+    h2 {
+        margin-top: 24px;
+    }
+
+    .topic-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    th, td {
+        padding: 8px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .topic-card:hover {
+        transform: none;
+    }
 }

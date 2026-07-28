@@ -1,4 +1,8 @@
-# Reframer first-class remediation mission
+# Historical Reframer first-class remediation mission
+
+This completed mission-control record preserves implementation provenance,
+including temporary branches and worktrees. Current behavior and evidence live
+in the root README, product contract, feature verification, and dated audit.
 
 Mission ID: `reframer-first-class-20260728`
 
@@ -25,10 +29,10 @@ explicitly listed UI-session and Apple-credential gates below.
 
 | Track | Branch | Worktree | Ownership |
 |---|---|---|---|
-| Playback correctness | `codex/reframer-playback` | `/private/tmp/reframer-remediation-20260728/playback` | `VideoView`, `VideoState`, formats, filter/playback tests |
-| Shortcut platform | `codex/reframer-shortcuts` | `/private/tmp/reframer-remediation-20260728/shortcuts` | shortcut registry/routing/customization, menus, shortcut tests |
-| UX and accessibility | `codex/reframer-ux` | `/private/tmp/reframer-remediation-20260728/ux` | edge hit testing, toolbar/filter/drop-zone accessibility and layout |
-| Integration and release | `main` | `/Users/ivg/github/reframer` | documentation contract, CI, metadata, packaging, window integration, merge review |
+| Playback correctness | `codex/reframer-playback` | temporary isolated worktree | `VideoView`, `VideoState`, formats, filter/playback tests |
+| Shortcut platform | `codex/reframer-shortcuts` | temporary isolated worktree | shortcut registry/routing/customization, menus, shortcut tests |
+| UX and accessibility | `codex/reframer-ux` | temporary isolated worktree | edge hit testing, toolbar/filter/drop-zone accessibility and layout |
+| Integration and release | `main` | repository root | documentation contract, CI, metadata, packaging, window integration, merge review |
 
 ## Worker policy
 
@@ -43,12 +47,12 @@ explicitly listed UI-session and Apple-credential gates below.
 scripts/validate_repository.sh
 TEST_SCOPE=unit scripts/runner_test.sh
 
-xcodebuild -project Reframer/Reframer.xcodeproj -scheme Reframer -configuration Debug -derivedDataPath /private/tmp/reframer-final-derived -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
-xcodebuild -project Reframer/Reframer.xcodeproj -scheme Reframer -configuration Release -derivedDataPath /private/tmp/reframer-final-universal -destination 'generic/platform=macOS' ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build
-xcodebuild -project Reframer/Reframer.xcodeproj -scheme Reframer -configuration Debug -derivedDataPath /private/tmp/reframer-final-derived -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO analyze
-xcodebuild -project Reframer/Reframer.xcodeproj -scheme Reframer -derivedDataPath /private/tmp/reframer-final-derived -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO docbuild
-xcodebuild -project Reframer/Reframer.xcodeproj -scheme Reframer -derivedDataPath /private/tmp/reframer-final-derived -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build-for-testing
-xcrun ibtool --warnings --errors --notices --compile /private/tmp/Reframer-ControlBar.nib Reframer/Reframer/Resources/ControlBar.xib
+xcodebuild -project Reframer/Reframer.xcodeproj -scheme Reframer -configuration Debug -derivedDataPath "$TMPDIR/Reframer-Debug" -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project Reframer/Reframer.xcodeproj -scheme Reframer -configuration Release -derivedDataPath "$TMPDIR/Reframer-Release" -destination 'generic/platform=macOS' ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project Reframer/Reframer.xcodeproj -scheme Reframer -configuration Debug -derivedDataPath "$TMPDIR/Reframer-Analyze" -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO analyze
+xcodebuild -project Reframer/Reframer.xcodeproj -scheme Reframer -derivedDataPath "$TMPDIR/Reframer-Docs" -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO docbuild
+xcodebuild -project Reframer/Reframer.xcodeproj -scheme Reframer -derivedDataPath "$TMPDIR/Reframer-Tests" -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build-for-testing
+xcrun ibtool --warnings --errors --notices --compile "$TMPDIR/Reframer-ControlBar.nib" Reframer/Reframer/Resources/ControlBar.xib
 ```
 
 UI automation must run in a logged-in macOS session whose operator has

@@ -46,8 +46,11 @@ trap cleanup EXIT
 ARCHIVE_PATH="$WORK_DIR/Reframer.xcarchive"
 APP_PATH="$ARCHIVE_PATH/Products/Applications/Reframer.app"
 SUBMISSION_ZIP="$WORK_DIR/Reframer-notarization.zip"
+NOTARY_RESULT="$WORK_DIR/notarization-result.json"
 DIST_DIR="$REPO_PATH/dist"
 FINAL_ZIP="$DIST_DIR/Reframer-$VERSION-macOS.zip"
+NOTARY_RECORD="$DIST_DIR/Reframer-$VERSION-notarization.json"
+CHECKSUM_FILE="$DIST_DIR/SHA256SUMS.txt"
 
 xcodebuild archive \
     -project "$PROJECT_PATH" \
@@ -112,7 +115,28 @@ if [ -n "${NOTARY_KEYCHAIN:-}" ]; then
     NOTARY_ARGUMENTS+=(--keychain "$NOTARY_KEYCHAIN")
 fi
 
-xcrun notarytool submit "$SUBMISSION_ZIP" "${NOTARY_ARGUMENTS[@]}" --wait
+xcrun notarytool submit \
+    "$SUBMISSION_ZIP" \
+    "${NOTARY_ARGUMENTS[@]}" \
+    --wait \
+    --output-format json |
+    tee "$NOTARY_RESULT"
+
+NOTARY_ID="$(
+    /usr/bin/python3 -c \
+        'import json,sys; print(json.load(open(sys.argv[1])).get("id", ""))' \
+        "$NOTARY_RESULT"
+)"
+NOTARY_STATUS="$(
+    /usr/bin/python3 -c \
+        'import json,sys; print(json.load(open(sys.argv[1])).get("status", ""))' \
+        "$NOTARY_RESULT"
+)"
+if [ -z "$NOTARY_ID" ] || [ "$NOTARY_STATUS" != "Accepted" ]; then
+    echo "error: notarization was not accepted: id=$NOTARY_ID status=$NOTARY_STATUS" >&2
+    exit 65
+fi
+
 xcrun stapler staple "$APP_PATH"
 xcrun stapler validate "$APP_PATH"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
@@ -120,5 +144,14 @@ xcrun stapler validate "$APP_PATH"
 
 mkdir -p "$DIST_DIR"
 /usr/bin/ditto -c -k --keepParent "$APP_PATH" "$FINAL_ZIP"
+/usr/bin/install -m 0644 "$NOTARY_RESULT" "$NOTARY_RECORD"
+(
+    cd "$DIST_DIR"
+    /usr/bin/shasum -a 256 \
+        "$(basename "$FINAL_ZIP")" \
+        "$(basename "$NOTARY_RECORD")" >"$(basename "$CHECKSUM_FILE")"
+)
 
+echo "Notarization submission: $NOTARY_ID"
 echo "Release artifact: $FINAL_ZIP"
+echo "Release checksums: $CHECKSUM_FILE"

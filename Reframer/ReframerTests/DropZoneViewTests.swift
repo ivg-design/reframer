@@ -28,6 +28,27 @@ final class DropZoneViewTests: XCTestCase {
         XCTAssertNil(state.videoURL)
     }
 
+    func testMixedDropSelectsTheSameFirstSupportedURLItValidates() {
+        let unsupported = URL(fileURLWithPath: "/tmp/cover.png")
+        let firstSupported = URL(fileURLWithPath: "/tmp/clip.mov")
+        let secondSupported = URL(fileURLWithPath: "/tmp/clip.mp4")
+
+        XCTAssertEqual(
+            DropZoneView.firstSupportedVideoURL(
+                in: [unsupported, firstSupported, secondSupported]
+            ),
+            firstSupported
+        )
+        XCTAssertNil(
+            DropZoneView.firstSupportedVideoURL(
+                in: [
+                    unsupported,
+                    URL(fileURLWithPath: "/tmp/notes.txt")
+                ]
+            )
+        )
+    }
+
     func testDropZoneIsKeyboardAndAccessibilityActionable() {
         let view = DropZoneView(frame: NSRect(x: 0, y: 0, width: 320, height: 180))
         let notification = expectation(forNotification: .openVideo, object: nil)
@@ -66,8 +87,14 @@ final class FilterMenuButtonTests: XCTestCase {
         XCTAssertEqual(filterItems, VideoFilter.simpleFilters)
         XCTAssertNotNil(menu.items.first(where: { $0.title == "None" }))
         XCTAssertNotNil(menu.items.first(where: { $0.title == "Advanced Filters..." }))
+        XCTAssertEqual(
+            menu.items.first(where: { $0.title == "Brightness" })?
+                .accessibilityLabel(),
+            "Quick filter: Brightness"
+        )
         XCTAssertEqual(button.accessibilityRole(), .popUpButton)
         XCTAssertEqual(button.accessibilityValue() as? String, "None")
+        XCTAssertEqual(button.isAccessibilityEnabled(), true)
     }
 }
 

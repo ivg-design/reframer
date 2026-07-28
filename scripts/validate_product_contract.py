@@ -8,13 +8,20 @@ import json
 import plistlib
 import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
+from typing import Optional
+from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_PATH = ROOT / "docs" / "product-contract.json"
 PROJECT_PATH = ROOT / "Reframer" / "Reframer.xcodeproj" / "project.pbxproj"
 INFO_PATH = ROOT / "Reframer" / "Reframer" / "Resources" / "Info.plist"
+HELP_ROOT = ROOT / "Reframer" / "Reframer" / "Reframer.help"
+HELP_INFO_PATH = HELP_ROOT / "Contents" / "Info.plist"
+HELP_LOCALIZED_ROOT = HELP_ROOT / "Contents" / "Resources" / "en.lproj"
+LICENSE_PATH = ROOT / "LICENSE"
 ENTITLEMENTS_PATH = (
     ROOT / "Reframer" / "Reframer" / "Resources" / "Reframer.entitlements"
 )
@@ -49,6 +56,7 @@ PUBLIC_DOCUMENTS = (
     ROOT / "Reframer" / "README.md",
     ROOT / "docs" / "FEATURES.md",
     ROOT / "docs" / "FEATURE_TESTS.md",
+    ROOT / "docs" / "AUDIT_2026-07-28.md",
     ROOT / "docs" / "PRODUCT_CONTRACT.md",
     ROOT / "docs" / "RELEASE.md",
     ROOT / "docs" / "THREAT_MODEL.md",
@@ -97,6 +105,64 @@ def normalized_prose(text: str) -> str:
     """Make Markdown and simple Help HTML comparable without an HTML parser."""
     without_tags = re.sub(r"<[^>]+>", " ", text)
     return re.sub(r"\s+", " ", without_tags).strip().lower()
+
+
+class HelpLinkParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.targets: list[str] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, Optional[str]]],
+    ) -> None:
+        for name, value in attrs:
+            if name in {"href", "src"} and value:
+                self.targets.append(value)
+
+
+def validate_relative_target(source: Path, raw_target: str) -> None:
+    target = raw_target.strip()
+    if target.startswith("<") and ">" in target:
+        target = target[1 : target.index(">")]
+    elif " " in target:
+        target = target.split(maxsplit=1)[0]
+
+    target = unquote(target)
+    parsed = urlsplit(target)
+    if parsed.scheme or parsed.netloc or target.startswith(("#", "<doc:")):
+        return
+
+    relative_path = parsed.path
+    if not relative_path:
+        return
+
+    resolved = (source.parent / relative_path).resolve()
+    if not resolved.exists():
+        fail(
+            f"{source.relative_to(ROOT)} links to missing path "
+            f"{raw_target!r}"
+        )
+
+
+def validate_public_links(public_texts: list[tuple[Path, str]]) -> None:
+    link_documents = dict(public_texts)
+    archive_root = ROOT / "docs" / "archive"
+    for path in ROOT.rglob("*.md"):
+        if path.is_relative_to(archive_root):
+            continue
+        link_documents.setdefault(path, path.read_text(encoding="utf-8"))
+
+    for path, text in link_documents.items():
+        if path.suffix == ".md":
+            for target in re.findall(r"!?\[[^\]]*\]\(([^)]+)\)", text):
+                validate_relative_target(path, target)
+        elif path.suffix == ".html":
+            parser = HelpLinkParser()
+            parser.feed(text)
+            for target in parser.targets:
+                validate_relative_target(path, target)
 
 
 def validate_shortcut_surfaces() -> None:
@@ -174,7 +240,8 @@ def validate_shortcut_implementation(contract: dict[str, object]) -> None:
         "stepMultiplier": 10,
         "frameStepRegistration": "Registered only while frame stepping is actionable",
         "inactiveFrameStepHandling": (
-            "Not registered, received, or swallowed by Reframer"
+            "Not registered, received, or swallowed through Reframer's "
+            "global path while another app is active"
         ),
     }
     for key, expected in expected_global_values.items():
@@ -211,6 +278,42 @@ def validate_shortcut_implementation(contract: dict[str, object]) -> None:
         fail("frame hot keys are not registered behind the actionable-state guard")
 
 
+def validate_playback_implementation(contract: dict[str, object]) -> None:
+    playback = contract["playback"]
+    frame_navigation = playback.get("frameNavigation", {})
+    expected_sample_limit = 2_000_000
+    if frame_navigation.get("maximumExactSamples") != expected_sample_limit:
+        fail("exact-sample ceiling is not canonical")
+    if playback.get("replacementStartsPaused") is not True:
+        fail("replacement playback contract must start paused")
+    if "same track" not in playback.get("trackSelection", ""):
+        fail("multi-track contract must keep rendering and navigation coherent")
+
+    timeline_source = (
+        ROOT
+        / "Reframer"
+        / "Reframer"
+        / "Utilities"
+        / "VideoFrameTimeline.swift"
+    ).read_text(encoding="utf-8")
+    if "maximumExactSampleCount = 2_000_000" not in timeline_source:
+        fail("Swift exact-sample ceiling does not match the product contract")
+
+    video_view_source = (
+        ROOT / "Reframer" / "Reframer" / "Views" / "VideoView.swift"
+    ).read_text(encoding="utf-8")
+    load_sequence = re.search(
+        r"func loadVideo\(url: URL\).*?state\.cancelScrubbing\(\)"
+        r".*?state\.isPlaying = false.*?cleanup\(\)",
+        video_view_source,
+        flags=re.DOTALL,
+    )
+    if load_sequence is None:
+        fail("replacement load does not clear playback before teardown")
+    if "alignVideoTrackSelection(for: item)" not in video_view_source:
+        fail("AVPlayerItem is not aligned to the selected metadata track")
+
+
 def main() -> None:
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     product = contract["product"]
@@ -236,11 +339,17 @@ def main() -> None:
 
     if re.fullmatch(r"\d+\.\d+\.\d+", version) is None:
         fail(f"contract version is not semantic: {version}")
+    validate_playback_implementation(contract)
 
     project = PROJECT_PATH.read_text(encoding="utf-8")
     project_versions = set(re.findall(r"MARKETING_VERSION = ([^;]+);", project))
     if project_versions != {version}:
         fail(f"project versions {sorted(project_versions)} do not equal {version}")
+
+    build_versions = set(re.findall(r"CURRENT_PROJECT_VERSION = ([^;]+);", project))
+    if len(build_versions) != 1 or not next(iter(build_versions)).isdigit():
+        fail(f"project build versions are not one numeric value: {build_versions}")
+    build_version = next(iter(build_versions))
 
     deployment_targets = set(re.findall(r"MACOSX_DEPLOYMENT_TARGET = ([^;]+);", project))
     if deployment_targets != {minimum_macos}:
@@ -258,6 +367,28 @@ def main() -> None:
         fail("Info.plist must derive its build from CURRENT_PROJECT_VERSION")
     if info.get("CFBundleIdentifier") != "$(PRODUCT_BUNDLE_IDENTIFIER)":
         fail("Info.plist must derive its identifier from PRODUCT_BUNDLE_IDENTIFIER")
+    expected_copyright = "Copyright © 2026 IVG Design"
+    if info.get("NSHumanReadableCopyright") != expected_copyright:
+        fail("Info.plist copyright does not identify IVG Design consistently")
+    if "Copyright (c) 2026 IVG Design" not in LICENSE_PATH.read_text(encoding="utf-8"):
+        fail("LICENSE copyright does not identify IVG Design consistently")
+
+    with HELP_INFO_PATH.open("rb") as help_info_file:
+        help_info = plistlib.load(help_info_file)
+    if help_info.get("CFBundleShortVersionString") != version:
+        fail("Apple Help version does not match the product version")
+    if help_info.get("CFBundleVersion") != build_version:
+        fail("Apple Help build does not match the product build")
+    if help_info.get("CFBundleIdentifier") != "com.reframer.help":
+        fail("Apple Help bundle identifier is not com.reframer.help")
+    if help_info.get("HPDBookIndexPath") != "search.cshelpindex":
+        fail("Apple Help must use the modern CoreSpotlight search index")
+    modern_help_index = HELP_LOCALIZED_ROOT / "search.cshelpindex"
+    legacy_help_index = HELP_LOCALIZED_ROOT / "search.helpindex"
+    if not modern_help_index.is_file() or modern_help_index.stat().st_size == 0:
+        fail("Apple Help modern search index is missing or empty")
+    if legacy_help_index.exists():
+        fail("Apple Help legacy search index must not remain in the product")
 
     if f"PRODUCT_BUNDLE_IDENTIFIER = {bundle_identifier};" not in project:
         fail(f"app bundle identifier is not {bundle_identifier}")
@@ -306,6 +437,7 @@ def main() -> None:
         fail("Info.plist must not import unsupported custom media types")
 
     public_texts = read_public_texts()
+    validate_public_links(public_texts)
     for path, text in public_texts:
         normalized = text.lower()
         for stale_claim, reason in STALE_CLAIMS.items():
@@ -325,6 +457,7 @@ def main() -> None:
         "MOV",
         "no Accessibility or Input Monitoring permission",
         "App Sandbox",
+        "2,000,000",
     )
     for claim in required_claims:
         if claim not in combined:

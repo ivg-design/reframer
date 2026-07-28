@@ -12,6 +12,10 @@ machine-readable counterpart is
 - A supported extension is not a promise that every embedded codec is
   decodable. Reframer preflights the selected asset and reports failure before
   presenting it as loaded.
+- Reframer selects the first enabled usable video track, or the first usable
+  fallback track when no enabled track qualifies. Playback, Core Image
+  filtering, dimensions, nominal rate, and navigation all use that selected
+  track.
 - Playback is local and offline.
 
 ## Commands
@@ -45,31 +49,43 @@ steps), and exposes directional VoiceOver actions.
 Shortcut editing must prevent collisions, reserved system chords, modifier
 collapse, and unsafe unmodified global keys. A customized chord replaces its
 old chord completely and fires once. Clearing or disabling an action survives
-relaunch.
+relaunch. Toggle, panel, reset, and open actions consume key autorepeat without
+dispatching again; frame stepping and panning intentionally repeat while held.
 
 Global actions use exclusive system-registered hot keys. During normal
 operation, the enabled global lock chord stays registered in every video and
 lock state. The four enabled frame-step variants are registered only while a
 video is loaded, the overlay is locked, and exact or estimated sample
 navigation is available. They are unregistered outside that actionable state,
-so Reframer neither receives nor swallows those key combinations then.
+so Reframer neither receives nor swallows those key combinations through the
+global path while another app is active.
 
-Registrations are rebuilt when shortcut settings or the actionable playback
-state changes. They are suspended while the shortcut recorder is listening and
-removed on shutdown. Reframer does not install a broad global event monitor and
-requires neither Accessibility nor Input Monitoring permission. Registration
-conflicts are surfaced in Shortcut Settings with a retry action.
+Registrations are updated incrementally when shortcut settings or the
+actionable playback state changes, retaining unchanged registrations and their
+physical held-key state. They are suspended while the shortcut recorder is
+listening and removed on shutdown. Reframer does not install a broad global
+event monitor and requires neither Accessibility nor Input Monitoring
+permission. Registration conflicts are surfaced in Shortcut Settings with a
+retry action.
 
 ## State
 
 - Loading, ready, playing, paused, ended, and failed are distinct states.
 - A new load cancels or invalidates all callbacks from the previous generation.
+- Model playback intent is authoritative: a delayed AVPlayer playing callback
+  after a rapid pause is stopped rather than allowed to revive playback.
+- Selecting a replacement stops the prior playback intent; loading and the
+  newly ready replacement remain paused.
 - The desired sample index is the authority during burst input.
+- Exact navigation uses presentation timestamps from the selected video track.
+  While exact indexing is running, when sample cursors are unavailable, or when
+  the 2,000,000-sample memory ceiling is reached, Reframer retains a visibly
+  labeled constant-rate estimate instead of allocating an unbounded table.
 - If an estimated frame table is replaced while a seek is pending, the latest
   requested presentation time and replay intent are remapped to the exact table
   under a new generation.
 - A scrub may use tolerant preview seeks while dragging; release resolves to
-  the exact target sample.
+  the nearest boundary in the active exact or labeled estimated timeline.
 - Ended media replays from the first sample when Play is invoked.
 - Each load owns one balanced security-scoped lease through preflight, player
   use, seeks, filtering, and cooperative cancellation. Replacement acquires the
@@ -82,16 +98,23 @@ when restored.
 ## Accessibility and input
 
 All controls have a task-oriented label, role, current value/state where
-applicable, and keyboard/VoiceOver action. Opening a panel moves focus into it;
-closing returns focus to its invoker. Decorative and status overlays never
-intercept pointer input. Ready video shows frame, zoom, and lock status, with
-the locked state persistently visible. Focused controls do not dim. Reduce
-Motion removes nonessential fades and pulses, and Reduce Transparency uses
-opaque status backgrounds.
+applicable, and keyboard/VoiceOver action. Sliders publish value, minimum,
+maximum, and orientation; frame, zoom, and lock ready-state badges are
+individually reachable; and the empty-state Open action reports enabled.
+Opening a panel moves focus into it;
+Escape closes the key/frontmost auxiliary panel and returns focus to its
+invoker. Dynamic shortcut and filter failures are announced. Decorative and
+status overlays never intercept pointer input. Ready video shows frame, zoom,
+and lock status, with the locked state persistently visible. Focused controls
+do not dim. Reduce Motion removes nonessential fades and pulses; Increase
+Contrast and Reduce Transparency keep critical controls and status fully
+visible, including when those settings change while Reframer is running.
 
 A focused text editor retains text and standard editing commands. Other
 controls retain only their conventional activation and navigation keys; they
 do not suppress plain or Shift-based Reframer shortcuts they do not own.
+System file and alert sheets bypass the application shortcut layer, and the
+documentation view retains native Space, arrow, and page navigation.
 
 ## Release
 

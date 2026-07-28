@@ -13,7 +13,7 @@ finds an element is not proof of the action behind it.
 | `xcodebuild analyze` | Xcode static analysis reports no blocking issue | Absence of every runtime defect |
 | `TEST_SCOPE=unit scripts/runner_test.sh` | Deterministic model and AppKit contract tests pass | WindowServer event routing, visual output, or another-app shortcuts |
 | `xcodebuild docbuild` | DocC compiles; bundle validation separately checks Apple Help packaging | Documentation accuracy beyond the validated contract |
-| `scripts/validate_bundle.sh` | The unsigned bundle has the expected version, deployment target, architecture, help book, resources, and privacy metadata | Developer ID trust, notarization, or Gatekeeper acceptance |
+| `scripts/validate_bundle.sh` | The universal unsigned bundle matches the version, per-slice deployment target, exact Contents/signature/executable/runtime/Help allowlists, modern Help index, source stamp, source privacy allowlist, and contains no symlinks | Embedded release entitlements, Developer ID trust, notarization, or Gatekeeper acceptance |
 | Release packaging workflow | The exact artifact passed signing verification, notarization, stapling, and Gatekeeper assessment | Behavior not exercised by the preceding test jobs |
 
 `build-for-testing` is a compile gate for both test targets. It is not recorded
@@ -27,14 +27,25 @@ The unit target currently proves:
 - MP4, M4V, and MOV are the only advertised extensions and content types, and
   preflight accepts a known playable fixture while rejecting a missing file,
   corrupt data with a supported extension, and a valid audio-only MP4.
+  Synthetic MOV and M4V container fixtures also reach the ready,
+  exact-navigation playback state.
 - Frame lookup uses presentation timestamps. Packaged media exercises exact
   23.976, 29.97, 59.94, and 60.00 fps sample indexing plus a real
   variable-frame-rate fixture with irregular intervals. An in-memory table
   covers additional variable timing, while the estimated-timeline tests cover
   fractional-rate fallback.
+- Multi-track selection rejects unusable tracks and prepares one coherent,
+  enabled video source for playback, Core Image filtering, metadata, and
+  indexing while retaining usable audio only across the selected video's
+  presentation range. Non-right-angle transformed frame bounds are covered.
+  Exact mapping is bounded at 2,000,000 samples and deterministically falls
+  back to the labeled estimate.
 - First/last clamping, repeated generations, 1/10-frame direction, rapid burst
   accumulation, preview cancellation, structured indexing cancellation, load
-  replacement, and unload-during-load are deterministic checks.
+  replacement-pauses-playback, and unload-during-load are deterministic checks.
+- Playback-intent reconciliation proves that a delayed AVPlayer playing status
+  cannot revive a rapid pause, an involuntary pause clears play intent, and a
+  scrub-owned pause preserves it.
 - Delayed exact-index installation remaps the latest estimated presentation
   time onto the exact VFR table, preserves replay intent, assigns a new
   generation, rejects the stale completion, and keeps a deferred filter refresh
@@ -49,13 +60,16 @@ The unit target currently proves:
   collision/reserved-key rejection, migration, clear/disable/re-enable, and
   persistence resolve to typed commands. The exact Carbon registration plan,
   lock-only versus actionable-frame registration lifecycle, AppKit-to-Carbon
-  modifier mapping, conflict/retry state, focused-control ownership, and
+  modifier mapping, conflict/retry state, focused-control ownership,
+  non-repeat event consumption, incremental registration retention across a
+  held lock chord, system-sheet bypass, native table/document navigation, and
   active-versus-inactive dispatch policy also have unit coverage.
 - Window recovery, toolbar reservation, attached-panel placement, and invalid
   geometry handling are checked as pure geometry.
 - Drop-zone actionability, quick-filter menu contents, advanced-filter control
-  naming/focus, lock-aware drag-handle state, status text, and pointer-transparent
-  overlays are checked through AppKit objects.
+  naming/focus, lock-aware drag-handle state, status text, independently
+  reachable ready-state badges, complete slider role/range/orientation, and
+  pointer-transparent overlays are checked through AppKit objects.
 
 These checks do not prove that macOS delivered a physical key, pointer, drag,
 display, accessibility, or workspace event to the running app.
@@ -67,17 +81,16 @@ suite for every test. It opens its fixture through Launch Services, exercising
 the same user-selected read-only sandbox-extension path as Finder's Open With
 flow.
 
-Current evidence status (2026-07-28): `build-for-testing` compiled the complete
-unit and UI targets, but the UI tests were not executed in this remediation
-session. The runner acknowledgment was not present, so
-`scripts/ui_test_preflight.sh` correctly exited 77; a separate live-app attempt
-could not start because the macOS desktop was locked. The bullets below
-therefore describe what a passing execution will prove, not results already
-recorded:
+The bullets below define what a passing execution proves. Candidate-specific
+results belong in the dated
+[audit and release-readiness record](AUDIT_2026-07-28.md), not in this stable
+test contract:
 
 - the empty state exposes a labeled, enabled Open video action;
 - clicking the empty state and pressing Command-O each present a cancellable
   system file picker, and Cancel restores the empty state;
+- with a video loaded, native Down/Space input in the replacement file picker
+  does not pan, step, or toggle playback;
 - H presents the labeled Shortcut Settings group and its labeled Close action
   dismisses it;
 - the Launch Services fixture reaches a ready, enabled timeline and exposes
@@ -95,25 +108,29 @@ recorded:
   Brightness re-enables the adjustable control;
 - mute/unmute updates the exposed audio state and restores the prior slider
   value;
-- F and Command-? open their named panels, and Escape closes each one;
+- F and Command-? open their named panels, documentation keeps native Space
+  input without toggling playback, and Escape closes each panel;
 - Space activates a focused Quick Filter button or filter switch without also
   toggling playback;
 - rebinding Play/Pause from Space to J removes the old chord, activates the new
   chord, survives relaunch, can be disabled, and remains disabled after another
   relaunch;
-- while Finder is active, all four frame-step variants dispatch exactly once
-  in both directions and at one/ten-sample factors while loaded and locked;
-- the actionable state reports five registered defaults (lock plus four frame
-  variants), global Command-Shift-L unlocks, the unlocked state reports only
-  the lock registration, and Command-Page Down is neither delivered to
-  Reframer nor swallowed then.
+- the actionable state reports five system-accepted registrations (lock plus
+  four frame variants), the inactive app retains those registrations, the
+  unlocked state reports only the lock registration, and relocking restores
+  all five.
+
+XCUITest `typeKey` events are targeted directly at the named application and
+do not traverse WindowServer's Carbon hot-key route. The UI target therefore
+does not claim physical cross-application delivery from those synthetic
+events; that remains an explicit live gate below.
 
 `ZoomScreenshotTest` always asserts the 100% to 200% zoom transition.
 `UITEST_SCREENSHOTS=1` only adds retained PNG evidence; omitting that variable
 does not skip the behavioral assertions.
 
-Run the target only in a logged-in session whose operator has acknowledged
-Xcode UI automation:
+Run the target only in an unlocked, logged-in session whose operator has
+acknowledged Xcode UI automation:
 
 ```bash
 REFRAMER_UI_RUNNER_AUTHORIZED=1 \
@@ -137,6 +154,9 @@ suite does not measure their result:
 - toolbar drag-handle movement, lock suppression, and visible lock/status HUD;
 - resize behavior at minimum size and toolbar attachment while moving;
 - Always on Top, click-through, and recovery/unlock from another app;
+- registered lock and all four frame-step chords physically dispatching once
+  from another app, plus unlocked frame chords reaching an observable receiver
+  there to prove the unregistered chord was not swallowed;
 - an actual registration conflict with another owner and the visible retry
   recovery path;
 - multi-display placement, display removal, and visible-frame clamping;
@@ -153,8 +173,7 @@ claim. Do not mark a row passed from a build log or from an element-existence
 assertion.
 
 The release workflow requires both the deterministic quality job and an
-executed self-hosted UI job before signing and notarization. No Developer ID
-distribution signing, notarization submission, staple, or Gatekeeper
-assessment ran during this remediation session. The live checks above remain
-release evidence that must be attached to a future candidate when their
-behavior changes.
+executed self-hosted UI job before signing and notarization. The live checks
+above remain candidate evidence and must be attached whenever their behavior
+changes. A local unsigned pass never substitutes for Developer ID signing,
+notarization, stapling, or Gatekeeper assessment.

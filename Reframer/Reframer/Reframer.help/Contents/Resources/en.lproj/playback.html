@@ -19,9 +19,15 @@
     <tr><td>Backward ten</td><td><kbd>⌘⇧ Page Up</kbd></td></tr>
   </table>
 
-  <p>Scroll down over unlocked video to advance; scroll up to reverse. Drag the
-  timeline for responsive preview and release it for an exact final seek.
-  Playing ended media starts again at the first sample.</p>
+  <p>Scroll down over unlocked video to advance; scroll up to reverse. After
+  exact indexing, navigation follows the selected video track’s decoded
+  presentation samples. During indexing, when sample cursors are unavailable,
+  or when a very long video exceeds the bounded exact table, the toolbar labels
+  frame numbers as estimated.</p>
+
+  <p>Drag the timeline for responsive preview and release it for the nearest
+  boundary in the active exact or estimated timeline. Playing ended media
+  starts again at the first frame.</p>
 
   <p>The frame-step chords work from another app only while a video is loaded,
   Reframer is locked, and exact or estimated sample navigation is available.

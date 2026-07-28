@@ -10,6 +10,26 @@ struct GlobalHotKeyDescriptor: Equatable {
     let allowsRepeat: Bool
 }
 
+struct GlobalHotKeyRegistrationChanges: Equatable {
+    let retainedIdentifiers: Set<UInt32>
+    let removedIdentifiers: Set<UInt32>
+    let addedIdentifiers: Set<UInt32>
+
+    static func between(
+        current: [UInt32: GlobalHotKeyDescriptor],
+        desired: [UInt32: GlobalHotKeyDescriptor]
+    ) -> GlobalHotKeyRegistrationChanges {
+        let unchanged = Set(current.compactMap { identifier, descriptor in
+            desired[identifier] == descriptor ? identifier : nil
+        })
+        return GlobalHotKeyRegistrationChanges(
+            retainedIdentifiers: unchanged,
+            removedIdentifiers: Set(current.keys).subtracting(unchanged),
+            addedIdentifiers: Set(desired.keys).subtracting(unchanged)
+        )
+    }
+}
+
 enum GlobalHotKeyPlan {
     static func descriptors(
         for settings: ShortcutSettings,
@@ -73,6 +93,28 @@ enum GlobalHotKeyPlan {
     }
 }
 
+/// Tracks physical down/up state for registered shortcuts that must dispatch
+/// only once per key press.
+struct GlobalHotKeyPressState {
+    private(set) var pressedNonRepeatingIdentifiers: Set<UInt32> = []
+
+    mutating func shouldDeliverPress(
+        identifier: UInt32,
+        allowsRepeat: Bool
+    ) -> Bool {
+        guard !allowsRepeat else { return true }
+        return pressedNonRepeatingIdentifiers.insert(identifier).inserted
+    }
+
+    mutating func release(identifier: UInt32) {
+        pressedNonRepeatingIdentifiers.remove(identifier)
+    }
+
+    mutating func reset() {
+        pressedNonRepeatingIdentifiers.removeAll()
+    }
+}
+
 /// Registers a finite set of exclusive system hot keys. Unlike a global event
 /// monitor, this API reports only the exact chords Reframer declares and does
 /// not require Accessibility or Input Monitoring permission.
@@ -89,7 +131,7 @@ final class GlobalHotKeyRegistrar {
     private let handler: Handler
     private var eventHandler: EventHandlerRef?
     private var registrations: [UInt32: Registration] = [:]
-    private var pressedNonRepeatingIdentifiers: Set<UInt32> = []
+    private var pressState = GlobalHotKeyPressState()
 
     init(handler: @escaping Handler) {
         self.handler = handler
@@ -105,12 +147,12 @@ final class GlobalHotKeyRegistrar {
         includeFrameSteps: Bool,
         suspended: Bool = false
     ) -> GlobalShortcutRegistrationStatus {
-        unregisterAll()
-
         guard settings.globalShortcutsEnabled else {
+            unregisterAll()
             return .disabled
         }
         guard !suspended else {
+            unregisterAll()
             return .pending
         }
         if eventHandler == nil {
@@ -128,14 +170,37 @@ final class GlobalHotKeyRegistrar {
                     statusCode: Int32(eventInternalErr)
                 )
             }
+            unregisterAll()
             return .partial(registered: 0, failures: failures)
         }
 
-        var failures: [GlobalShortcutRegistrationFailure] = []
-        for descriptor in GlobalHotKeyPlan.descriptors(
+        let desiredDescriptors = GlobalHotKeyPlan.descriptors(
             for: settings,
             includeFrameSteps: includeFrameSteps
-        ) {
+        )
+        let desiredByIdentifier = Dictionary(
+            uniqueKeysWithValues: desiredDescriptors.map {
+                ($0.identifier, $0)
+            }
+        )
+        let changes = GlobalHotKeyRegistrationChanges.between(
+            current: registrations.mapValues { $0.descriptor },
+            desired: desiredByIdentifier
+        )
+
+        for identifier in changes.removedIdentifiers {
+            guard let registration = registrations.removeValue(
+                forKey: identifier
+            ) else {
+                continue
+            }
+            UnregisterEventHotKey(registration.reference)
+            pressState.release(identifier: identifier)
+        }
+
+        var failures: [GlobalShortcutRegistrationFailure] = []
+        for descriptor in desiredDescriptors
+        where changes.addedIdentifiers.contains(descriptor.identifier) {
             var reference: EventHotKeyRef?
             let hotKeyID = EventHotKeyID(
                 signature: Self.signature,
@@ -234,13 +299,15 @@ final class GlobalHotKeyRegistrar {
 
         switch GetEventKind(event) {
         case UInt32(kEventHotKeyPressed):
-            if !registration.descriptor.allowsRepeat,
-               !pressedNonRepeatingIdentifiers.insert(hotKeyID.id).inserted {
+            if !pressState.shouldDeliverPress(
+                identifier: hotKeyID.id,
+                allowsRepeat: registration.descriptor.allowsRepeat
+            ) {
                 return noErr
             }
             deliver(registration.descriptor.match)
         case UInt32(kEventHotKeyReleased):
-            pressedNonRepeatingIdentifiers.remove(hotKeyID.id)
+            pressState.release(identifier: hotKeyID.id)
         default:
             return OSStatus(eventNotHandledErr)
         }
@@ -262,6 +329,6 @@ final class GlobalHotKeyRegistrar {
             UnregisterEventHotKey(registration.reference)
         }
         registrations.removeAll()
-        pressedNonRepeatingIdentifiers.removeAll()
+        pressState.reset()
     }
 }

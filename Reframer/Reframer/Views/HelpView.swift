@@ -15,6 +15,8 @@ final class HelpView: NSView {
     )
     private let retryRegistrationButton = NSButton()
     private var cancellables = Set<AnyCancellable>()
+    private var displayOptionsObserver: NSObjectProtocol?
+    private var errorAnnouncementTracker = AccessibilityErrorAnnouncementTracker()
 
     private var shortcutButtons: [ShortcutSettings.Action: NSButton] = [:]
     private var enableButtons: [ShortcutSettings.Action: NSButton] = [:]
@@ -250,6 +252,13 @@ final class HelpView: NSView {
         updateStatus()
         updateControls()
         updateGlobalControls()
+        displayOptionsObserver = NotificationCenter.default.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateControls()
+        }
     }
 
     private func makeInfoBanner() -> NSView {
@@ -461,12 +470,14 @@ final class HelpView: NSView {
     }
 
     private func updateStatus() {
+        var errorAnnouncement: String?
         if let message = shortcutSettings.validationMessage {
             statusLabel.stringValue = message
             statusLabel.textColor = .systemRed
             statusLabel.superview?.layer?.backgroundColor =
                 NSColor.systemRed.withAlphaComponent(0.13).cgColor
             statusLabel.setAccessibilityLabel("Shortcut error: \(message)")
+            errorAnnouncement = "Shortcut error: \(message)"
         } else if let action = shortcutSettings.recordingAction {
             statusLabel.stringValue =
                 "Press the new shortcut for \(action.displayName). Escape cancels; Delete clears it."
@@ -489,6 +500,8 @@ final class HelpView: NSView {
             statusLabel.setAccessibilityLabel(
                 "Global shortcut registration error: \(statusLabel.stringValue)"
             )
+            errorAnnouncement =
+                "Global shortcut registration error: \(statusLabel.stringValue)"
         } else {
             switch shortcutSettings.globalRegistrationStatus {
             case .disabled:
@@ -506,6 +519,10 @@ final class HelpView: NSView {
             statusLabel.superview?.layer?.backgroundColor =
                 NSColor.systemBlue.withAlphaComponent(0.15).cgColor
             statusLabel.setAccessibilityLabel(statusLabel.stringValue)
+        }
+        if let announcement = errorAnnouncementTracker
+            .newMessageToAnnounce(errorAnnouncement) {
+            postAccessibilityErrorAnnouncement(announcement, from: statusLabel)
         }
     }
 
@@ -597,6 +614,9 @@ final class HelpView: NSView {
     }
 
     deinit {
+        if let displayOptionsObserver {
+            NotificationCenter.default.removeObserver(displayOptionsObserver)
+        }
         shortcutSettings.cancelRecording()
     }
 }

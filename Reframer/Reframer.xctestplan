@@ -9,6 +9,12 @@
     }
   ],
   "defaultOptions" : {
+    "environmentVariableEntries" : [
+      {
+        "key" : "REFRAMER_UI_RUNNER_AUTHORIZED",
+        "value" : "$(REFRAMER_UI_RUNNER_AUTHORIZED)"
+      }
+    ],
     "targetForVariableExpansion" : {
       "containerPath" : "container:Reframer.xcodeproj",
       "identifier" : "AAA50001",

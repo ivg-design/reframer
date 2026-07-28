@@ -11,12 +11,12 @@ Reframer requires macOS 15.0 or later.
 1. Launch Reframer.
 2. Activate the empty-state Open action, drop a file on the window, or press
    Command-O.
-3. Choose an MP4, M4V, or MOV file with a video track macOS can decode.
+3. Choose an MP4, M4V, or MOV file with a usable video track macOS can decode.
 4. Use Space or the play control to play and pause.
 5. Use Command-Page Down and Command-Page Up to step forward and backward.
 
 An accepted file extension is not enough by itself: Reframer verifies that the
-asset is playable and has a decodable video track.
+asset is playable and has a usable, decodable video track.
 
 ## Position the reference
 

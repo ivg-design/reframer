@@ -224,6 +224,9 @@ final class WindowDragHandle: NSView, ReframerShortcutOwningResponder {
 
 /// Pure AppKit control bar loaded from XIB
 class ControlBar: NSView {
+    /// Natural width of the complete control set, including the drag handle,
+    /// readable long-frame metadata, and the volume slider when unmuted.
+    static let minimumUsableWidth: CGFloat = 1_060
 
     // MARK: - Controls (found programmatically)
 
@@ -287,10 +290,50 @@ class ControlBar: NSView {
     }
 
     private func loadFromNib() {
-        // Load the XIB without using outlet connections
+        // Resolve resources from the class that owns the XIB. Using the
+        // dynamic type here points at a test bundle whenever a test subclass
+        // instantiates ControlBar, where ControlBar.nib is not packaged.
+        let classBundle = Bundle(for: ControlBar.self)
+        var resourceBundles = [classBundle, Bundle.main]
+
+        // A deterministic `xcrun xctest` run loads the application module from
+        // ReframerTests.xctest without launching Reframer.app, so neither
+        // Bundle.main nor Bundle(for:) necessarily names the enclosing app.
+        // Walk up from both known bundles and include that app explicitly.
+        for bundle in [classBundle, Bundle.main] {
+            var candidateURL = bundle.bundleURL
+            while candidateURL.path != "/" {
+                if candidateURL.pathExtension == "app",
+                   let appBundle = Bundle(url: candidateURL) {
+                    resourceBundles.append(appBundle)
+                    break
+                }
+                candidateURL.deleteLastPathComponent()
+            }
+        }
+
+        var seenBundleURLs = Set<URL>()
+        resourceBundles = resourceBundles.filter {
+            seenBundleURLs.insert($0.bundleURL.standardizedFileURL).inserted
+        }
+
         var topLevelObjects: NSArray?
-        let bundle = Bundle(for: type(of: self))
-        guard bundle.loadNibNamed("ControlBar", owner: nil, topLevelObjects: &topLevelObjects) else {
+        let didLoadNib = resourceBundles.contains { bundle in
+            guard bundle.url(forResource: "ControlBar", withExtension: "nib") != nil else {
+                return false
+            }
+            var objects: NSArray?
+            guard bundle.loadNibNamed(
+                "ControlBar",
+                owner: nil,
+                topLevelObjects: &objects
+            ) else {
+                return false
+            }
+            topLevelObjects = objects
+            return true
+        }
+        guard didLoadNib else {
             fatalError("Failed to load ControlBar.xib")
         }
 
@@ -419,9 +462,29 @@ class ControlBar: NSView {
 
     private func configure(control: NSControl?, label: String, help: String) {
         control?.setAccessibilityElement(true)
+        if let slider = control as? NSSlider {
+            control?.setAccessibilityRole(.slider)
+            // Setting an explicit role on a custom slider means AppKit no
+            // longer synthesizes its numeric accessibility contract for us.
+            // Publish the complete range so Voice Control and XCUITest can
+            // perform proportional adjustments.
+            updateAccessibilityRange(for: slider)
+            slider.setAccessibilityOrientation(
+                slider.isVertical ? .vertical : .horizontal
+            )
+            slider.setAccessibilityValue(slider.doubleValue)
+        } else if control is NSTextField {
+            control?.setAccessibilityRole(.textField)
+        }
         control?.setAccessibilityLabel(label)
         control?.setAccessibilityHelp(help)
         control?.toolTip = help
+    }
+
+    private func updateAccessibilityRange(for slider: NSSlider?) {
+        guard let slider else { return }
+        slider.setAccessibilityMinValue(slider.minValue)
+        slider.setAccessibilityMaxValue(slider.maxValue)
     }
 
     private func findView(withIdentifier identifier: String, in view: NSView) -> NSView? {
@@ -553,6 +616,14 @@ class ControlBar: NSView {
             }
             focusObservers.append(observer)
         }
+        let displayOptionsObserver = NotificationCenter.default.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateOpacity()
+        }
+        focusObservers.append(displayOptionsObserver)
     }
 
     deinit {
@@ -737,7 +808,7 @@ class ControlBar: NSView {
             .sink { [weak self] duration in
                 guard let self = self else { return }
                 self.timelineSlider?.maxValue = max(0.1, duration)
-                self.timelineSlider?.setAccessibilityMaxValue(duration)
+                self.updateAccessibilityRange(for: self.timelineSlider)
             }
             .store(in: &cancellables)
 
@@ -822,7 +893,7 @@ class ControlBar: NSView {
             suffix = "/ \(state.totalFrames)"
             help = "Current decoded frame. Video contains \(state.totalFrames) exact presentation frames."
         case .indexing:
-            suffix = state.totalFrames > 0 ? "/ ~\(state.totalFrames) · indexing" : "/ indexing"
+            suffix = state.totalFrames > 0 ? "/ ~\(state.totalFrames) · idx" : "/ idx"
             help = state.frameNavigationMessage
                 ?? "Exact frame boundaries are being indexed. The current frame count is estimated."
         case .estimated:
@@ -888,6 +959,10 @@ class ControlBar: NSView {
                 restoreAccessibilityHelp(for: opacityField)
             }
         }
+        updateAccessibilityRange(for: opacitySlider)
+        if let opacitySlider {
+            opacitySlider.setAccessibilityValue(opacitySlider.doubleValue)
+        }
     }
 
     /// Format filter value for display based on filter's actual parameter range
@@ -913,17 +988,21 @@ class ControlBar: NSView {
     }
 
     private func updateOpacity() {
-        let accessibilityIsActive = NSWorkspace.shared.isVoiceOverEnabled
+        let workspace = NSWorkspace.shared
+        let accessibilityRequiresFullVisibility =
+            workspace.isVoiceOverEnabled
+            || workspace.accessibilityDisplayShouldIncreaseContrast
+            || workspace.accessibilityDisplayShouldReduceTransparency
         let shouldShow = isHovering ||
             isControlBarFocused() ||
-            accessibilityIsActive ||
+            accessibilityRequiresFullVisibility ||
             !(videoState?.isVideoLoaded ?? false)
         let targetAlpha: CGFloat = shouldShow ? 1.0 : 0.4
 
         guard abs(alphaValue - targetAlpha) > 0.001 else { return }
 
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.2
+            context.duration = workspace.accessibilityDisplayShouldReduceMotion ? 0 : 0.2
             self.animator().alphaValue = targetAlpha
         }
     }

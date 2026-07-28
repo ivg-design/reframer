@@ -28,6 +28,12 @@ enum UITestVideoLoader {
             XCTFail("Missing UI-test fixture: \(videoURL.path)", file: file, line: line)
             return false
         }
+        // A preceding cross-application hot-key test may leave Finder active
+        // for a moment after launch. Explicit activation makes the fixture
+        // handoff deterministic without changing application behavior.
+        if !app.wait(for: .runningForeground, timeout: min(2, timeout)) {
+            app.activate()
+        }
         guard app.wait(for: .runningForeground, timeout: timeout) else {
             XCTFail("Reframer did not reach the foreground", file: file, line: line)
             return false

@@ -30,7 +30,13 @@
   require an unlocked overlay. Frame stepping works outside Reframer only with
   a loaded, locked video whose exact or estimated sample navigation is
   available. Focused controls keep only their conventional activation and
-  navigation keys, while text editing keeps normal field behavior.</p>
+  navigation keys, while text editing keeps normal field behavior. System file
+  and alert sheets bypass Reframer commands, and documentation keeps native
+  Space, arrow, and page scrolling.</p>
+
+  <p>Holding a toggle, panel, reset, or open shortcut does not fire it
+  repeatedly. Frame stepping and panning are the intentional repeatable
+  actions.</p>
 
   <h2>Customize</h2>
   <p>Open shortcut settings with <kbd>H</kbd>. Change, clear, disable, or reset
@@ -38,10 +44,11 @@
   unsafe global chords. A new chord replaces the old one and persists. Global
   shortcuts can be disabled independently. During normal operation, the
   enabled lock chord stays registered in every video and lock state. Frame
-  chords are registered only in their actionable state and are not swallowed
-  otherwise. Registered hot keys require no Accessibility or Input Monitoring
-  permission. If another app owns a chord, this panel reports the conflict and
-  offers a retry action.</p>
+  chords are registered only in their actionable state and are not received or
+  swallowed through the global path while another app is active. Registered
+  hot keys require no Accessibility or Input Monitoring permission. If another
+  app owns a chord, this panel reports the conflict and offers a retry
+  action.</p>
 
   <div class="nav-links">
     <p><a href="index.html">← Reframer Help</a></p>

@@ -55,6 +55,8 @@
 		DDD00006 /* test_5994fps_60f.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10006 /* test_5994fps_60f.mp4 */; };
 		DDD00007 /* test_vfr_11f.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10007 /* test_vfr_11f.mp4 */; };
 		DDD00008 /* test_audio_only.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10008 /* test_audio_only.mp4 */; };
+		DDD00009 /* test_playable.mov in Resources */ = {isa = PBXBuildFile; fileRef = DDD10009 /* test_playable.mov */; };
+		DDD00010 /* test_playable.m4v in Resources */ = {isa = PBXBuildFile; fileRef = DDD10010 /* test_playable.m4v */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -108,6 +110,9 @@
 		DDD10006 /* test_5994fps_60f.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_5994fps_60f.mp4; sourceTree = "<group>"; };
 		DDD10007 /* test_vfr_11f.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_vfr_11f.mp4; sourceTree = "<group>"; };
 		DDD10008 /* test_audio_only.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_audio_only.mp4; sourceTree = "<group>"; };
+		DDD10009 /* test_playable.mov */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.mov; sourceTree = "<group>"; };
+		DDD10010 /* test_playable.m4v */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.m4v; sourceTree = "<group>"; };
+		DDD10011 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		DZ001001 /* DropZoneViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropZoneViewTests.swift; sourceTree = "<group>"; };
 		EEE10001 /* Reframer.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = Reframer.docc; sourceTree = "<group>"; };
 		FFF10001 /* Reframer.help */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Reframer.help; sourceTree = "<group>"; };
@@ -293,6 +298,9 @@
 				DDD10006 /* test_5994fps_60f.mp4 */,
 				DDD10007 /* test_vfr_11f.mp4 */,
 				DDD10008 /* test_audio_only.mp4 */,
+				DDD10009 /* test_playable.mov */,
+				DDD10010 /* test_playable.m4v */,
+				DDD10011 /* README.md */,
 			);
 			path = TestFixtures;
 			sourceTree = "<group>";
@@ -421,6 +429,8 @@
 				DDD00006 /* test_5994fps_60f.mp4 in Resources */,
 				DDD00007 /* test_vfr_11f.mp4 in Resources */,
 				DDD00008 /* test_audio_only.mp4 in Resources */,
+				DDD00009 /* test_playable.mov in Resources */,
+				DDD00010 /* test_playable.m4v in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

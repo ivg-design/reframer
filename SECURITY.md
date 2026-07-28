@@ -2,14 +2,17 @@
 
 ## Supported versions
 
-Security fixes are applied to the latest release and the `main` branch.
+Until the first signed release is published, security fixes are applied to the
+`main` branch. After publication, fixes are applied to `main` and the latest
+release.
 
 ## Reporting a vulnerability
 
-Please use GitHub’s private vulnerability-reporting flow for this repository.
-Include the affected Reframer version, macOS version, reproduction steps, and
-the impact you observed. Do not open a public issue for an undisclosed
-vulnerability.
+Email private reports to [ilyav@gusinski.us](mailto:ilyav@gusinski.us). Include
+the affected Reframer version, macOS version, reproduction steps, and the impact
+you observed. If GitHub private vulnerability reporting is enabled for this
+repository, its Security tab is also an approved private channel. Do not open a
+public issue for an undisclosed vulnerability.
 
 ## Security posture
 
@@ -28,11 +31,12 @@ bookmarks or reopen videos after relaunch.
 Global shortcuts use macOS registered hot keys. The enabled lock chord remains
 registered during normal operation. Frame-step chords exist only while a video
 is loaded, the overlay is locked, and exact or estimated sample navigation is
-available; outside that state Reframer does not receive or swallow those keys.
-It receives no unrelated keyboard input from other applications. This path
-requires neither Accessibility nor Input Monitoring permission. An
-exclusive-registration conflict is shown in Shortcut Settings; the user can
-change the chord or close the conflicting app and retry.
+available; outside that state Reframer does not receive or swallow those keys
+through the global path while another app is active. It receives no unrelated
+keyboard input from other applications. This path requires neither
+Accessibility nor Input Monitoring permission. An exclusive-registration
+conflict is shown in Shortcut Settings; the user can change the chord or close
+the conflicting app and retry.
 
 Files are opened only after the user chooses, drops, or opens them with
 Reframer. Release acceptance requires Hardened Runtime, the two allowlisted

@@ -21,6 +21,72 @@ private final class ReframerCommandBox: NSObject {
     }
 }
 
+enum AuxiliaryPanelKind: CaseIterable, Hashable {
+    case shortcutSettings
+    case filters
+    case documentation
+}
+
+enum AuxiliaryPanelRouting {
+    static func target(
+        keyPanel: AuxiliaryPanelKind?,
+        orderedVisiblePanels: [AuxiliaryPanelKind],
+        visiblePanels: Set<AuxiliaryPanelKind>
+    ) -> AuxiliaryPanelKind? {
+        if let keyPanel, visiblePanels.contains(keyPanel) {
+            return keyPanel
+        }
+        if let ordered = orderedVisiblePanels.first(where: visiblePanels.contains) {
+            return ordered
+        }
+        return AuxiliaryPanelKind.allCases.first(where: visiblePanels.contains)
+    }
+}
+
+enum FocusedShortcutEventDecision: Equatable {
+    case passThrough
+    case deliverToFocusedResponder
+    case consumeWithoutDispatch
+    case dispatch(ShortcutMatch)
+}
+
+enum FocusedShortcutEventRouting {
+    static func decision(
+        resolution: ShortcutEventResolution,
+        focusedResponderOwnsStroke: Bool
+    ) -> FocusedShortcutEventDecision {
+        switch resolution {
+        case .unmatched:
+            return .passThrough
+        case .consumeWithoutDispatch:
+            return focusedResponderOwnsStroke
+                ? .deliverToFocusedResponder
+                : .consumeWithoutDispatch
+        case .dispatch(let match):
+            return focusedResponderOwnsStroke
+                ? .deliverToFocusedResponder
+                : .dispatch(match)
+        }
+    }
+}
+
+enum ShortcutWindowRouting {
+    static func shouldBypassApplicationShortcuts(
+        isSystemSavePanel: Bool,
+        hasSheetParent: Bool
+    ) -> Bool {
+        isSystemSavePanel || hasSheetParent
+    }
+
+    static func shouldBypassApplicationShortcuts(in window: NSWindow?) -> Bool {
+        guard let window else { return true }
+        return shouldBypassApplicationShortcuts(
+            isSystemSavePanel: window is NSSavePanel,
+            hasSheetParent: window.sheetParent != nil
+        )
+    }
+}
+
 @main
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
@@ -64,7 +130,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// Kept in sync with ControlBar.xib so the child window and its content
     /// have one layout height and never create conflicting constraints.
     private let controlWindowHeight: CGFloat = 48
-    private let mainWindowMinimumSize = NSSize(width: 640, height: 360)
+    private let mainWindowMinimumSize = NSSize(
+        width: ControlBar.minimumUsableWidth,
+        height: 360
+    )
     private let windowFrameDefaultsKey = "VideoOverlay.mainWindowFrame"
     private var windowReclampWorkItem: DispatchWorkItem?
     private var isRepositioningWindows = false
@@ -87,9 +156,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         observeWindowFrameChanges()
         setupGlobalShortcuts()
         observeState()
-
-        // Skip move-to-Applications prompt (disabled for development)
-        // ensureInstalledInApplications()
 
         #if DEBUG
         // Development-only convenience hook. The shipping app accepts video
@@ -347,6 +413,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         helpMenu.addItem(makeCommandMenuItem(
             title: "Reframer Documentation",
             command: .openDocumentation,
+            // Preserve the conventional menu presentation. The local event
+            // layer resolves the physical Command-Shift-/ chord before AppKit
+            // opens Help-menu search.
             keyEquivalent: "?",
             modifiers: [.command]
         ))
@@ -417,7 +486,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             ?? visibleFrames.first
             ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         // Main window is just the video canvas - toolbar will be BELOW it
-        let windowSize = NSSize(width: 800, height: 560)
+        let windowSize = NSSize(width: ControlBar.minimumUsableWidth, height: 560)
         let defaultOrigin = NSPoint(
             x: screenFrame.midX - windowSize.width / 2,
             y: screenFrame.midY - windowSize.height / 2 + controlWindowHeight / 2
@@ -447,6 +516,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // Background dragging would steal primary-button video panning.
         window.isMovableByWindowBackground = false
         window.minSize = mainWindowMinimumSize
+        window.title = "Reframer Video Overlay"
+        window.setAccessibilityIdentifier("window-main")
+        window.setAccessibilityLabel("Reframer Video Overlay")
 
         mainViewController = MainViewController(videoState: videoState)
         window.contentViewController = mainViewController
@@ -482,6 +554,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         window.hasShadow = false
         window.level = mainWindow.level
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.title = "Reframer Controls"
+        window.setAccessibilityIdentifier("window-controls")
+        window.setAccessibilityLabel("Reframer Controls")
         // NOTE: Do NOT set isMovableByWindowBackground on control window
         // It's a child window and will move with the main window when main is dragged
 
@@ -650,15 +725,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func setupGlobalShortcuts() {
         globalHotKeyRegistrar = GlobalHotKeyRegistrar { [weak self] match in
             guard let self else { return }
-            let origin = RegisteredHotKeyRouting.origin(
+            guard RegisteredHotKeyRouting.shouldDeliverCarbonEvent(
                 isApplicationActive: NSApp.isActive
-            )
-            if origin == .localShortcut,
-               self.deliverRegisteredHotKeyToFocusedControlIfOwned(match) {
+            ) else {
                 return
             }
             let command = self.videoState.shortcutSettings.command(for: match)
-            _ = self.dispatch(command, origin: origin)
+            _ = self.dispatch(command, origin: .globalShortcut)
         }
         registerGlobalHotKeys()
 
@@ -690,6 +763,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// control actually owns, and dispatches an app shortcut exactly once.
     @discardableResult
     private func handleLocalEvent(_ event: NSEvent) -> Bool {
+        // Native sheets and system file panels own their complete keyboard
+        // interaction. Reframer shortcuts must not turn Space/arrows into
+        // playback or pan commands while the user is choosing a file or
+        // responding to an alert.
+        guard !ShortcutWindowRouting.shouldBypassApplicationShortcuts(
+            in: NSApp.keyWindow
+        ) else {
+            return false
+        }
+
         let settings = videoState.shortcutSettings
 
         if settings.recordingAction != nil {
@@ -702,29 +785,36 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         guard event.type == .keyDown else { return false }
         let stroke = ShortcutKeystroke(event: event)
 
-        guard let match = settings.resolve(stroke: stroke, scope: .local) else {
-            return false
+        switch FixedCommandShortcutRouting.eventResolution(stroke: stroke) {
+        case .unmatched:
+            break
+        case .consumeWithoutDispatch:
+            return true
+        case .dispatch(let command):
+            return dispatch(command, origin: .localShortcut)
         }
 
-        // Registered global variants are delivered through the Carbon event
-        // handler even while Reframer is active. Consuming the corresponding
-        // local event first prevents both command and native-control delivery
-        // from occurring twice.
-        if match.action.isGlobal,
-           globalHotKeyRegistrar?.isRegistered(match: match) == true {
-            return true
-        }
+        let resolution = settings.eventResolution(stroke: stroke, scope: .local)
 
         let responder = activeFieldEditor() ?? NSApp.keyWindow?.firstResponder
-        if ShortcutControlRouting.focusedResponderOwns(
-            stroke: stroke,
-            responder: responder
-        ) {
+        let decision = FocusedShortcutEventRouting.decision(
+            resolution: resolution,
+            focusedResponderOwnsStroke: ShortcutControlRouting.focusedResponderOwns(
+                stroke: stroke,
+                responder: responder
+            )
+        )
+        switch decision {
+        case .passThrough:
+            return false
+        case .deliverToFocusedResponder:
             responder?.keyDown(with: event)
             return true
+        case .consumeWithoutDispatch:
+            return true
+        case .dispatch(let match):
+            return dispatch(settings.command(for: match), origin: .localShortcut)
         }
-
-        return dispatch(settings.command(for: match), origin: .localShortcut)
     }
 
     private func activeFieldEditor() -> NSTextView? {
@@ -737,41 +827,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             return editor
         }
         return nil
-    }
-
-    private func deliverRegisteredHotKeyToFocusedControlIfOwned(
-        _ match: ShortcutMatch
-    ) -> Bool {
-        let settings = videoState.shortcutSettings
-        guard let stroke = settings.keystroke(for: match) else { return false }
-        let responder = activeFieldEditor() ?? NSApp.keyWindow?.firstResponder
-        guard ShortcutControlRouting.focusedResponderOwns(
-            stroke: stroke,
-            responder: responder
-        ),
-              let responder,
-              let window = NSApp.keyWindow else {
-            return false
-        }
-
-        let shortcut = settings.binding(for: match.action).shortcut
-        let characters = shortcut?.menuKeyEquivalent ?? ""
-        guard let event = NSEvent.keyEvent(
-            with: .keyDown,
-            location: .zero,
-            modifierFlags: NSEvent.ModifierFlags(rawValue: stroke.modifiers),
-            timestamp: ProcessInfo.processInfo.systemUptime,
-            windowNumber: window.windowNumber,
-            context: nil,
-            characters: characters,
-            charactersIgnoringModifiers: characters,
-            isARepeat: stroke.isRepeat,
-            keyCode: stroke.keyCode
-        ) else {
-            return true
-        }
-        responder.keyDown(with: event)
-        return true
     }
 
     // MARK: - Unified Command Dispatch
@@ -806,13 +861,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case .toggleFilterPanel:
             videoState.showFilterPanel.toggle()
         case .closeContext:
-            if videoState.showHelp {
+            switch currentAuxiliaryPanel() {
+            case .shortcutSettings:
                 videoState.showHelp = false
-            } else if videoState.showFilterPanel {
+            case .filters:
                 videoState.showFilterPanel = false
-            } else if documentationWindow?.isVisible == true {
-                documentationWindow?.orderOut(nil)
-            } else {
+            case .documentation:
+                hideDocumentationWindow()
+            case nil:
                 return false
             }
         case .openDocumentation:
@@ -842,6 +898,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 isFilterPanelVisible: videoState.showFilterPanel,
                 isDocumentationVisible: documentationWindow?.isVisible == true
             )
+        )
+    }
+
+    private func currentAuxiliaryPanel() -> AuxiliaryPanelKind? {
+        let windows: [(NSWindow?, AuxiliaryPanelKind)] = [
+            (shortcutsWindow, .shortcutSettings),
+            (filterPanelWindow, .filters),
+            (documentationWindow, .documentation)
+        ]
+        let visiblePanels = Set(windows.compactMap { window, kind in
+            window?.isVisible == true ? kind : nil
+        })
+        let keyPanel = windows.first(where: { $0.0 === NSApp.keyWindow })?.1
+        let orderedVisiblePanels = NSApp.orderedWindows.compactMap { orderedWindow in
+            windows.first(where: { $0.0 === orderedWindow })?.1
+        }
+        return AuxiliaryPanelRouting.target(
+            keyPanel: keyPanel,
+            orderedVisiblePanels: orderedVisiblePanels,
+            visiblePanels: visiblePanels
         )
     }
 
@@ -1057,6 +1133,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             panel.level = desiredWindowLevel
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isMovableByWindowBackground = true
+            panel.title = "Shortcut Settings"
+            panel.setAccessibilityLabel("Shortcut Settings")
 
             let helpView = HelpView(videoState: videoState)
             let viewController = NSViewController()
@@ -1130,6 +1208,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             panel.level = desiredWindowLevel
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isMovableByWindowBackground = true
+            panel.title = "Advanced Filters"
+            panel.setAccessibilityLabel("Advanced Filters")
 
             let panelView = FilterPanelView(frame: NSRect(origin: .zero, size: size))
             panelView.videoState = videoState
@@ -1188,6 +1268,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             visibleFrames: visibleFrames
         )
         documentationWindow.setFrame(frame, display: documentationWindow.isVisible)
+    }
+
+    private func hideDocumentationWindow() {
+        let shouldRestoreFocus = documentationWindow?.isKeyWindow == true
+        documentationWindow?.orderOut(nil)
+        let snapshot = documentationFocusSnapshot
+        documentationFocusSnapshot = nil
+        if shouldRestoreFocus {
+            restoreFocus(from: snapshot)
+        }
     }
 
     // MARK: - File Operations
@@ -1342,61 +1432,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         videoState.resetFilterSettings()
     }
 
-    // MARK: - Installation
-
-    private func ensureInstalledInApplications() {
-        let bundleURL = Bundle.main.bundleURL.standardizedFileURL
-        let applicationsURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
-
-        guard !bundleURL.path.hasPrefix(applicationsURL.path) else { return }
-
-        let alert = NSAlert()
-        alert.messageText = "Move to Applications folder?"
-        alert.informativeText = "Reframer should be installed in /Applications."
-        alert.addButton(withTitle: "Move")
-        alert.addButton(withTitle: "Cancel")
-
-        // Show as sheet if main window is ready, otherwise use modal
-        let handleResponse: (NSApplication.ModalResponse) -> Void = { [weak self] response in
-            guard response == .alertFirstButtonReturn else { return }
-            self?.performMoveToApplications(from: bundleURL, to: applicationsURL)
-        }
-
-        if let window = mainWindow {
-            alert.beginSheetModal(for: window, completionHandler: handleResponse)
-        } else {
-            handleResponse(alert.runModal())
-        }
-    }
-
-    private func performMoveToApplications(from bundleURL: URL, to applicationsURL: URL) {
-        let destinationURL = applicationsURL.appendingPathComponent(bundleURL.lastPathComponent)
-        let fileManager = FileManager.default
-
-        do {
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                try fileManager.removeItem(at: destinationURL)
-            }
-            // Move instead of copy to avoid duplicate app bundles
-            try fileManager.moveItem(at: bundleURL, to: destinationURL)
-
-            NSWorkspace.shared.openApplication(at: destinationURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
-                NSApp.terminate(nil)
-            }
-        } catch {
-            // If move fails (e.g., cross-volume), try copy + delete original
-            do {
-                try fileManager.copyItem(at: bundleURL, to: destinationURL)
-                try? fileManager.removeItem(at: bundleURL) // Best effort delete original
-                NSWorkspace.shared.openApplication(at: destinationURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
-                    NSApp.terminate(nil)
-                }
-            } catch {
-                showErrorAlert(title: "Could not move app",
-                               message: "Please drag Reframer into /Applications manually.\n\n\(error.localizedDescription)")
-            }
-        }
-    }
 }
 
 // MARK: - NSWindowDelegate

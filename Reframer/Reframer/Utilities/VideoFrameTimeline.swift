@@ -4,6 +4,7 @@ import CoreMedia
 enum VideoFrameTimelineError: LocalizedError {
     case sampleCursorUnavailable
     case noVideoSamples
+    case exactSampleLimitExceeded(maximum: Int)
 
     var errorDescription: String? {
         switch self {
@@ -11,8 +12,15 @@ enum VideoFrameTimelineError: LocalizedError {
             return "The video's presentation samples could not be indexed."
         case .noVideoSamples:
             return "The file does not contain any readable video frames."
+        case .exactSampleLimitExceeded(let maximum):
+            return "The video contains more than \(maximum) presentation samples, so exact frame indexing was skipped."
         }
     }
+}
+
+struct VideoFrameSegmentMapping: Sendable {
+    let source: CMTimeRange
+    let target: CMTimeRange
 }
 
 /// Exact presentation timestamps for the decoded samples in one video track.
@@ -21,6 +29,11 @@ enum VideoFrameTimelineError: LocalizedError {
 /// frame rate. That keeps frame entry, stepping, VFR media, and fractional
 /// frame-rate media on the asset's real sample boundaries.
 struct VideoFrameTimeline {
+    /// Caps exact indexing at roughly 46 MiB for the final CMTime table and
+    /// bounds temporary mapping storage. Larger media keeps the virtual,
+    /// constant-rate fallback instead of risking an unbounded memory spike.
+    static let maximumExactSampleCount = 2_000_000
+
     enum Precision: Equatable {
         case exact
         case estimated
@@ -50,22 +63,26 @@ struct VideoFrameTimeline {
     init(presentationTimes: [CMTime], nominalFrameRate: Double) {
         var sorted = presentationTimes
             .filter { $0.isValid && $0.isNumeric && CMTimeCompare($0, .zero) >= 0 }
-            .sorted { CMTimeCompare($0, $1) < 0 }
-
-        if sorted.count > 1 {
-            var unique: [CMTime] = []
-            unique.reserveCapacity(sorted.count)
-            for time in sorted where unique.last.map({ CMTimeCompare($0, time) != 0 }) ?? true {
-                unique.append(time)
-            }
-            sorted = unique
-        }
+        sorted.sort { CMTimeCompare($0, $1) < 0 }
+        Self.deduplicateSortedTimesInPlace(&sorted)
 
         storage = .exact(sorted)
         precision = .exact
         self.nominalFrameRate = Self.resolvedFrameRate(
             preferred: nominalFrameRate,
             presentationTimes: sorted
+        )
+    }
+
+    private init(
+        sortedPresentationTimes: [CMTime],
+        nominalFrameRate: Double
+    ) {
+        storage = .exact(sortedPresentationTimes)
+        precision = .exact
+        self.nominalFrameRate = Self.resolvedFrameRate(
+            preferred: nominalFrameRate,
+            presentationTimes: sortedPresentationTimes
         )
     }
 
@@ -180,10 +197,11 @@ struct VideoFrameTimeline {
             let times = try mappedPresentationTimes(
                 track: track,
                 segments: segments,
-                canProvideSampleCursors: canProvideSampleCursors
+                canProvideSampleCursors: canProvideSampleCursors,
+                maximumSampleCount: maximumExactSampleCount
             )
             return VideoFrameTimeline(
-                presentationTimes: times,
+                sortedPresentationTimes: times,
                 nominalFrameRate: nominalFrameRate
             )
         }
@@ -213,7 +231,8 @@ struct VideoFrameTimeline {
     private static func mappedPresentationTimes(
         track: AVAssetTrack,
         segments: [AVAssetTrackSegment],
-        canProvideSampleCursors: Bool
+        canProvideSampleCursors: Bool,
+        maximumSampleCount: Int
     ) throws -> [CMTime] {
         guard canProvideSampleCursors,
               let cursor = track.makeSampleCursorAtFirstSampleInDecodeOrder() else {
@@ -227,51 +246,163 @@ struct VideoFrameTimeline {
         }
 
         var sourceTimes: [CMTime] = []
+        sourceTimes.reserveCapacity(min(maximumSampleCount, 240_000))
+        var visitedSampleCount = 0
         repeat {
             try Task.checkCancellation()
+            visitedSampleCount += 1
+            guard visitedSampleCount <= maximumSampleCount else {
+                throw VideoFrameTimelineError.exactSampleLimitExceeded(
+                    maximum: maximumSampleCount
+                )
+            }
             let time = cursor.presentationTimeStamp
-            if time.isValid && time.isNumeric {
+            if time.isValid,
+               time.isNumeric,
+               sourceTimes.last.map({ CMTimeCompare($0, time) != 0 }) ?? true {
                 sourceTimes.append(time)
             }
         } while cursor.stepInPresentationOrder(byCount: 1) != 0
-        sourceTimes.sort { CMTimeCompare($0, $1) < 0 }
+
+        let mappings = segments
+            .filter { !$0.isEmpty }
+            .map {
+                VideoFrameSegmentMapping(
+                    source: $0.timeMapping.source,
+                    target: $0.timeMapping.target
+                )
+            }
+        let mapped = try mapSortedPresentationTimes(
+            sourceTimes,
+            through: mappings,
+            maximumSampleCount: maximumSampleCount
+        )
+        guard !mapped.isEmpty else {
+            throw VideoFrameTimelineError.noVideoSamples
+        }
+        return mapped
+    }
+
+    /// Maps a presentation-ordered sample table through target-ordered edit
+    /// segments. Binary bounds avoid rescanning every sample for every segment.
+    /// The normal asset path is already sorted; an in-place fallback sort is
+    /// needed only for malformed or overlapping target mappings.
+    static func mapSortedPresentationTimes(
+        _ sourceTimes: [CMTime],
+        through mappings: [VideoFrameSegmentMapping],
+        maximumSampleCount: Int = maximumExactSampleCount
+    ) throws -> [CMTime] {
+        guard maximumSampleCount > 0 else {
+            throw VideoFrameTimelineError.exactSampleLimitExceeded(
+                maximum: maximumSampleCount
+            )
+        }
+        guard sourceTimes.count <= maximumSampleCount else {
+            throw VideoFrameTimelineError.exactSampleLimitExceeded(
+                maximum: maximumSampleCount
+            )
+        }
+
+        let validMappings = mappings
+            .filter {
+                $0.source.isValid
+                    && $0.target.isValid
+                    && $0.source.start.isNumeric
+                    && $0.target.start.isNumeric
+                    && $0.source.duration.isNumeric
+                    && $0.target.duration.isNumeric
+                    && CMTimeCompare($0.source.duration, .zero) > 0
+                    && CMTimeCompare($0.target.duration, .zero) > 0
+            }
+            .sorted {
+                let targetOrder = CMTimeCompare($0.target.start, $1.target.start)
+                if targetOrder != 0 {
+                    return targetOrder < 0
+                }
+                return CMTimeCompare($0.source.start, $1.source.start) < 0
+            }
 
         var targetTimes: [CMTime] = []
-        for segment in segments where !segment.isEmpty {
-            try Task.checkCancellation()
-            let mapping = segment.timeMapping
-            guard mapping.source.isValid,
-                  mapping.target.isValid,
-                  mapping.source.duration.isNumeric,
-                  mapping.target.duration.isNumeric else { continue }
+        targetTimes.reserveCapacity(min(sourceTimes.count, maximumSampleCount))
+        var requiresNormalization = false
 
-            for sourceTime in sourceTimes
-            where CMTimeRangeContainsTime(mapping.source, time: sourceTime) {
+        for mapping in validMappings {
+            try Task.checkCancellation()
+            let sourceEnd = CMTimeRangeGetEnd(mapping.source)
+            guard sourceEnd.isValid, sourceEnd.isNumeric else { continue }
+            let lower = lowerBound(
+                in: sourceTimes,
+                for: mapping.source.start
+            )
+            let upper = lowerBound(in: sourceTimes, for: sourceEnd)
+            guard lower < upper else { continue }
+
+            for sourceTime in sourceTimes[lower..<upper] {
                 try Task.checkCancellation()
+                guard CMTimeRangeContainsTime(mapping.source, time: sourceTime) else {
+                    continue
+                }
                 let targetTime = CMTimeMapTimeFromRangeToRange(
                     sourceTime,
                     fromRange: mapping.source,
                     toRange: mapping.target
                 )
-                if targetTime.isValid,
-                   targetTime.isNumeric,
-                   CMTimeCompare(targetTime, .zero) >= 0 {
-                    targetTimes.append(targetTime)
+                guard targetTime.isValid,
+                      targetTime.isNumeric,
+                      CMTimeCompare(targetTime, .zero) >= 0 else { continue }
+
+                if let previous = targetTimes.last {
+                    let order = CMTimeCompare(previous, targetTime)
+                    if order == 0 {
+                        continue
+                    }
+                    if order > 0 {
+                        requiresNormalization = true
+                    }
                 }
+                guard targetTimes.count < maximumSampleCount else {
+                    throw VideoFrameTimelineError.exactSampleLimitExceeded(
+                        maximum: maximumSampleCount
+                    )
+                }
+                targetTimes.append(targetTime)
             }
         }
 
-        targetTimes.sort { CMTimeCompare($0, $1) < 0 }
-        var unique: [CMTime] = []
-        unique.reserveCapacity(targetTimes.count)
-        for time in targetTimes
-        where unique.last.map({ CMTimeCompare($0, time) != 0 }) ?? true {
-            unique.append(time)
+        if requiresNormalization {
+            targetTimes.sort { CMTimeCompare($0, $1) < 0 }
+            deduplicateSortedTimesInPlace(&targetTimes)
         }
-        guard !unique.isEmpty else {
-            throw VideoFrameTimelineError.noVideoSamples
+        return targetTimes
+    }
+
+    private static func lowerBound(in values: [CMTime], for target: CMTime) -> Int {
+        var lower = 0
+        var upper = values.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if CMTimeCompare(values[middle], target) < 0 {
+                lower = middle + 1
+            } else {
+                upper = middle
+            }
         }
-        return unique
+        return lower
+    }
+
+    private static func deduplicateSortedTimesInPlace(_ values: inout [CMTime]) {
+        guard values.count > 1 else { return }
+        var writeIndex = 1
+        for readIndex in 1..<values.count
+        where CMTimeCompare(values[writeIndex - 1], values[readIndex]) != 0 {
+            if writeIndex != readIndex {
+                values[writeIndex] = values[readIndex]
+            }
+            writeIndex += 1
+        }
+        if writeIndex < values.count {
+            values.removeSubrange(writeIndex...)
+        }
     }
 
     private static func resolvedFrameRate(
@@ -282,12 +413,20 @@ struct VideoFrameTimeline {
             return preferred
         }
 
-        let deltas = zip(presentationTimes, presentationTimes.dropFirst())
-            .map { CMTimeGetSeconds(CMTimeSubtract($1, $0)) }
-            .filter { $0.isFinite && $0 > 0 }
-            .sorted()
-        guard !deltas.isEmpty else { return 0 }
-        return 1.0 / deltas[deltas.count / 2]
+        var duration = 0.0
+        var intervalCount = 0
+        for (earlier, later) in zip(
+            presentationTimes,
+            presentationTimes.dropFirst()
+        ) {
+            let delta = CMTimeGetSeconds(CMTimeSubtract(later, earlier))
+            if delta.isFinite, delta > 0 {
+                duration += delta
+                intervalCount += 1
+            }
+        }
+        guard intervalCount > 0, duration.isFinite, duration > 0 else { return 0 }
+        return Double(intervalCount) / duration
     }
 }
 

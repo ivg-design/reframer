@@ -24,18 +24,26 @@ struct ShortcutKeystroke: Equatable {
     let keyCode: UInt16
     let modifiers: UInt
     let isRepeat: Bool
+    let charactersIgnoringModifiers: String?
 
-    init(keyCode: UInt16, modifiers: UInt, isRepeat: Bool = false) {
+    init(
+        keyCode: UInt16,
+        modifiers: UInt,
+        isRepeat: Bool = false,
+        charactersIgnoringModifiers: String? = nil
+    ) {
         self.keyCode = keyCode
         self.modifiers = ShortcutSettings.normalizedModifiers(modifiers)
         self.isRepeat = isRepeat
+        self.charactersIgnoringModifiers = charactersIgnoringModifiers
     }
 
     init(event: NSEvent) {
         self.init(
             keyCode: event.keyCode,
             modifiers: event.modifierFlags.rawValue,
-            isRepeat: event.isARepeat
+            isRepeat: event.isARepeat,
+            charactersIgnoringModifiers: event.charactersIgnoringModifiers
         )
     }
 }
@@ -43,6 +51,21 @@ struct ShortcutKeystroke: Equatable {
 struct ShortcutMatch: Equatable {
     let action: ShortcutSettings.Action
     let variant: ShortcutVariant
+}
+
+enum ShortcutEventResolution: Equatable {
+    case unmatched
+    case consumeWithoutDispatch(ShortcutMatch)
+    case dispatch(ShortcutMatch)
+
+    var match: ShortcutMatch? {
+        switch self {
+        case .unmatched:
+            return nil
+        case .consumeWithoutDispatch(let match), .dispatch(let match):
+            return match
+        }
+    }
 }
 
 enum ReframerCommand: Equatable {
@@ -106,6 +129,40 @@ enum ReframerCommandAvailability {
 enum RegisteredHotKeyRouting {
     static func origin(isApplicationActive: Bool) -> ReframerCommandOrigin {
         isApplicationActive ? .localShortcut : .globalShortcut
+    }
+
+    /// Carbon and AppKit both report a registered chord while Reframer is
+    /// active. AppKit owns that case so focused controls retain native repeat
+    /// behavior; Carbon is the sole delivery path only across applications.
+    static func shouldDeliverCarbonEvent(isApplicationActive: Bool) -> Bool {
+        !isApplicationActive
+    }
+}
+
+enum FixedCommandShortcutResolution: Equatable {
+    case unmatched
+    case consumeWithoutDispatch
+    case dispatch(ReframerCommand)
+}
+
+/// Command-? is reserved by AppKit for Help-menu search before a custom menu
+/// item can invoke its action. Resolve the documented chord in the same local
+/// event layer as configurable shortcuts, then route it through the canonical
+/// command dispatcher.
+enum FixedCommandShortcutRouting {
+    static func eventResolution(
+        stroke: ShortcutKeystroke
+    ) -> FixedCommandShortcutResolution {
+        let commandShift = NSEvent.ModifierFlags([.command, .shift]).rawValue
+        guard stroke.keyCode == KeyCode.questionMark,
+              stroke.modifiers == ShortcutSettings.normalizedModifiers(
+                commandShift
+              ) else {
+            return .unmatched
+        }
+        return stroke.isRepeat
+            ? .consumeWithoutDispatch
+            : .dispatch(.openDocumentation)
     }
 }
 
@@ -267,15 +324,20 @@ final class ShortcutSettings: ObservableObject {
         var keyCode: UInt16
         var modifiers: UInt
         var multiplierModifier: UInt
+        var recordedCharacter: String?
 
         init(
             keyCode: UInt16,
             modifiers: UInt,
-            multiplierModifier: UInt = NSEvent.ModifierFlags.shift.rawValue
+            multiplierModifier: UInt = NSEvent.ModifierFlags.shift.rawValue,
+            recordedCharacter: String? = nil
         ) {
             self.keyCode = keyCode
             self.modifiers = ShortcutSettings.normalizedModifiers(modifiers)
             self.multiplierModifier = ShortcutSettings.normalizedModifiers(multiplierModifier)
+            self.recordedCharacter = ShortcutSettings.sanitizedRecordedCharacter(
+                recordedCharacter
+            )
         }
 
         var displayString: String {
@@ -289,7 +351,8 @@ final class ShortcutSettings: ObservableObject {
         func displayString(factor: Int) -> String {
             let modifiers = expandedModifiers(factor: factor)
             return ShortcutSettings.formatModifiers(modifiers)
-                + ShortcutSettings.keyCodeDisplayString(keyCode)
+                + (recordedCharacter?.uppercased()
+                    ?? ShortcutSettings.keyCodeDisplayString(keyCode))
         }
 
         func expandedModifiers(factor: Int) -> UInt {
@@ -308,7 +371,8 @@ final class ShortcutSettings: ObservableObject {
         }
 
         var menuKeyEquivalent: String? {
-            ShortcutSettings.menuKeyEquivalent(for: keyCode)
+            recordedCharacter
+                ?? ShortcutSettings.menuKeyEquivalent(for: keyCode)
         }
     }
 
@@ -461,8 +525,21 @@ final class ShortcutSettings: ObservableObject {
     }
 
     func resolve(stroke: ShortcutKeystroke, scope: ShortcutScope) -> ShortcutMatch? {
-        if scope == .global && !globalShortcutsEnabled {
+        guard case .dispatch(let match) = eventResolution(stroke: stroke, scope: scope) else {
             return nil
+        }
+        return match
+    }
+
+    /// Separates shortcut identity from repeat dispatch policy. A repeat for a
+    /// recognized non-repeating action is still consumed so it cannot leak into
+    /// an equivalent AppKit menu item and invoke the action there.
+    func eventResolution(
+        stroke: ShortcutKeystroke,
+        scope: ShortcutScope
+    ) -> ShortcutEventResolution {
+        if scope == .global && !globalShortcutsEnabled {
+            return .unmatched
         }
         for action in Action.allCases {
             guard scope == .local || action.isGlobal else { continue }
@@ -471,20 +548,23 @@ final class ShortcutSettings: ObservableObject {
                   let shortcut = binding.shortcut else {
                 continue
             }
-            guard !stroke.isRepeat || action.allowsKeyRepeat else { continue }
 
             for factor in action.supportedFactors {
                 guard stroke.keyCode == shortcut.keyCode,
                       stroke.modifiers == shortcut.expandedModifiers(factor: factor) else {
                     continue
                 }
-                return ShortcutMatch(
+                let match = ShortcutMatch(
                     action: action,
                     variant: factor == 1 ? .primary : .multiplied(factor)
                 )
+                if stroke.isRepeat && !action.allowsKeyRepeat {
+                    return .consumeWithoutDispatch(match)
+                }
+                return .dispatch(match)
             }
         }
-        return nil
+        return .unmatched
     }
 
     func command(for match: ShortcutMatch) -> ReframerCommand {
@@ -505,7 +585,8 @@ final class ShortcutSettings: ObservableObject {
         let normalized = Shortcut(
             keyCode: shortcut.keyCode,
             modifiers: shortcut.modifiers,
-            multiplierModifier: shortcut.multiplierModifier
+            multiplierModifier: shortcut.multiplierModifier,
+            recordedCharacter: shortcut.recordedCharacter
         )
 
         do {
@@ -624,7 +705,8 @@ final class ShortcutSettings: ObservableObject {
         let candidate = Shortcut(
             keyCode: stroke.keyCode,
             modifiers: stroke.modifiers,
-            multiplierModifier: multiplier
+            multiplierModifier: multiplier,
+            recordedCharacter: stroke.charactersIgnoringModifiers
         )
         switch setShortcut(candidate, for: action) {
         case .success:
@@ -715,7 +797,8 @@ final class ShortcutSettings: ObservableObject {
             let normalized = Shortcut(
                 keyCode: shortcut.keyCode,
                 modifiers: shortcut.modifiers,
-                multiplierModifier: shortcut.multiplierModifier
+                multiplierModifier: shortcut.multiplierModifier,
+                recordedCharacter: shortcut.recordedCharacter
             )
             do {
                 try validator.validate(normalized, for: action, existingBindings: sanitized)
@@ -871,27 +954,77 @@ final class ShortcutSettings: ObservableObject {
 
     static func menuKeyEquivalent(for code: UInt16) -> String? {
         switch code {
+        case 122:
+            return functionKeyEquivalent(NSF1FunctionKey)
+        case 120:
+            return functionKeyEquivalent(NSF2FunctionKey)
+        case 99:
+            return functionKeyEquivalent(NSF3FunctionKey)
+        case 118:
+            return functionKeyEquivalent(NSF4FunctionKey)
+        case 96:
+            return functionKeyEquivalent(NSF5FunctionKey)
+        case 97:
+            return functionKeyEquivalent(NSF6FunctionKey)
+        case 98:
+            return functionKeyEquivalent(NSF7FunctionKey)
+        case 100:
+            return functionKeyEquivalent(NSF8FunctionKey)
+        case 101:
+            return functionKeyEquivalent(NSF9FunctionKey)
+        case 109:
+            return functionKeyEquivalent(NSF10FunctionKey)
+        case 103:
+            return functionKeyEquivalent(NSF11FunctionKey)
+        case 111:
+            return functionKeyEquivalent(NSF12FunctionKey)
+        case KeyCode.home:
+            return functionKeyEquivalent(NSHomeFunctionKey)
+        case KeyCode.end:
+            return functionKeyEquivalent(NSEndFunctionKey)
         case KeyCode.pageUp:
-            return String(Character(UnicodeScalar(NSPageUpFunctionKey)!))
+            return functionKeyEquivalent(NSPageUpFunctionKey)
         case KeyCode.pageDown:
-            return String(Character(UnicodeScalar(NSPageDownFunctionKey)!))
+            return functionKeyEquivalent(NSPageDownFunctionKey)
         case KeyCode.leftArrow:
-            return String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!))
+            return functionKeyEquivalent(NSLeftArrowFunctionKey)
         case KeyCode.rightArrow:
-            return String(Character(UnicodeScalar(NSRightArrowFunctionKey)!))
+            return functionKeyEquivalent(NSRightArrowFunctionKey)
         case KeyCode.upArrow:
-            return String(Character(UnicodeScalar(NSUpArrowFunctionKey)!))
+            return functionKeyEquivalent(NSUpArrowFunctionKey)
         case KeyCode.downArrow:
-            return String(Character(UnicodeScalar(NSDownArrowFunctionKey)!))
+            return functionKeyEquivalent(NSDownArrowFunctionKey)
         case KeyCode.space:
             return " "
         case KeyCode.escape:
             return "\u{1b}"
         case KeyCode.returnKey:
             return "\r"
+        case KeyCode.tab:
+            return "\t"
+        case KeyCode.delete:
+            return "\u{8}"
+        case KeyCode.forwardDelete:
+            return functionKeyEquivalent(NSDeleteFunctionKey)
         default:
             return characterForKeyCode(code)
         }
+    }
+
+    private static func functionKeyEquivalent(_ value: Int) -> String {
+        String(Character(UnicodeScalar(value)!))
+    }
+
+    private static func sanitizedRecordedCharacter(_ value: String?) -> String? {
+        guard let value,
+              value.count == 1,
+              let scalar = value.unicodeScalars.first,
+              !CharacterSet.controlCharacters.contains(scalar),
+              !CharacterSet.whitespacesAndNewlines.contains(scalar),
+              scalar.value < 0xF700 else {
+            return nil
+        }
+        return value
     }
 
     private static func characterForKeyCode(_ code: UInt16) -> String? {
@@ -910,7 +1043,7 @@ final class ShortcutSettings: ObservableObject {
     private static func isSupportedKeyCode(_ keyCode: UInt16) -> Bool {
         guard keyCode <= 127 else { return false }
         let modifierKeyCodes: Set<UInt16> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
-        return !modifierKeyCodes.contains(keyCode)
+        return keyCode != KeyCode.tab && !modifierKeyCodes.contains(keyCode)
     }
 
     private static let reservedSystemStrokes: Set<StrokeSignature> = {

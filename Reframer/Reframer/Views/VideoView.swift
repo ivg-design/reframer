@@ -106,6 +106,20 @@ struct VideoPointerPanSession: Equatable {
     }
 }
 
+enum PlaybackStatusReconciliation {
+    static func intent(
+        currentIntent: Bool,
+        status: AVPlayer.TimeControlStatus,
+        rate: Float,
+        isScrubbing: Bool
+    ) -> Bool {
+        if status == .paused, currentIntent, rate == 0, !isScrubbing {
+            return false
+        }
+        return currentIntent
+    }
+}
+
 /// Pure AppKit video view with zoom, pan, and mouse handling
 class VideoView: NSView {
 
@@ -123,6 +137,7 @@ class VideoView: NSView {
     private var playerItemFailedObserver: NSObjectProtocol?
     private var playerItemEndedObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
+    private var selectedVideoTrackID: CMPersistentTrackID?
     private var loadToken = UUID()
     private var filterToken = UUID()
     private var failedLoadToken: UUID?
@@ -396,6 +411,7 @@ class VideoView: NSView {
             access: environment.securityScopedAccess
         )
         state.cancelScrubbing()
+        state.isPlaying = false
         cleanup()
         activeResourceLease = lease
 
@@ -428,12 +444,27 @@ class VideoView: NSView {
             do {
                 let videoAsset = try await environment.preflight(url)
                 try Task.checkCancellation()
+                let selectedTrack = try await VideoFormats.selectVideoTrack(
+                    in: videoAsset
+                )
+                try Task.checkCancellation()
+                let playbackAsset = try await VideoFormats.preparePlaybackAsset(
+                    from: videoAsset,
+                    selectedVideoTrack: selectedTrack
+                )
+                try Task.checkCancellation()
                 await MainActor.run {
                     guard self.loadToken == token, let state else { return }
-                    self.configurePlayer(asset: videoAsset, state: state, token: token)
+                    self.configurePlayer(
+                        asset: playbackAsset.asset,
+                        selectedTrackID: playbackAsset.selectedVideoTrackID,
+                        state: state,
+                        token: token
+                    )
                 }
                 try await self.loadMetadata(
-                    for: videoAsset,
+                    for: playbackAsset.asset,
+                    selectedTrack: selectedTrack,
                     state: state,
                     token: token,
                     timelineLoader: environment.loadTimeline
@@ -453,9 +484,15 @@ class VideoView: NSView {
         }
     }
 
-    private func configurePlayer(asset: AVURLAsset, state: VideoState, token: UUID) {
+    private func configurePlayer(
+        asset: AVAsset,
+        selectedTrackID: CMPersistentTrackID,
+        state: VideoState,
+        token: UUID
+    ) {
         guard loadToken == token else { return }
         currentAsset = asset
+        self.selectedVideoTrackID = selectedTrackID
         let item = AVPlayerItem(asset: asset)
         playerItem = item
         player = AVPlayer(playerItem: item)
@@ -476,14 +513,24 @@ class VideoView: NSView {
                 guard let self,
                       self.loadToken == token,
                       let state = self.videoState else { return }
-                switch player.timeControlStatus {
+                let status = player.timeControlStatus
+                let reconciledIntent = PlaybackStatusReconciliation.intent(
+                    currentIntent: state.isPlaying,
+                    status: status,
+                    rate: player.rate,
+                    isScrubbing: state.isScrubbing
+                )
+                switch status {
                 case .playing:
-                    if !state.isPlaying {
-                        state.isPlaying = true
+                    // VideoState is the playback intent authority. AVPlayer
+                    // can deliver a stale `.playing` transition after a rapid
+                    // play-then-pause command; never let that resurrect play.
+                    if !reconciledIntent {
+                        player.pause()
                     }
                 case .paused:
-                    if state.isPlaying, player.rate == 0, !state.isScrubbing {
-                        state.isPlaying = false
+                    if reconciledIntent != state.isPlaying {
+                        state.isPlaying = reconciledIntent
                     }
                 case .waitingToPlayAtSpecifiedRate:
                     break
@@ -501,6 +548,7 @@ class VideoView: NSView {
                 guard self.loadToken == token else { return }
                 switch item.status {
                 case .readyToPlay:
+                    self.alignVideoTrackSelection(for: item)
                     self.playerIsReady = true
                     self.updateLoadReadiness(token: token)
                 case .failed:
@@ -557,6 +605,21 @@ class VideoView: NSView {
         }
     }
 
+    private func alignVideoTrackSelection(for item: AVPlayerItem) {
+        guard let selectedVideoTrackID else { return }
+        let videoTracks = item.tracks.filter {
+            $0.assetTrack?.mediaType == .video
+        }
+        guard videoTracks.contains(where: {
+            $0.assetTrack?.trackID == selectedVideoTrackID
+        }) else { return }
+
+        for itemTrack in videoTracks {
+            itemTrack.isEnabled =
+                itemTrack.assetTrack?.trackID == selectedVideoTrackID
+        }
+    }
+
     private func installTimeObserver(token: UUID) {
         if let obs = timeObserver {
             player?.removeTimeObserver(obs)
@@ -583,18 +646,15 @@ class VideoView: NSView {
 
     private func loadMetadata(
         for asset: AVAsset,
+        selectedTrack: SelectedVideoTrack,
         state: VideoState?,
         token: UUID,
         timelineLoader: VideoLoadEnvironment.TimelineLoader
     ) async throws {
         let duration = try await asset.load(.duration)
-        guard let track = try await asset.loadTracks(withMediaType: .video).first else {
-            throw VideoPreflightError.noVideoTrack
-        }
-        let nominalFrameRate = try await Double(track.load(.nominalFrameRate))
-        let (naturalSize, preferredTransform) = try await track.load(.naturalSize, .preferredTransform)
-        let transformedSize = naturalSize.applying(preferredTransform)
-        let resolvedSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
+        let track = selectedTrack.track
+        let nominalFrameRate = selectedTrack.nominalFrameRate
+        let resolvedSize = selectedTrack.displaySize
         let seconds = CMTimeGetSeconds(duration)
         guard duration.isValid,
               duration.isNumeric,
@@ -929,6 +989,7 @@ class VideoView: NSView {
                 }
                 state.isAtEnd = false
                 if finished, resumePlayback {
+                    state.isPlaying = true
                     self.player?.play()
                 }
                 self.retryPausedFilterRefreshIfNeeded()
@@ -1013,6 +1074,7 @@ class VideoView: NSView {
         timeSeekToken = UUID()
         timeSeekInFlightToken = nil
         frameTimeline = nil
+        selectedVideoTrackID = nil
         playerIsReady = false
         metadataIsReady = false
         scrubWasPlaying = false

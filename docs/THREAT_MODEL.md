@@ -25,7 +25,8 @@ enabled global lock chord stays registered in every video and lock state. The
 four frame-step variants are registered only while a video is loaded, the
 overlay is locked, and exact or estimated sample navigation is available. They
 are removed outside that state, so Reframer cannot receive or swallow those
-keys when frame navigation is not actionable.
+keys through the global path while another app is active and frame navigation
+is not actionable.
 
 Registration describes exact virtual key and modifier combinations; it does
 not expose unrelated keystrokes. Registrations are exclusive so an existing
@@ -34,7 +35,8 @@ Reframer shows that failure and a retry action.
 
 The app does not use a global `NSEvent` monitor, event tap, Accessibility API,
 or Input Monitoring permission. Local key handling runs only while Reframer is
-active. Text editors keep text and standard edit commands, while other focused
+active. System sheets bypass that layer, documentation retains native scrolling
+keys, text editors keep text and standard edit commands, and other focused
 controls keep only conventional activation and navigation keys.
 
 ## Abuse resistance
@@ -45,9 +47,10 @@ controls keep only conventional activation and navigation keys.
   key-repeat behavior.
 - Binding validation rejects duplicates, macOS-reserved chords, multiplier
   collapse, unsupported keys, and globals without Command or Control.
-- Registration is rebuilt after binding, global-enable, video, lock, or
-  navigation-availability changes. All registrations are suspended during
-  shortcut recording and removed on shutdown.
+- Registration is updated incrementally after binding, global-enable, video,
+  lock, or navigation-availability changes so unchanged held keys remain held.
+  All registrations are suspended during shortcut recording and removed on
+  shutdown.
 
 ## Release controls
 

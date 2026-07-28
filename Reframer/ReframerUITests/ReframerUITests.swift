@@ -31,7 +31,14 @@ final class ReframerUITests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        let cancelButton = app.buttons["Cancel"].firstMatch
+        let openPanel = app.sheets.firstMatch
+        XCTAssertTrue(
+            openPanel.waitForExistence(timeout: 5),
+            "The open-video action should present a sheet",
+            file: file,
+            line: line
+        )
+        let cancelButton = openPanel.buttons["Cancel"].firstMatch
         XCTAssertTrue(
             cancelButton.waitForExistence(timeout: 5),
             "The open-video action should present a cancellable file picker",
@@ -39,15 +46,15 @@ final class ReframerUITests: XCTestCase {
             line: line
         )
         XCTAssertTrue(
-            app.buttons["Open"].firstMatch.waitForExistence(timeout: 2),
+            openPanel.buttons["Open"].firstMatch.waitForExistence(timeout: 2),
             "The file picker should expose its Open action",
             file: file,
             line: line
         )
 
-        cancelButton.click()
+        app.typeKey(.escape, modifierFlags: [])
         XCTAssertTrue(
-            waitForDisappearance(cancelButton),
+            waitForDisappearance(openPanel),
             "Cancelling should dismiss the file picker",
             file: file,
             line: line

@@ -44,6 +44,7 @@ class DropZoneView: NSView, ReframerShortcutOwningResponder {
         setAccessibilityLabel("Open video")
         setAccessibilityHelp("Open or drop an MP4, M4V, or MOV video")
         setAccessibilityIdentifier("open-video-drop-zone")
+        setAccessibilityEnabled(true)
 
         // Register for drag and drop - must register for fileURL to accept file drops
         registerForDraggedTypes([.fileURL])
@@ -188,16 +189,7 @@ class DropZoneView: NSView, ReframerShortcutOwningResponder {
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         isTargeted = false
 
-        guard let pasteboard = sender.draggingPasteboard.propertyList(forType: .fileURL) as? String,
-              let url = URL(string: pasteboard) else {
-            // Try alternative method
-            if let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
-               let url = urls.first {
-                return loadVideo(from: url)
-            }
-            return false
-        }
-
+        guard let url = supportedVideoURL(in: sender) else { return false }
         return loadVideo(from: url)
     }
 
@@ -208,18 +200,22 @@ class DropZoneView: NSView, ReframerShortcutOwningResponder {
     // MARK: - Helpers
 
     private func hasValidVideoFile(_ sender: NSDraggingInfo) -> Bool {
-        let pasteboard = sender.draggingPasteboard
+        supportedVideoURL(in: sender) != nil
+    }
 
-        // Check for file URLs
-        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
-            for url in urls {
-                if VideoFormats.isSupported(url) {
-                    return true
-                }
-            }
-        }
+    private func supportedVideoURL(in sender: NSDraggingInfo) -> URL? {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [
+            .urlReadingFileURLsOnly: true
+        ]
+        let urls = sender.draggingPasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: options
+        ) as? [URL] ?? []
+        return Self.firstSupportedVideoURL(in: urls)
+    }
 
-        return false
+    static func firstSupportedVideoURL(in urls: [URL]) -> URL? {
+        urls.first(where: VideoFormats.isSupported)
     }
 
     func loadVideo(from url: URL) -> Bool {

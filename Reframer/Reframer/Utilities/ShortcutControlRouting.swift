@@ -1,4 +1,5 @@
 import Cocoa
+import WebKit
 
 protocol ReframerShortcutOwningResponder: AnyObject {
     /// Returns true when this responder's documented native interaction owns
@@ -12,14 +13,20 @@ enum FocusedControlKind {
     case button
     case slider
     case popUpButton
+    case navigableContent
     case otherControl
 }
 
 enum ShortcutControlRouting {
     static func kind(for responder: NSResponder?) -> FocusedControlKind {
+        if responderIsInsideWebView(responder) {
+            return .navigableContent
+        }
         switch responder {
         case is NSTextView:
             return .textEditor
+        case is NSTableView, is NSCollectionView, is NSBrowser:
+            return .navigableContent
         case is NSPopUpButton:
             return .popUpButton
         case is NSSwitch:
@@ -83,9 +90,30 @@ enum ShortcutControlRouting {
                 KeyCode.space, KeyCode.returnKey, KeyCode.escape,
                 KeyCode.upArrow, KeyCode.downArrow
             ].contains(stroke.keyCode)
+        case .navigableContent:
+            return !hasCommand && !hasControl && [
+                KeyCode.space, KeyCode.returnKey,
+                KeyCode.leftArrow, KeyCode.rightArrow,
+                KeyCode.upArrow, KeyCode.downArrow,
+                KeyCode.pageUp, KeyCode.pageDown,
+                KeyCode.home, KeyCode.end
+            ].contains(stroke.keyCode)
         case .otherControl:
             return false
         }
+    }
+
+    private static func responderIsInsideWebView(
+        _ responder: NSResponder?
+    ) -> Bool {
+        var view = responder as? NSView
+        while let currentView = view {
+            if currentView is WKWebView {
+                return true
+            }
+            view = currentView.superview
+        }
+        return false
     }
 
     private static func isTextNavigationKey(_ keyCode: UInt16) -> Bool {

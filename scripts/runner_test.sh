@@ -22,17 +22,14 @@ LOG_PATH="$ARTIFACT_DIR/xcodebuild.log"
 case "$TEST_SCOPE" in
     unit)
         TEST_SELECTION=("-only-testing:ReframerTests")
-        SIGNING_ARGUMENTS=("CODE_SIGNING_ALLOWED=NO")
         ;;
     ui)
         "$SCRIPT_DIR/ui_test_preflight.sh"
         TEST_SELECTION=("-only-testing:ReframerUITests")
-        SIGNING_ARGUMENTS=()
         ;;
     all)
         "$SCRIPT_DIR/ui_test_preflight.sh"
         TEST_SELECTION=()
-        SIGNING_ARGUMENTS=()
         ;;
     *)
         echo "error: TEST_SCOPE must be one of: unit, ui, all" >&2
@@ -69,7 +66,7 @@ if [ "$TEST_SCOPE" = "unit" ]; then
         -destination "$DESTINATION" \
         -derivedDataPath "$DERIVED_DATA_PATH" \
         -parallel-testing-enabled NO \
-        "${SIGNING_ARGUMENTS[@]}" \
+        CODE_SIGNING_ALLOWED=NO \
         2>&1 | tee -a "$LOG_PATH"
     BUILD_STATUS=${PIPESTATUS[0]}
     set -e
@@ -113,17 +110,24 @@ if [ "$TEST_SCOPE" = "unit" ]; then
     exit 0
 fi
 
+XCODEBUILD_ARGUMENTS=(
+    test
+    -project "$PROJECT_PATH"
+    -scheme "$SCHEME"
+    -destination "$DESTINATION"
+    -derivedDataPath "$DERIVED_DATA_PATH"
+    -resultBundlePath "$XCRESULT_PATH"
+    -parallel-testing-enabled NO
+)
+if [ "${#TEST_SELECTION[@]}" -gt 0 ]; then
+    XCODEBUILD_ARGUMENTS+=("${TEST_SELECTION[@]}")
+fi
+XCODEBUILD_ARGUMENTS+=(
+    "REFRAMER_UI_RUNNER_AUTHORIZED=$REFRAMER_UI_RUNNER_AUTHORIZED"
+)
+
 set +e
-xcodebuild test \
-    -project "$PROJECT_PATH" \
-    -scheme "$SCHEME" \
-    -destination "$DESTINATION" \
-    -derivedDataPath "$DERIVED_DATA_PATH" \
-    -resultBundlePath "$XCRESULT_PATH" \
-    -parallel-testing-enabled NO \
-    "${SIGNING_ARGUMENTS[@]}" \
-    "${TEST_SELECTION[@]}" \
-    2>&1 | tee -a "$LOG_PATH"
+xcodebuild "${XCODEBUILD_ARGUMENTS[@]}" 2>&1 | tee -a "$LOG_PATH"
 TEST_STATUS=${PIPESTATUS[0]}
 set -e
 

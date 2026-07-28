@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   quality:
@@ -22,7 +22,78 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify release source
+        env:
+          REQUESTED_VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          RELEASE_VERSION="${REQUESTED_VERSION#v}"
+          PROJECT_VERSION="$(
+            xcodebuild \
+              -project Reframer/Reframer.xcodeproj \
+              -scheme Reframer \
+              -configuration Release \
+              -showBuildSettings |
+              awk '/ MARKETING_VERSION = / { print $3; exit }'
+          )"
+          if [ "$RELEASE_VERSION" != "$PROJECT_VERSION" ]; then
+            echo "error: requested $RELEASE_VERSION but project is $PROJECT_VERSION" >&2
+            exit 65
+          fi
+          if ! git show-ref --verify --quiet refs/remotes/origin/main; then
+            echo "error: checkout did not provide origin/main" >&2
+            exit 65
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "error: release source is not on origin/main" >&2
+            exit 65
+          fi
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            if [ "$GITHUB_REF_NAME" != "v$PROJECT_VERSION" ]; then
+              echo "error: release tag must be v$PROJECT_VERSION" >&2
+              exit 65
+            fi
+            TAG_COMMIT="$(git rev-parse "$GITHUB_REF_NAME^{commit}")"
+            if [ "$TAG_COMMIT" != "$GITHUB_SHA" ]; then
+              echo "error: release tag does not resolve to the event commit" >&2
+              exit 65
+            fi
+            python3 - "$PROJECT_VERSION" <<'PY'
+          import datetime
+          import pathlib
+          import sys
+
+          version = sys.argv[1]
+          prefix = f"## [{version}] - "
+          matching_headers = [
+              line for line in pathlib.Path("CHANGELOG.md").read_text().splitlines()
+              if line.startswith(prefix)
+          ]
+          if len(matching_headers) != 1:
+              raise SystemExit(
+                  f"error: changelog must contain exactly one {version} heading"
+              )
+          value = matching_headers[0][len(prefix):]
+          if value == "Unreleased":
+              raise SystemExit(
+                  f"error: changelog entry for {version} is still Unreleased"
+              )
+          try:
+              parsed = datetime.date.fromisoformat(value)
+          except ValueError:
+              raise SystemExit(
+                  f"error: changelog entry for {version} is not dated"
+              )
+          if parsed.isoformat() != value:
+              raise SystemExit(
+                  f"error: changelog entry for {version} is not dated"
+              )
+          PY
+          fi
 
       - name: Validate repository
         run: scripts/validate_repository.sh
@@ -43,8 +114,10 @@ jobs:
             -project Reframer/Reframer.xcodeproj \
             -scheme Reframer \
             -configuration Release \
-            -destination 'platform=macOS' \
+            -destination 'generic/platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/Reframer-Release" \
+            ARCHS='arm64 x86_64' \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO
           scripts/validate_bundle.sh \
             "$RUNNER_TEMP/Reframer-Release/Build/Products/Release/Reframer.app"
@@ -77,7 +150,7 @@ jobs:
 
       - name: Upload quality diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: reframer-release-quality-diagnostics
           path: ${{ runner.temp }}/reframer-release-test-artifacts
@@ -92,7 +165,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Runner preflight
         run: scripts/ui_test_preflight.sh
@@ -109,7 +184,7 @@ jobs:
 
       - name: Upload UI diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: reframer-release-ui-diagnostics
           path: ${{ runner.temp }}/reframer-release-ui-artifacts
@@ -121,12 +196,32 @@ jobs:
     needs: [quality, ui]
     runs-on: macos-15
     timeout-minutes: 45
+    environment: release
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reverify release checkout
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo "error: release checkout does not match the event commit" >&2
+            exit 65
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "error: release checkout is not on origin/main" >&2
+            exit 65
+          fi
+          if [ "$GITHUB_REF_TYPE" = "tag" ] &&
+             [ "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" != "$GITHUB_SHA" ]; then
+            echo "error: release tag does not match the event commit" >&2
+            exit 65
+          fi
 
       - name: Validate repository
         run: scripts/validate_repository.sh
@@ -137,9 +232,10 @@ jobs:
           CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.RELEASE_KEYCHAIN_PASSWORD }}
         run: |
+          umask 077
           CERTIFICATE_PATH="$RUNNER_TEMP/developer-id.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/reframer-signing.keychain-db"
-          echo "$CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          printf '%s' "$CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -148,6 +244,7 @@ jobs:
             -P "$CERTIFICATE_PASSWORD" \
             -T /usr/bin/codesign \
             -T /usr/bin/security
+          rm -f "$CERTIFICATE_PATH"
           security set-key-partition-list \
             -S apple-tool:,apple: \
             -s \
@@ -162,13 +259,15 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: |
-          NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_$NOTARY_KEY_ID.p8"
-          echo "$NOTARY_API_KEY_BASE64" | base64 --decode > "$NOTARY_KEY_PATH"
+          umask 077
+          NOTARY_KEY_PATH="$RUNNER_TEMP/reframer-notary-key.p8"
+          printf '%s' "$NOTARY_API_KEY_BASE64" | base64 --decode > "$NOTARY_KEY_PATH"
           xcrun notarytool store-credentials reframer-ci \
             --key "$NOTARY_KEY_PATH" \
             --key-id "$NOTARY_KEY_ID" \
             --issuer "$NOTARY_ISSUER_ID" \
             --keychain "$RELEASE_KEYCHAIN"
+          rm -f "$NOTARY_KEY_PATH"
 
       - name: Package release
         env:
@@ -183,21 +282,67 @@ jobs:
           scripts/package_release.sh
 
       - name: Upload signed artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Reframer-macOS
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*-notarization.json
+            dist/SHA256SUMS.txt
           if-no-files-found: error
 
       - name: Publish GitHub release
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --verify-tag --generate-notes
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          expected_commit = os.environ["GITHUB_SHA"]
+          token = os.environ["GH_TOKEN"]
+
+          def github_json(path):
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/{repository}{path}",
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {token}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urllib.request.urlopen(request) as response:
+                  return json.load(response)
+
+          encoded_tag = urllib.parse.quote(tag, safe="")
+          target = github_json(f"/git/ref/tags/{encoded_tag}")["object"]
+          while target["type"] == "tag":
+              target = github_json(f"/git/tags/{target['sha']}")["object"]
+          if target["type"] != "commit" or target["sha"] != expected_commit:
+              raise SystemExit(
+                  "error: remote release tag no longer resolves to the event commit"
+              )
+          PY
+          gh release create "$GITHUB_REF_NAME" \
+            dist/*.zip \
+            dist/*-notarization.json \
+            dist/SHA256SUMS.txt \
+            --verify-tag \
+            --target "$GITHUB_SHA" \
+            --generate-notes
 
       - name: Remove temporary keychain
         if: always()
         run: |
-          if [ -n "${RELEASE_KEYCHAIN:-}" ] && [ -f "$RELEASE_KEYCHAIN" ]; then
-            security delete-keychain "$RELEASE_KEYCHAIN"
+          KEYCHAIN_PATH="$RUNNER_TEMP/reframer-signing.keychain-db"
+          CERTIFICATE_PATH="$RUNNER_TEMP/developer-id.p12"
+          NOTARY_KEY_PATH="$RUNNER_TEMP/reframer-notary-key.p8"
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
           fi
+          rm -f "$CERTIFICATE_PATH" "$NOTARY_KEY_PATH"

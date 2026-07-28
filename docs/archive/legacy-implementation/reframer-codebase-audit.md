@@ -2,7 +2,8 @@
 
 > Archived historical material. It does not describe the current product contract.
 
-Scope: `/Users/ivg/github/video-overlay/Reframer-filters` on branch `feature/video-filters`.
+Scope: an archived `Reframer-filters` worktree on branch
+`feature/video-filters`.
 
 ## Recent changes observed
 - Recent commits on the branch include work on UI test runners, help/filters UX, and YouTube prompt handling (see `git log` entries around `c2243bf`, `ed20da0`, `128b97b`, `f8ab548`).

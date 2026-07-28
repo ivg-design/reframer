@@ -2,6 +2,41 @@ import AVFoundation
 import XCTest
 @testable import Reframer
 
+final class PlaybackStatusReconciliationTests: XCTestCase {
+    func testDelayedPlayingStatusCannotResurrectPausedIntent() {
+        XCTAssertFalse(
+            PlaybackStatusReconciliation.intent(
+                currentIntent: false,
+                status: .playing,
+                rate: 1,
+                isScrubbing: false
+            )
+        )
+    }
+
+    func testInvoluntaryPauseClearsPlayingIntent() {
+        XCTAssertFalse(
+            PlaybackStatusReconciliation.intent(
+                currentIntent: true,
+                status: .paused,
+                rate: 0,
+                isScrubbing: false
+            )
+        )
+    }
+
+    func testScrubPausePreservesPlayingIntent() {
+        XCTAssertTrue(
+            PlaybackStatusReconciliation.intent(
+                currentIntent: true,
+                status: .paused,
+                rate: 0,
+                isScrubbing: true
+            )
+        )
+    }
+}
+
 final class VideoFrameTimelineTests: XCTestCase {
     func testVariableFrameRateLookupUsesPresentationTimes() {
         let timeline = VideoFrameTimeline(
@@ -226,6 +261,104 @@ final class VideoFrameTimelineTests: XCTestCase {
         XCTAssertEqual(timeline.nominalFrameRate, 30)
     }
 
+    func testExactSampleLimitIsExplicitAndEnforcedBeforeMapping() {
+        XCTAssertEqual(VideoFrameTimeline.maximumExactSampleCount, 2_000_000)
+        let sourceTimes = (0..<4).map {
+            CMTime(value: CMTimeValue($0), timescale: 1)
+        }
+        let mapping = VideoFrameSegmentMapping(
+            source: CMTimeRange(
+                start: .zero,
+                duration: CMTime(value: 4, timescale: 1)
+            ),
+            target: CMTimeRange(
+                start: .zero,
+                duration: CMTime(value: 4, timescale: 1)
+            )
+        )
+
+        XCTAssertThrowsError(
+            try VideoFrameTimeline.mapSortedPresentationTimes(
+                sourceTimes,
+                through: [mapping],
+                maximumSampleCount: 3
+            )
+        ) { error in
+            guard case VideoFrameTimelineError.exactSampleLimitExceeded(
+                let maximum
+            ) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(maximum, 3)
+        }
+    }
+
+    func testSegmentMappingUsesBinarySlicesAndTargetOrder() throws {
+        let sourceTimes = (0..<6).map {
+            CMTime(value: CMTimeValue($0), timescale: 1)
+        }
+        // Deliberately provide the later target segment first. The source edit
+        // also jumps backwards, as a reordered movie edit can.
+        let mappings = [
+            VideoFrameSegmentMapping(
+                source: CMTimeRange(
+                    start: .zero,
+                    duration: CMTime(value: 2, timescale: 1)
+                ),
+                target: CMTimeRange(
+                    start: CMTime(value: 2, timescale: 1),
+                    duration: CMTime(value: 2, timescale: 1)
+                )
+            ),
+            VideoFrameSegmentMapping(
+                source: CMTimeRange(
+                    start: CMTime(value: 3, timescale: 1),
+                    duration: CMTime(value: 2, timescale: 1)
+                ),
+                target: CMTimeRange(
+                    start: .zero,
+                    duration: CMTime(value: 2, timescale: 1)
+                )
+            )
+        ]
+
+        let mapped = try VideoFrameTimeline.mapSortedPresentationTimes(
+            sourceTimes,
+            through: mappings
+        )
+
+        XCTAssertEqual(
+            mapped.map(CMTimeGetSeconds),
+            [0, 1, 2, 3]
+        )
+    }
+
+    func testOverlappingMappingsNormalizeAndDeduplicateInPlace() throws {
+        let sourceTimes = [0, 1, 2].map {
+            CMTime(value: CMTimeValue($0), timescale: 1)
+        }
+        let fullRange = CMTimeRange(
+            start: .zero,
+            duration: CMTime(value: 3, timescale: 1)
+        )
+
+        let mapped = try VideoFrameTimeline.mapSortedPresentationTimes(
+            sourceTimes,
+            through: [
+                VideoFrameSegmentMapping(
+                    source: fullRange,
+                    target: fullRange
+                ),
+                VideoFrameSegmentMapping(
+                    source: fullRange,
+                    target: fullRange
+                )
+            ]
+        )
+
+        XCTAssertEqual(mapped.map(CMTimeGetSeconds), [0, 1, 2])
+    }
+
     func testPreviewSeeksAreBoundedAndLatestWins() {
         var coordinator = PreviewSeekCoordinator()
         let firstAction = coordinator.submit(time: 0)
@@ -445,9 +578,10 @@ final class SecurityScopedURLLeaseTests: XCTestCase {
             url: url,
             access: access
         )
-        weak var weakLease = owner
+        weak let weakLease = owner
         var asyncOwner = owner
 
+        XCTAssertNotNil(asyncOwner)
         owner = nil
         XCTAssertNotNil(weakLease)
         XCTAssertEqual(events.snapshot(), ["start:reframer-lease-success.mov"])
@@ -476,6 +610,7 @@ final class SecurityScopedURLLeaseTests: XCTestCase {
             )
         )
 
+        XCTAssertNotNil(lease)
         lease = nil
 
         XCTAssertEqual(events.snapshot(), ["start"])
@@ -484,6 +619,50 @@ final class SecurityScopedURLLeaseTests: XCTestCase {
 
 @MainActor
 final class VideoViewLifecycleTests: XCTestCase {
+    func testMOVAndM4VFixturesReachReadyPlaybackState() async throws {
+        let bundle = Bundle(for: Self.self)
+
+        for fileExtension in ["mov", "m4v"] {
+            let suiteName =
+                "Reframer.VideoViewLifecycleTests.\(fileExtension).\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+            defaults.removePersistentDomain(forName: suiteName)
+            defer { defaults.removePersistentDomain(forName: suiteName) }
+
+            let url = try XCTUnwrap(
+                bundle.url(
+                    forResource: "test_playable",
+                    withExtension: fileExtension
+                )
+            )
+            let state = VideoState(defaults: defaults)
+            let videoView = VideoView(
+                frame: NSRect(x: 0, y: 0, width: 640, height: 480)
+            )
+            videoView.videoState = state
+
+            state.videoURL = url
+            let loaded = await waitUntil(timeout: 5) {
+                state.isVideoLoaded
+                    && state.frameNavigationPrecision == .exact
+            }
+
+            XCTAssertTrue(
+                loaded,
+                state.videoErrorMessage
+                    ?? "\(fileExtension.uppercased()) did not reach ready state"
+            )
+            XCTAssertEqual(state.totalFrames, 6)
+            XCTAssertEqual(
+                state.videoNaturalSize.width / state.videoNaturalSize.height,
+                1,
+                accuracy: 0.001
+            )
+            XCTAssertFalse(state.isPlaying)
+            state.videoURL = nil
+        }
+    }
+
     func testSecondLoadSupersedesFirstWithoutStaleMetadataWinning() async throws {
         let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -524,6 +703,76 @@ final class VideoViewLifecycleTests: XCTestCase {
             accuracy: 0.001
         )
         XCTAssertNil(state.videoErrorMessage)
+    }
+
+    func testReplacingPlayingVideoEntersLoadingAndLandsPaused() async throws {
+        let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let bundle = Bundle(for: Self.self)
+        let firstURL = try XCTUnwrap(
+            bundle.url(forResource: "test_30fps_2s", withExtension: "mp4")
+        )
+        let secondURL = try XCTUnwrap(
+            bundle.url(forResource: "test_4x3_1s", withExtension: "mp4")
+        )
+        let state = VideoState(defaults: defaults)
+        let videoView = VideoView(
+            frame: NSRect(x: 0, y: 0, width: 640, height: 480)
+        )
+        videoView.videoState = state
+
+        state.videoURL = firstURL
+        let firstLoaded = await waitUntil(timeout: 5) {
+            state.isVideoLoaded
+                && state.frameNavigationPrecision == .exact
+        }
+        XCTAssertTrue(
+            firstLoaded,
+            state.videoErrorMessage ?? "First video did not finish loading"
+        )
+
+        state.isPlaying = true
+        XCTAssertTrue(state.isPlaying)
+
+        let replacementGate = AsyncTestGate()
+        videoView.loadEnvironment = VideoLoadEnvironment(
+            securityScopedAccess: VideoLoadEnvironment.live.securityScopedAccess,
+            preflight: { url in
+                if url.standardizedFileURL == secondURL.standardizedFileURL {
+                    await replacementGate.wait()
+                }
+                return try await VideoFormats.preflight(url)
+            },
+            loadTimeline: VideoLoadEnvironment.live.loadTimeline
+        )
+
+        state.videoURL = secondURL
+        let replacementLoading = await waitUntil {
+            state.isVideoLoading && !state.isVideoLoaded
+        }
+        XCTAssertTrue(replacementLoading)
+        XCTAssertFalse(
+            state.isPlaying,
+            "Loading state must not retain the prior player's playing state"
+        )
+
+        await replacementGate.open()
+        let replacementLoaded = await waitUntil(timeout: 5) {
+            state.isVideoLoaded
+                && state.frameNavigationPrecision == .exact
+        }
+        XCTAssertTrue(
+            replacementLoaded,
+            state.videoErrorMessage ?? "Replacement video did not finish loading"
+        )
+        XCTAssertFalse(
+            state.isPlaying,
+            "A newly selected replacement must land paused"
+        )
+        state.videoURL = nil
     }
 
     func testUnloadCancelsInFlightLoadAndPreventsLateReadiness() async throws {
@@ -679,11 +928,13 @@ final class VideoViewLifecycleTests: XCTestCase {
                     return true
                 },
                 stop: { [weak videoView] _ in
-                    events.append(
-                        videoView?.hasActivePlaybackResources == true
-                            ? "stop:player-active"
-                            : "stop:player-torn-down"
-                    )
+                    MainActor.assumeIsolated {
+                        events.append(
+                            videoView?.hasActivePlaybackResources == true
+                                ? "stop:player-active"
+                                : "stop:player-torn-down"
+                        )
+                    }
                 }
             ),
             preflight: VideoLoadEnvironment.live.preflight,
@@ -707,7 +958,7 @@ final class VideoViewLifecycleTests: XCTestCase {
         XCTAssertEqual(events.snapshot().filter { $0.hasPrefix("stop:") }.count, 1)
     }
 
-    func testDelayedExactIndexPromotionAndForcedFallbackAreDeterministic() async throws {
+    func testDelayedExactIndexPromotionAndSampleCapFallbackAreDeterministic() async throws {
         let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
@@ -758,7 +1009,9 @@ final class VideoViewLifecycleTests: XCTestCase {
             securityScopedAccess: videoView.loadEnvironment.securityScopedAccess,
             preflight: VideoLoadEnvironment.live.preflight,
             loadTimeline: { _, _, _ in
-                throw VideoFrameTimelineError.sampleCursorUnavailable
+                throw VideoFrameTimelineError.exactSampleLimitExceeded(
+                    maximum: VideoFrameTimeline.maximumExactSampleCount
+                )
             }
         )
         videoView.loadVideo(url: url)

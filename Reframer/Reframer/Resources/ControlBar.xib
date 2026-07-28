@@ -102,7 +102,7 @@
                             <rect key="frame" x="367" y="8" width="50" height="24"/>
                             <constraints>
                                 <constraint firstAttribute="height" constant="24" id="QDh-Jv-pVT"/>
-                                <constraint firstAttribute="width" constant="50" id="frame-w"/>
+                                <constraint firstAttribute="width" constant="64" id="frame-w"/>
                             </constraints>
                             <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" borderStyle="bezel" alignment="right" placeholderString="0" bezelStyle="round" id="field-frame-cell">
                                 <font key="font" metaFont="system"/>
@@ -113,7 +113,7 @@
                         <textField identifier="label-frame-total" clipsToBounds="YES" focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="label-frame-total">
                             <rect key="frame" x="420" y="12" width="54" height="16"/>
                             <constraints>
-                                <constraint firstAttribute="width" relation="lessThanOrEqual" constant="50" id="jds-Ub-DMa"/>
+                                <constraint firstAttribute="width" relation="lessThanOrEqual" constant="100" id="jds-Ub-DMa"/>
                             </constraints>
                             <textFieldCell key="cell" lineBreakMode="clipping" allowsUndo="NO" alignment="left" title="/ 0" id="label-frame-total-cell">
                                 <font key="font" metaFont="system"/>

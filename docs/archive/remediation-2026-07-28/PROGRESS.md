@@ -1,4 +1,7 @@
-# Reframer remediation progress
+# Historical Reframer remediation progress
+
+This commit-era implementation log is retained for provenance. It is not the
+current product contract or release-readiness record.
 
 ## 2026-07-28
 

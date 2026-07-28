@@ -1,43 +1,19 @@
-# Handoff Report (Session 4) — Remote Test Runner
+# Archived runner handoff
 
-> Archived historical material. It does not describe the current product contract.
+> Historical summary only. This file is not a current setup guide or product
+> contract.
 
-This handoff is retained for the remote test runner setup and workflow. Legacy playback notes were removed in favor of the current libmpv implementation.
+The original handoff described a machine-specific SSH runner used during an
+early Reframer experiment. Its host address, account name, absolute paths, and
+copy-paste commands were removed from the public tree because they are not
+portable and exposed private workstation details.
 
-## Remote Test Runner Summary
+The useful historical conclusion was that AppKit UI automation needs an active,
+interactive macOS desktop. Current automation must use the repository's
+[`ui_test_preflight.sh`](../../../scripts/ui_test_preflight.sh) and the evidence
+rules in [Feature Verification](../../FEATURE_TESTS.md). It must not alter TCC
+databases, restart privacy services, weaken screen-lock policy, strip
+provenance, or re-sign test products.
 
-- **Runner host**: `laptop` (SSH alias to `ivg@192.168.2.107`)
-- **Repo path on runner**: `/Users/ivg/github/video-overlay/Reframer-filters/Reframer`
-- **Goal**: Build and run AppKit UI tests without focus‑stealing on the main Mac
-
-### Typical Workflow
-
-```bash
-# Sync repo
-rsync -av --delete /Users/ivg/github/video-overlay/Reframer-filters/Reframer/ laptop:/Users/ivg/github/video-overlay/Reframer-filters/Reframer/
-
-# Build
-ssh laptop "cd /Users/ivg/github/video-overlay/Reframer-filters/Reframer && xcodebuild -scheme Reframer -configuration Debug -destination 'platform=macOS' build"
-
-# Run app with test mode
-ssh laptop "export UITEST_MODE=1 && /Users/ivg/Library/Developer/Xcode/DerivedData/Reframer-*/Build/Products/Debug/Reframer.app/Contents/MacOS/Reframer"
-
-# Run UI tests
-ssh laptop "cd /Users/ivg/github/video-overlay/Reframer-filters/Reframer && xcodebuild -scheme Reframer -destination 'platform=macOS' test"
-```
-
-### GUI Runner (Preferred for UI tests)
-
-```bash
-ssh laptop "/Users/ivg/github/video-overlay/Reframer-filters/scripts/runner_test_gui.sh"
-```
-
-If UI tests hang, approve Input Monitoring for **Terminal** and (if prompted) **Xcode** or **DTServiceHub** in System Settings → Privacy & Security → Input Monitoring.
-
-### Notes
-- Keep the runner user logged in to allow AppKit UI tests to interact with windows.
-- Accessibility permissions must be granted once on the runner.
-
----
-
-*Last Updated: 2026-02-01 12:30*
+The original report remains available in Git history when historical forensics
+are necessary.

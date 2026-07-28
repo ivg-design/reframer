@@ -13,13 +13,13 @@
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>0.10.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>HPDBookAccessPath</key>
 	<string>index.html</string>
 	<key>HPDBookIndexPath</key>
-	<string>search.helpindex</string>
+	<string>search.cshelpindex</string>
 	<key>HPDBookTitle</key>
 	<string>Reframer Help</string>
 	<key>HPDBookType</key>
