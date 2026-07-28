@@ -47,6 +47,7 @@ class VideoView: NSView {
     private var currentAsset: AVAsset?
     private var timeObserver: Any?
     private var playerTimeControlObservation: NSKeyValueObservation?
+    private var loadTask: Task<Void, Never>?
     private var playerItemStatusObservation: NSKeyValueObservation?
     private var playerItemFailedObserver: NSObjectProtocol?
     private var playerItemEndedObserver: NSObjectProtocol?
@@ -305,18 +306,26 @@ class VideoView: NSView {
         frameTimeline = nil
         frameSeekCoordinator.reset()
 
-        Task { [weak self, weak state] in
+        loadTask = Task { [weak self, weak state] in
             guard let self else { return }
             do {
                 let videoAsset = try await VideoFormats.preflight(url)
+                try Task.checkCancellation()
                 await MainActor.run {
                     guard self.loadToken == token, let state else { return }
                     self.configurePlayer(asset: videoAsset, state: state, token: token)
                 }
                 try await self.loadMetadata(for: videoAsset, state: state, token: token)
+                try Task.checkCancellation()
             } catch {
+                guard !(error is CancellationError) else { return }
                 await MainActor.run {
                     self.failLoad(error, token: token)
+                }
+            }
+            await MainActor.run {
+                if self.loadToken == token {
+                    self.loadTask = nil
                 }
             }
         }
@@ -437,10 +446,9 @@ class VideoView: NSView {
                   self.loadToken == token,
                   let state = self.videoState else { return }
             let sec = CMTimeGetSeconds(time)
-            if sec.isFinite {
+            if sec.isFinite, !self.frameSeekCoordinator.hasPendingSeek {
                 state.currentTime = sec
-                if !self.frameSeekCoordinator.hasPendingSeek,
-                   let timeline = self.frameTimeline {
+                if let timeline = self.frameTimeline {
                     state.currentFrame = timeline.frameIndex(containing: time)
                 }
             }
@@ -642,10 +650,11 @@ class VideoView: NSView {
                       self.frameSeekCoordinator.desiredTarget == seekTarget else { return }
                 self.frameSeekCoordinator.complete(seekTarget)
                 if finished {
+                    let shouldResume = resumePlayback && (state.isPlaying || !state.isAtEnd)
                     state.currentFrame = target
                     state.currentTime = max(0, CMTimeGetSeconds(time))
                     state.isAtEnd = false
-                    if resumePlayback {
+                    if shouldResume {
                         self.player?.play()
                     }
                 } else {
@@ -704,6 +713,8 @@ class VideoView: NSView {
     }
 
     private func cleanup() {
+        loadTask?.cancel()
+        loadTask = nil
         loadToken = UUID()
         filterToken = UUID()
         frameSeekCoordinator.reset()

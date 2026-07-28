@@ -32,6 +32,7 @@ class MainViewController: NSViewController {
     private var dropZoneView: DropZoneView!
     private var edgeIndicatorView: EdgeIndicatorView!
     private var loadingView: NSStackView!
+    private var loadingLabel: NSTextField!
     private var errorView: NSStackView!
     private var errorLabel: NSTextField!
     private var retryButton: NSButton!
@@ -188,11 +189,19 @@ class MainViewController: NSViewController {
         spinner.startAnimation(nil)
         spinner.setAccessibilityElement(false)
 
-        let label = NSTextField(labelWithString: "Loading video…")
-        label.font = .systemFont(ofSize: 15, weight: .medium)
-        label.textColor = .secondaryLabelColor
+        loadingLabel = NSTextField(labelWithString: "Loading video…")
+        loadingLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        loadingLabel.textColor = .secondaryLabelColor
 
-        let stack = NSStackView(views: [spinner, label])
+        let cancelButton = NSButton(
+            title: "Cancel",
+            target: self,
+            action: #selector(cancelLoading)
+        )
+        cancelButton.setAccessibilityIdentifier("button-cancel-loading")
+        cancelButton.setAccessibilityHelp("Stop loading and return to the empty state")
+
+        let stack = NSStackView(views: [spinner, loadingLabel, cancelButton])
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 10
@@ -263,6 +272,16 @@ class MainViewController: NSViewController {
         } else {
             errorView.isHidden = true
         }
+
+        if state == .loading {
+            if let name = videoState.videoURL?.lastPathComponent, !name.isEmpty {
+                loadingLabel.stringValue = "Loading \(name)…"
+                loadingView.setAccessibilityHelp("Loading \(name)")
+            } else {
+                loadingLabel.stringValue = "Loading video…"
+                loadingView.setAccessibilityHelp(nil)
+            }
+        }
     }
 
     @objc private func retryVideo(_ sender: Any?) {
@@ -271,6 +290,10 @@ class MainViewController: NSViewController {
 
     @objc private func chooseAnotherVideo(_ sender: Any?) {
         NotificationCenter.default.post(name: .openVideo, object: nil)
+    }
+
+    @objc private func cancelLoading(_ sender: Any?) {
+        videoState.videoURL = nil
     }
 
     override func viewDidAppear() {

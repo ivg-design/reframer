@@ -63,6 +63,40 @@ final class VideoFrameTimelineTests: XCTestCase {
         XCTAssertNil(coordinator.desiredTarget)
     }
 
+    func testOneHundredRapidStepsAccumulateAndClamp() {
+        let timeline = makeTimeline(count: 75)
+        var coordinator = FrameSeekCoordinator()
+        var target = coordinator.begin(frame: 0, timeline: timeline)
+
+        for _ in 0..<100 {
+            target = coordinator.target(from: 0, delta: 1, timeline: timeline)
+        }
+        XCTAssertEqual(target.frame, 74)
+
+        for _ in 0..<100 {
+            target = coordinator.target(from: 74, delta: -1, timeline: timeline)
+        }
+        XCTAssertEqual(target.frame, 0)
+    }
+
+    func testTenFrameStepsReverseFromDesiredTarget() {
+        let timeline = makeTimeline(count: 100)
+        var coordinator = FrameSeekCoordinator()
+
+        XCTAssertEqual(
+            coordinator.target(from: 20, delta: 10, timeline: timeline).frame,
+            30
+        )
+        XCTAssertEqual(
+            coordinator.target(from: 20, delta: 10, timeline: timeline).frame,
+            40
+        )
+        XCTAssertEqual(
+            coordinator.target(from: 20, delta: -10, timeline: timeline).frame,
+            30
+        )
+    }
+
     func testFractionalFrameRateFixtureHasExactSampleCount() async throws {
         let bundle = Bundle(for: Self.self)
         let url = try XCTUnwrap(bundle.url(forResource: "test-video", withExtension: "mp4"))
@@ -86,6 +120,25 @@ final class VideoFrameTimelineTests: XCTestCase {
             CMTimeGetSeconds(timeline.time(forFrame: 1_290)),
             CMTimeGetSeconds(duration)
         )
+    }
+
+    func testSixtyFPSFixtureHasExactSampleCount() async throws {
+        let bundle = Bundle(for: Self.self)
+        let url = try XCTUnwrap(bundle.url(forResource: "test_60fps_5s", withExtension: "mp4"))
+        let asset = AVURLAsset(url: url)
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        let track = try XCTUnwrap(tracks.first)
+        let nominalRate = try await Double(track.load(.nominalFrameRate))
+
+        let timeline = try await VideoFrameTimeline.load(
+            asset: asset,
+            track: track,
+            nominalFrameRate: nominalRate
+        )
+
+        XCTAssertEqual(timeline.count, 300)
+        XCTAssertEqual(timeline.nominalFrameRate, 60, accuracy: 0.001)
+        XCTAssertEqual(CMTimeGetSeconds(timeline.time(forFrame: 0)), 0, accuracy: 0.000_001)
     }
 
     private func makeTimeline(count: Int) -> VideoFrameTimeline {
