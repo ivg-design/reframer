@@ -26,12 +26,16 @@ final class WindowDragHandle: NSView {
     var isDragEnabled = true {
         didSet {
             guard oldValue != isDragEnabled else { return }
+            if !isDragEnabled, window?.firstResponder === self {
+                window?.makeFirstResponder(nil)
+            }
             updatePresentation()
             window?.invalidateCursorRects(for: self)
         }
     }
 
     private let gripImageView = NSImageView()
+    private var isKeyboardFocused = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -71,7 +75,34 @@ final class WindowDragHandle: NSView {
         setAccessibilityElement(true)
         setAccessibilityRole(.handle)
         setAccessibilityLabel("Move overlay window")
+        setAccessibilityCustomActions([
+            makeMoveAction(name: "Move overlay left", x: -10, y: 0),
+            makeMoveAction(name: "Move overlay right", x: 10, y: 0),
+            makeMoveAction(name: "Move overlay up", x: 0, y: 10),
+            makeMoveAction(name: "Move overlay down", x: 0, y: -10)
+        ])
         updatePresentation()
+    }
+
+    override var acceptsFirstResponder: Bool { isDragEnabled }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        isDragEnabled
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        guard isDragEnabled else { return false }
+        let accepted = super.becomeFirstResponder()
+        isKeyboardFocused = accepted
+        updatePresentation()
+        return accepted
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        isKeyboardFocused = false
+        updatePresentation()
+        return resigned
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -91,9 +122,77 @@ final class WindowDragHandle: NSView {
         }
 
         window?.makeFirstResponder(self)
-        NSCursor.closedHand.push()
-        defer { NSCursor.pop() }
         windowToMove.performDrag(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard isDragEnabled,
+              let delta = Self.keyboardMoveDelta(
+                keyCode: event.keyCode,
+                modifiers: event.modifierFlags
+              ) else {
+            super.keyDown(with: event)
+            return
+        }
+        _ = moveTargetWindow(x: delta.width, y: delta.height)
+    }
+
+    static func keyboardMoveDelta(
+        keyCode: UInt16,
+        modifiers: NSEvent.ModifierFlags
+    ) -> CGSize? {
+        let normalized = modifiers.intersection([.command, .shift, .option, .control])
+        guard normalized.contains(.option),
+              !normalized.contains(.command),
+              !normalized.contains(.control) else {
+            return nil
+        }
+
+        let distance: CGFloat = normalized.contains(.shift) ? 10 : 1
+        switch keyCode {
+        case KeyCode.leftArrow:
+            return CGSize(width: -distance, height: 0)
+        case KeyCode.rightArrow:
+            return CGSize(width: distance, height: 0)
+        case KeyCode.upArrow:
+            return CGSize(width: 0, height: distance)
+        case KeyCode.downArrow:
+            return CGSize(width: 0, height: -distance)
+        default:
+            return nil
+        }
+    }
+
+    private func makeMoveAction(
+        name: String,
+        x: CGFloat,
+        y: CGFloat
+    ) -> NSAccessibilityCustomAction {
+        NSAccessibilityCustomAction(name: name) { [weak self] in
+            self?.moveTargetWindow(x: x, y: y) ?? false
+        }
+    }
+
+    @discardableResult
+    private func moveTargetWindow(x: CGFloat, y: CGFloat) -> Bool {
+        guard isDragEnabled,
+              let windowToMove = targetWindow ?? window?.parent else {
+            return false
+        }
+
+        var proposedFrame = windowToMove.frame
+        proposedFrame.origin.x += x
+        proposedFrame.origin.y += y
+        let visibleFrames = NSScreen.screens.map(\.visibleFrame)
+        let clampedFrame = WindowPlacement.clampMainFrame(
+            proposedFrame,
+            visibleFrames: visibleFrames,
+            toolbarHeight: window?.frame.height ?? 48,
+            minimumSize: windowToMove.minSize
+        )
+        windowToMove.setFrame(clampedFrame, display: true, animate: false)
+        NSAccessibility.post(element: self, notification: .valueChanged)
+        return true
     }
 
     private func updatePresentation() {
@@ -105,8 +204,10 @@ final class WindowDragHandle: NSView {
                 ? NSColor.labelColor.withAlphaComponent(0.07)
                 : NSColor.clear
         ).cgColor
+        layer?.borderWidth = isKeyboardFocused && isDragEnabled ? 2 : 0
+        layer?.borderColor = NSColor.keyboardFocusIndicatorColor.cgColor
         toolTip = isDragEnabled
-            ? "Drag to move the overlay window"
+            ? "Drag to move. Focus and use Option-Arrow for keyboard movement."
             : "Unlock the overlay before moving it"
         setAccessibilityHelp(toolTip)
         setAccessibilityValue(isDragEnabled ? "Available" : "Disabled while locked")

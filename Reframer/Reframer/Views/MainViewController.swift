@@ -28,6 +28,7 @@ struct ReadyStatusOverlaySnapshot: Equatable {
 private final class StatusBadgeView: NSView {
     private let label = NSTextField(labelWithString: "")
     private var isAccent = false
+    private var displayedText = ""
 
     init(identifier: String, accessibilityLabel: String) {
         super.init(frame: .zero)
@@ -62,10 +63,15 @@ private final class StatusBadgeView: NSView {
     }
 
     func update(text: String, accent: Bool = false) {
-        label.stringValue = text
-        label.setAccessibilityValue(text)
-        isAccent = accent
-        updateAppearance()
+        if displayedText != text {
+            displayedText = text
+            label.stringValue = text
+            label.setAccessibilityValue(text)
+        }
+        if isAccent != accent {
+            isAccent = accent
+            updateAppearance()
+        }
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -189,9 +195,6 @@ final class ReadyStatusOverlayView: NSView {
         frameBadge.update(text: snapshot.frameText)
         zoomBadge.update(text: snapshot.zoomText)
         lockBadge.update(text: snapshot.lockText, accent: snapshot.isLocked)
-        setAccessibilityValue(
-            "\(snapshot.frameText), \(snapshot.zoomText), \(snapshot.lockText)"
-        )
     }
 
     private func bindState() {
@@ -204,16 +207,18 @@ final class ReadyStatusOverlayView: NSView {
             state.$zoomScale,
             state.$isLocked
         )
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] currentFrame, totalFrames, zoomScale, isLocked in
-                self?.update(
-                    ReadyStatusOverlaySnapshot(
-                        currentFrame: currentFrame,
-                        totalFrames: totalFrames,
-                        zoomScale: zoomScale,
-                        isLocked: isLocked
-                    )
+            .map { currentFrame, totalFrames, zoomScale, isLocked in
+                ReadyStatusOverlaySnapshot(
+                    currentFrame: currentFrame,
+                    totalFrames: totalFrames,
+                    zoomScale: zoomScale,
+                    isLocked: isLocked
                 )
+            }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                self?.update(snapshot)
             }
             .store(in: &cancellables)
     }

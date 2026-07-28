@@ -20,10 +20,13 @@ asset is playable and has a decodable video track.
 
 ## Position the reference
 
-Drag the grip at the left edge of the control bar to move the window. Resize
-from an edge, zoom with Shift-scroll, drag the loaded video to pan, and set
-opacity from 2% through 100%. The ready surface always shows its current frame,
-zoom, and lock state without intercepting pointer input.
+Drag the grip at the left edge of the control bar to move the window, including
+on the first click while Reframer is inactive. Focus the grip and use
+Option-Arrow to move one point or add Shift to move ten points; VoiceOver
+offers the same four directions as named actions. Resize from an edge, zoom
+with Shift-scroll, drag the loaded video to pan, and set opacity from 2% through
+100%. The ready surface always shows its current frame, zoom, and lock state
+without intercepting pointer input.
 
 Press L to lock the overlay. Video-area clicks then pass through to the app
 underneath. Press Command-Shift-L when Reframer is not active to unlock it.

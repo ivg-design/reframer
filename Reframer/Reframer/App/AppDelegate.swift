@@ -442,7 +442,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         window.hasShadow = false
         window.level = desiredWindowLevel
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.isMovableByWindowBackground = true  // Enable window dragging
+        // The dedicated, lock-aware control-bar grip owns window movement.
+        // Background dragging would steal primary-button video panning.
+        window.isMovableByWindowBackground = false
         window.minSize = mainWindowMinimumSize
 
         mainViewController = MainViewController(videoState: videoState)

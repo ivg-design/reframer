@@ -18,7 +18,7 @@ historical investigations are not product claims.
 ## Overlay
 
 - Transparent, resizable video window with a dedicated, lock-aware control-bar
-  grip for moving it.
+  grip for pointer, keyboard, and VoiceOver movement.
 - Configurable Always on Top behavior.
 - Opacity from 2% through 100%, persisted across launches.
 - Click-through lock mode with visible, non-interactive frame, zoom, and lock

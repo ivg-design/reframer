@@ -138,10 +138,15 @@ class VideoView: NSView {
             .sink { [weak self] isLocked, isLoaded in
                 guard let self else { return }
                 if isLocked || !isLoaded {
-                    self.pointerPanSession = nil
+                    self.cancelPointerPan()
                 }
                 self.window?.invalidateCursorRects(for: self)
             }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.cancelPointerPan() }
             .store(in: &cancellables)
 
         // Observe video size changes
@@ -1089,6 +1094,18 @@ class VideoView: NSView {
     // MARK: - Mouse Handling
 
     override var acceptsFirstResponder: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        videoState?.isVideoLoaded == true && videoState?.isLocked == false
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil {
+            cancelPointerPan()
+        }
+        super.viewWillMove(toWindow: newWindow)
+    }
 
     override func resetCursorRects() {
         guard let state = videoState, state.isVideoLoaded, !state.isLocked else {
@@ -1128,6 +1145,16 @@ class VideoView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        cancelPointerPan()
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        cancelPointerPan()
+        super.cancelOperation(sender)
+    }
+
+    private func cancelPointerPan() {
+        guard pointerPanSession != nil else { return }
         pointerPanSession = nil
         window?.invalidateCursorRects(for: self)
     }

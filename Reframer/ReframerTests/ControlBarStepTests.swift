@@ -40,6 +40,35 @@ final class VideoPointerPanSessionTests: XCTestCase {
 
 @MainActor
 final class OverlayInteractionContractTests: XCTestCase {
+    func testWindowDragHandleKeyboardMovementRequiresOptionAndSupportsCoarseSteps() {
+        XCTAssertEqual(
+            WindowDragHandle.keyboardMoveDelta(
+                keyCode: KeyCode.leftArrow,
+                modifiers: [.option]
+            ),
+            CGSize(width: -1, height: 0)
+        )
+        XCTAssertEqual(
+            WindowDragHandle.keyboardMoveDelta(
+                keyCode: KeyCode.upArrow,
+                modifiers: [.option, .shift]
+            ),
+            CGSize(width: 0, height: 10)
+        )
+        XCTAssertNil(
+            WindowDragHandle.keyboardMoveDelta(
+                keyCode: KeyCode.rightArrow,
+                modifiers: []
+            )
+        )
+        XCTAssertNil(
+            WindowDragHandle.keyboardMoveDelta(
+                keyCode: KeyCode.rightArrow,
+                modifiers: [.option, .command]
+            )
+        )
+    }
+
     func testWindowDragHandleExposesLockAwareAccessibilityState() {
         let handle = WindowDragHandle(
             frame: NSRect(x: 0, y: 0, width: 24, height: 32)

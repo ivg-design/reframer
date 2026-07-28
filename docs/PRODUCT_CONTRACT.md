@@ -38,7 +38,9 @@ machine-readable counterpart is
 Shift-scroll zooms in 5% steps. Command-Shift-scroll uses 0.1% steps. An
 unmodified scroll over unlocked video steps samples. Primary-button dragging
 the loaded video pans it while unlocked; the dedicated control-bar grip moves
-the overlay window.
+the overlay window. The grip accepts the first click when Reframer is inactive,
+supports Option-Arrow keyboard movement while focused (add Shift for 10-point
+steps), and exposes directional VoiceOver actions.
 
 Shortcut editing must prevent collisions, reserved system chords, modifier
 collapse, and unsafe unmodified global keys. A customized chord replaces its
