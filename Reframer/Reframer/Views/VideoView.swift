@@ -36,6 +36,20 @@ private final class FilterPipelineState: @unchecked Sendable {
     }
 }
 
+/// Immutable pointer-pan geometry, separated from AppKit event delivery so a
+/// drag can be verified without synthesizing system input.
+struct VideoPointerPanSession: Equatable {
+    let startLocation: NSPoint
+    let startOffset: CGSize
+
+    func offset(at location: NSPoint) -> CGSize {
+        CGSize(
+            width: startOffset.width + location.x - startLocation.x,
+            height: startOffset.height + location.y - startLocation.y
+        )
+    }
+}
+
 /// Pure AppKit video view with zoom, pan, and mouse handling
 class VideoView: NSView {
 
@@ -72,10 +86,8 @@ class VideoView: NSView {
         didSet { bindState() }
     }
 
-    // Drag state for Ctrl+drag panning
-    private var dragStart: NSPoint = .zero
-    private var panStart: CGSize = .zero
-    private var isPanning: Bool = false  // Track if we started a pan operation
+    // Pointer dragging always pans the loaded picture while unlocked.
+    private var pointerPanSession: VideoPointerPanSession?
     private var scrollStepper = ScrollStepAccumulator()
 
     // MARK: - Initialization
@@ -115,6 +127,17 @@ class VideoView: NSView {
         state.$panOffset
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.updateTransform() }
+            .store(in: &cancellables)
+
+        Publishers.CombineLatest(state.$isLocked, state.$isVideoLoaded)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isLocked, isLoaded in
+                guard let self else { return }
+                if isLocked || !isLoaded {
+                    self.pointerPanSession = nil
+                }
+                self.window?.invalidateCursorRects(for: self)
+            }
             .store(in: &cancellables)
 
         // Observe video size changes
@@ -880,34 +903,46 @@ class VideoView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
-    override func mouseDown(with event: NSEvent) {
-        guard let state = videoState, !state.isLocked else { return }
-
-        // Only start panning if Ctrl is held (otherwise let window drag work)
-        if event.modifierFlags.contains(.control) {
-            isPanning = true
-            dragStart = event.locationInWindow
-            panStart = state.panOffset
-        } else {
-            isPanning = false
+    override func resetCursorRects() {
+        guard let state = videoState, state.isVideoLoaded, !state.isLocked else {
+            return
         }
+        addCursorRect(bounds, cursor: pointerPanSession == nil ? .openHand : .closedHand)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard event.type == .leftMouseDown,
+              let state = videoState,
+              state.isVideoLoaded,
+              !state.isLocked else {
+            super.mouseDown(with: event)
+            return
+        }
+
+        window?.makeFirstResponder(self)
+        pointerPanSession = VideoPointerPanSession(
+            startLocation: convert(event.locationInWindow, from: nil),
+            startOffset: state.panOffset
+        )
+        window?.invalidateCursorRects(for: self)
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let state = videoState, !state.isLocked, isPanning else { return }
+        guard let state = videoState,
+              state.isVideoLoaded,
+              !state.isLocked,
+              let pointerPanSession else {
+            return
+        }
 
-        let current = event.locationInWindow
-        let dx = current.x - dragStart.x
-        let dy = current.y - dragStart.y
-
-        state.panOffset = CGSize(
-            width: panStart.width + dx,
-            height: panStart.height + dy
+        state.panOffset = pointerPanSession.offset(
+            at: convert(event.locationInWindow, from: nil)
         )
     }
 
     override func mouseUp(with event: NSEvent) {
-        isPanning = false
+        pointerPanSession = nil
+        window?.invalidateCursorRects(for: self)
     }
 
     override func scrollWheel(with event: NSEvent) {

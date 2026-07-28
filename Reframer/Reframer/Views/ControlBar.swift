@@ -17,6 +17,103 @@ final class TimelineSlider: NSSlider {
     }
 }
 
+/// A dedicated grip for moving the main overlay window from its attached
+/// control window. Keeping this as an arranged view means its hit region can
+/// never cover playback controls.
+final class WindowDragHandle: NSView {
+    weak var targetWindow: NSWindow?
+
+    var isDragEnabled = true {
+        didSet {
+            guard oldValue != isDragEnabled else { return }
+            updatePresentation()
+            window?.invalidateCursorRects(for: self)
+        }
+    }
+
+    private let gripImageView = NSImageView()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+
+    private func setup() {
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 6
+
+        gripImageView.translatesAutoresizingMaskIntoConstraints = false
+        gripImageView.image = NSImage(
+            systemSymbolName: "line.3.horizontal",
+            accessibilityDescription: nil
+        )
+        gripImageView.imageScaling = .scaleProportionallyDown
+        gripImageView.setAccessibilityElement(false)
+        addSubview(gripImageView)
+
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: 24),
+            heightAnchor.constraint(equalToConstant: 32),
+            gripImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            gripImageView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            gripImageView.widthAnchor.constraint(equalToConstant: 15),
+            gripImageView.heightAnchor.constraint(equalToConstant: 15)
+        ])
+
+        identifier = NSUserInterfaceItemIdentifier("window-drag-handle")
+        setAccessibilityIdentifier("window-drag-handle")
+        setAccessibilityElement(true)
+        setAccessibilityRole(.handle)
+        setAccessibilityLabel("Move overlay window")
+        updatePresentation()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updatePresentation()
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: isDragEnabled ? .openHand : .arrow)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isDragEnabled,
+              event.type == .leftMouseDown,
+              let windowToMove = targetWindow ?? window?.parent else {
+            return
+        }
+
+        window?.makeFirstResponder(self)
+        NSCursor.closedHand.push()
+        defer { NSCursor.pop() }
+        windowToMove.performDrag(with: event)
+    }
+
+    private func updatePresentation() {
+        gripImageView.contentTintColor = isDragEnabled
+            ? .secondaryLabelColor
+            : .disabledControlTextColor
+        layer?.backgroundColor = (
+            isDragEnabled
+                ? NSColor.labelColor.withAlphaComponent(0.07)
+                : NSColor.clear
+        ).cgColor
+        toolTip = isDragEnabled
+            ? "Drag to move the overlay window"
+            : "Unlock the overlay before moving it"
+        setAccessibilityHelp(toolTip)
+        setAccessibilityValue(isDragEnabled ? "Available" : "Disabled while locked")
+        setAccessibilityEnabled(isDragEnabled)
+    }
+}
+
 /// Pure AppKit control bar loaded from XIB
 class ControlBar: NSView {
 
@@ -49,11 +146,16 @@ class ControlBar: NSView {
     private var zoomField: NSTextField?
     private var zoomPercentLabel: NSTextField?
     private var opacityField: NSTextField?
+    private var windowDragHandle: WindowDragHandle?
 
     // MARK: - Properties
 
     weak var videoState: VideoState? {
         didSet { bindState() }
+    }
+
+    weak var windowToDrag: NSWindow? {
+        didSet { windowDragHandle?.targetWindow = windowToDrag }
     }
 
     private var cancellables = Set<AnyCancellable>()
@@ -113,6 +215,7 @@ class ControlBar: NSView {
 
         // Replace opacity icon with FilterMenuButton
         setupFilterButton()
+        setupWindowDragHandle()
 
         setupActions()
         setupTextFieldDelegates()
@@ -271,6 +374,14 @@ class ControlBar: NSView {
 
         filterMenuButton = button
         filterMenuButton?.setAccessibilityIdentifier("button-filter-menu")
+    }
+
+    private func setupWindowDragHandle() {
+        guard let stackView = mainStackView else { return }
+        let handle = WindowDragHandle(frame: NSRect(x: 0, y: 0, width: 24, height: 32))
+        handle.targetWindow = windowToDrag
+        stackView.insertArrangedSubview(handle, at: 0)
+        windowDragHandle = handle
     }
 
     // MARK: - Actions Setup
@@ -550,6 +661,7 @@ class ControlBar: NSView {
         state.$isLocked
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isLocked in
+                self?.windowDragHandle?.isDragEnabled = !isLocked
                 self?.lockButton?.state = isLocked ? .on : .off
                 self?.lockButton?.contentTintColor = isLocked ? .systemRed : nil
                 self?.lockButton?.setAccessibilityLabel(isLocked ? "Unlock overlay" : "Lock overlay")

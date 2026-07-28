@@ -17,16 +17,19 @@ historical investigations are not product claims.
 
 ## Overlay
 
-- Transparent, resizable, movable video window.
+- Transparent, resizable video window with a dedicated, lock-aware control-bar
+  grip for moving it.
 - Configurable Always on Top behavior.
 - Opacity from 2% through 100%, persisted across launches.
-- Click-through lock mode with a visible but non-interactive status overlay.
+- Click-through lock mode with visible, non-interactive frame, zoom, and lock
+  status badges.
 - Window placement is clamped to an available display after display changes.
 
 ## Inspection
 
 - Zoom from 10% through 1000%, including fine scroll adjustment.
-- Pan by pointer or keyboard while unlocked.
+- Pan by primary-button dragging the loaded video or by keyboard while
+  unlocked.
 - Frame, zoom, and opacity fields support direct entry and modified-arrow
   increments.
 - Quick filter menu plus an advanced, keyboard-accessible filter panel.

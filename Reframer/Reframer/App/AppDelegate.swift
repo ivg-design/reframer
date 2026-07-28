@@ -485,6 +485,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // Create control bar
         controlBar = ControlBar(frame: controlFrame)
         controlBar.videoState = videoState
+        controlBar.windowToDrag = mainWindow
 
         // Wrap in a view controller
         let viewController = NSViewController()

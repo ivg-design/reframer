@@ -10,7 +10,8 @@ When locked:
 
 - video-area pointer events pass to the app underneath;
 - moving, resizing, zooming, and panning are disabled;
-- the status overlay remains visible without intercepting input;
+- the frame, zoom, and locked-status badges remain visible without intercepting
+  input;
 - Command-Page Down and Command-Page Up can step a loaded video globally.
 
 Global frame stepping is ignored when no video is loaded or the overlay is

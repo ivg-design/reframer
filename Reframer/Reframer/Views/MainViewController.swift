@@ -1,6 +1,224 @@
 import Cocoa
 import Combine
 
+struct ReadyStatusOverlaySnapshot: Equatable {
+    let frameText: String
+    let zoomText: String
+    let lockText: String
+    let isLocked: Bool
+
+    init(currentFrame: Int, totalFrames: Int, zoomScale: CGFloat, isLocked: Bool) {
+        let safeFrame = max(0, currentFrame)
+        let safeTotal = max(0, totalFrames)
+        let percentage = zoomScale.isFinite
+            ? max(10, min(1000, Double(zoomScale * 100)))
+            : 100
+
+        frameText = "Frame \(safeFrame) / \(safeTotal)"
+        if abs(percentage.rounded() - percentage) < 0.000_1 {
+            zoomText = "Zoom \(Int(percentage.rounded()))%"
+        } else {
+            zoomText = String(format: "Zoom %.1f%%", percentage)
+        }
+        lockText = isLocked ? "Locked" : "Unlocked"
+        self.isLocked = isLocked
+    }
+}
+
+private final class StatusBadgeView: NSView {
+    private let label = NSTextField(labelWithString: "")
+    private var isAccent = false
+
+    init(identifier: String, accessibilityLabel: String) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 7
+        layer?.borderWidth = 0.5
+
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        label.lineBreakMode = .byClipping
+        label.setContentHuggingPriority(.required, for: .horizontal)
+        label.setAccessibilityElement(true)
+        label.setAccessibilityIdentifier(identifier)
+        label.identifier = NSUserInterfaceItemIdentifier(identifier)
+        label.setAccessibilityLabel(accessibilityLabel)
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -7)
+        ])
+
+        setAccessibilityElement(false)
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    func update(text: String, accent: Bool = false) {
+        label.stringValue = text
+        label.setAccessibilityValue(text)
+        isAccent = accent
+        updateAppearance()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateAppearance()
+    }
+
+    func refreshAppearance() {
+        updateAppearance()
+    }
+
+    private func updateAppearance() {
+        effectiveAppearance.performAsCurrentDrawingAppearance { [weak self] in
+            guard let self else { return }
+            let reduceTransparency =
+                NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            if isAccent {
+                layer?.backgroundColor = (
+                    reduceTransparency
+                        ? NSColor.systemRed
+                        : NSColor.systemRed.withAlphaComponent(0.82)
+                ).cgColor
+                label.textColor = .white
+            } else {
+                layer?.backgroundColor = (
+                    reduceTransparency
+                        ? NSColor.windowBackgroundColor
+                        : NSColor.black.withAlphaComponent(0.58)
+                ).cgColor
+                label.textColor = reduceTransparency ? .labelColor : .white
+            }
+            layer?.borderColor = (
+                reduceTransparency
+                    ? NSColor.separatorColor
+                    : NSColor.white.withAlphaComponent(0.16)
+            ).cgColor
+            CATransaction.commit()
+        }
+    }
+}
+
+/// Compact, pointer-transparent status for the ready video surface. It avoids
+/// nonessential animation entirely, so Reduce Motion users receive the exact
+/// same state changes without fades or pulses.
+final class ReadyStatusOverlayView: NSView {
+    weak var videoState: VideoState? {
+        didSet { bindState() }
+    }
+
+    private let frameBadge = StatusBadgeView(
+        identifier: "status-frame",
+        accessibilityLabel: "Current frame status"
+    )
+    private let zoomBadge = StatusBadgeView(
+        identifier: "status-zoom",
+        accessibilityLabel: "Zoom status"
+    )
+    private let lockBadge = StatusBadgeView(
+        identifier: "status-lock",
+        accessibilityLabel: "Overlay lock status"
+    )
+    private var cancellables = Set<AnyCancellable>()
+    private var appearanceObserver: NSObjectProtocol?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+
+    deinit {
+        if let appearanceObserver {
+            NotificationCenter.default.removeObserver(appearanceObserver)
+        }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    private func setup() {
+        translatesAutoresizingMaskIntoConstraints = false
+        identifier = NSUserInterfaceItemIdentifier("status-overlay")
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
+        setAccessibilityLabel("Video status")
+
+        let stack = NSStackView(views: [frameBadge, zoomBadge, lockBadge])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 6
+        addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor)
+        ])
+
+        appearanceObserver = NotificationCenter.default.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.frameBadge.refreshAppearance()
+            self?.zoomBadge.refreshAppearance()
+            self?.lockBadge.refreshAppearance()
+        }
+    }
+
+    func update(_ snapshot: ReadyStatusOverlaySnapshot) {
+        frameBadge.update(text: snapshot.frameText)
+        zoomBadge.update(text: snapshot.zoomText)
+        lockBadge.update(text: snapshot.lockText, accent: snapshot.isLocked)
+        setAccessibilityValue(
+            "\(snapshot.frameText), \(snapshot.zoomText), \(snapshot.lockText)"
+        )
+    }
+
+    private func bindState() {
+        cancellables.removeAll()
+        guard let state = videoState else { return }
+
+        Publishers.CombineLatest4(
+            state.$currentFrame,
+            state.$totalFrames,
+            state.$zoomScale,
+            state.$isLocked
+        )
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] currentFrame, totalFrames, zoomScale, isLocked in
+                self?.update(
+                    ReadyStatusOverlaySnapshot(
+                        currentFrame: currentFrame,
+                        totalFrames: totalFrames,
+                        zoomScale: zoomScale,
+                        isLocked: isLocked
+                    )
+                )
+            }
+            .store(in: &cancellables)
+    }
+}
+
 enum MainPresentationState: Equatable {
     case empty
     case loading
@@ -37,6 +255,7 @@ class MainViewController: NSViewController {
     private var errorLabel: NSTextField!
     private var retryButton: NSButton!
     private var filterErrorLabel: NSTextField!
+    private var statusOverlayView: ReadyStatusOverlayView!
     private var presentationState: MainPresentationState = .empty
     private var cancellables = Set<AnyCancellable>()
 
@@ -102,10 +321,14 @@ class MainViewController: NSViewController {
         edgeIndicatorView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(edgeIndicatorView)
 
+        statusOverlayView = ReadyStatusOverlayView()
+        view.addSubview(statusOverlayView)
+
         // Configure views
         videoView.videoState = videoState
         dropZoneView.videoState = videoState
         edgeIndicatorView.videoState = videoState
+        statusOverlayView.videoState = videoState
 
         // Add constraints - content fills entire view (toolbar is now BELOW window)
         NSLayoutConstraint.activate([
@@ -137,7 +360,14 @@ class MainViewController: NSViewController {
             edgeIndicatorView.topAnchor.constraint(equalTo: view.topAnchor),
             edgeIndicatorView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             edgeIndicatorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            edgeIndicatorView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            edgeIndicatorView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            statusOverlayView.topAnchor.constraint(equalTo: view.topAnchor, constant: 12),
+            statusOverlayView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            statusOverlayView.trailingAnchor.constraint(
+                lessThanOrEqualTo: view.trailingAnchor,
+                constant: -12
+            )
         ])
 
         // Bind opacity
@@ -261,6 +491,7 @@ class MainViewController: NSViewController {
         loadingView.isHidden = state != .loading
         videoView.isHidden = state != .ready
         edgeIndicatorView.isHidden = state != .ready
+        statusOverlayView.isHidden = state != .ready
 
         if case .failed(let message) = state {
             errorView.isHidden = false

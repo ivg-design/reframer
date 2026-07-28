@@ -152,6 +152,12 @@ final class ReframerIntegrationTests: XCTestCase {
         // Verify overlays appear
         let frameField = app.textFields["input-frame"]
         XCTAssertTrue(frameField.waitForExistence(timeout: 2), "Frame field should exist when video loaded")
+        XCTAssertTrue(
+            app.staticTexts["status-frame"].waitForExistence(timeout: 2),
+            "Ready video should expose frame status"
+        )
+        XCTAssertTrue(app.staticTexts["status-zoom"].exists)
+        XCTAssertTrue(app.staticTexts["status-lock"].exists)
     }
 
     // MARK: - F-VP-002: Spacebar Play/Pause

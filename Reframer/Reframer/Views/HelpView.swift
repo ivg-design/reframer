@@ -156,8 +156,8 @@ final class HelpView: NSView {
             .configurable(.toggleFilterPanel)
         ]))
         contentView.addArrangedSubview(makeSection(title: "POINTER", shortcuts: [
-            .static("Ctrl+Drag", "Pan video"),
-            .static("Drag window", "Move window"),
+            .static("Drag video", "Pan video"),
+            .static("Drag grip", "Move window"),
             .static("Drag edges", "Resize window")
         ]))
 

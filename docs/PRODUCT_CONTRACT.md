@@ -36,7 +36,9 @@ machine-readable counterpart is
 | Close current panel or recording | Escape | Contextual |
 
 Shift-scroll zooms in 5% steps. Command-Shift-scroll uses 0.1% steps. An
-unmodified scroll over unlocked video steps samples.
+unmodified scroll over unlocked video steps samples. Primary-button dragging
+the loaded video pans it while unlocked; the dedicated control-bar grip moves
+the overlay window.
 
 Shortcut editing must prevent collisions, reserved system chords, modifier
 collapse, and unsafe unmodified global keys. A customized chord replaces its
@@ -61,8 +63,10 @@ when restored.
 All controls have a task-oriented label, role, current value/state where
 applicable, and keyboard/VoiceOver action. Opening a panel moves focus into it;
 closing returns focus to its invoker. Decorative and status overlays never
-intercept pointer input. Focused controls do not dim. Reduce Motion removes
-nonessential fades and pulses.
+intercept pointer input. Ready video shows frame, zoom, and lock status, with
+the locked state persistently visible. Focused controls do not dim. Reduce
+Motion removes nonessential fades and pulses, and Reduce Transparency uses
+opaque status backgrounds.
 
 ## Release
 

@@ -20,9 +20,10 @@ asset is playable and has a decodable video track.
 
 ## Position the reference
 
-Drag the control-bar background to move the window. Resize from an edge, zoom
-with Shift-scroll, pan with the arrow keys or pointer, and set opacity from 2%
-through 100%.
+Drag the grip at the left edge of the control bar to move the window. Resize
+from an edge, zoom with Shift-scroll, drag the loaded video to pan, and set
+opacity from 2% through 100%. The ready surface always shows its current frame,
+zoom, and lock state without intercepting pointer input.
 
 Press L to lock the overlay. Video-area clicks then pass through to the app
 underneath. Press Command-Shift-L when Reframer is not active to unlock it.
