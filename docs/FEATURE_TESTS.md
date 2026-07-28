@@ -35,6 +35,14 @@ The unit target currently proves:
 - First/last clamping, repeated generations, 1/10-frame direction, rapid burst
   accumulation, preview cancellation, structured indexing cancellation, load
   replacement, and unload-during-load are deterministic checks.
+- Delayed exact-index installation remaps the latest estimated presentation
+  time onto the exact VFR table, preserves replay intent, assigns a new
+  generation, rejects the stale completion, and keeps a deferred filter refresh
+  pending until it is safe.
+- Per-load security-scoped leases have deterministic balance and ordering
+  checks: failed acquisition never stops, successful acquisition stops once
+  after the final reference, replacement starts before old release, cancelling
+  work retains access until it unwinds, and player teardown precedes release.
 - Playback, scrub, zoom, opacity, mute, filter, and persistence state
   transitions obey their model contracts.
 - Shortcut defaults, local/global scope, 1/10/100 multipliers, repeat policy,

@@ -74,7 +74,7 @@ preflight does not modify TCC.
 
 ## Recorded validation and external gates
 
-The latest integrated-state validation passed the deterministic unit runner,
+The latest integrated-state validation passed all 162 deterministic unit tests,
 Debug build, universal Release build, static analysis, DocC build, repository
 and product-contract validators, XIB validation with zero diagnostics,
 built-bundle validation, and unsigned universal archive validation. The unit

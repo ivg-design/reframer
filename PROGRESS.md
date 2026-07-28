@@ -20,6 +20,13 @@
 - Normalized the child control window and XIB to a single 48-point layout, removed every Interface Builder clipping notice, and added control labels, help, state values, tooltips, focus visibility, and frame-entry clamping.
 - Verified the integration branch builds and passes repository, XIB, and built-bundle validation.
 - Replaced nominal-frame-rate arithmetic with exact presentation-order sample indexing, including edit-list source-to-player timeline mapping and stale-seek generation guards.
+- Preserved the latest requested presentation time and replay intent when an
+  estimated index is replaced by the exact VFR index; the remapped seek gets a
+  new generation and stale estimated completions cannot clear it.
+- Moved security-scoped access into one ARC-backed lease per load. Replacement
+  access is acquired before old teardown, asynchronous load/seek/composition
+  work retains its lease, and release occurs only after the AV graph and
+  cancelling work finish.
 - Added explicit scrub begin/preview/end semantics, EOF replay, AVPlayer truth observation, finite metadata validation, and a single generation-scoped loading/failure recovery surface.
 - Replaced deprecated CFR-forcing filter composition with a source-timing-preserving, snapshot-driven filter pipeline and paused-frame refresh.
 - Persisted and sanitized opacity, quick/advanced filters, and every filter parameter using isolated preference tests.
@@ -47,8 +54,8 @@
 
 - `scripts/validate_repository.sh` passed, including product-contract, plist,
   scheme, XIB, resource, workflow, entitlement, and documentation checks.
-- The deterministic unit runner passed the complete integrated suite with zero
-  failures.
+- The deterministic unit runner passed all 162 integrated tests with zero
+  failures or unexpected results.
 - Debug and universal arm64/x86_64 Release builds passed.
 - Static analysis and DocC builds passed.
 - The XIB compiled with zero errors, warnings, or notices.

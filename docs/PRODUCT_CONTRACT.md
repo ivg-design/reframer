@@ -65,9 +65,15 @@ conflicts are surfaced in Shortcut Settings with a retry action.
 - Loading, ready, playing, paused, ended, and failed are distinct states.
 - A new load cancels or invalidates all callbacks from the previous generation.
 - The desired sample index is the authority during burst input.
+- If an estimated frame table is replaced while a seek is pending, the latest
+  requested presentation time and replay intent are remapped to the exact table
+  under a new generation.
 - A scrub may use tolerant preview seeks while dragging; release resolves to
   the exact target sample.
 - Ended media replays from the first sample when Play is invoked.
+- Each load owns one balanced security-scoped lease through preflight, player
+  use, seeks, filtering, and cooperative cancellation. Replacement acquires the
+  next lease before the prior player graph is dismantled.
 
 Opacity, last audible volume, mute, Always on Top, window placement, filter
 settings, and shortcut customization persist. Values are validated and clamped

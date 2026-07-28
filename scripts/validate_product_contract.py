@@ -18,6 +18,29 @@ INFO_PATH = ROOT / "Reframer" / "Reframer" / "Resources" / "Info.plist"
 ENTITLEMENTS_PATH = (
     ROOT / "Reframer" / "Reframer" / "Resources" / "Reframer.entitlements"
 )
+SHORTCUT_SOURCE_PATH = (
+    ROOT / "Reframer" / "Reframer" / "Models" / "ShortcutSettings.swift"
+)
+APP_DELEGATE_PATH = ROOT / "Reframer" / "Reframer" / "App" / "AppDelegate.swift"
+
+SHORTCUT_DOCUMENTS = (
+    ROOT / "README.md",
+    ROOT / "docs" / "PRODUCT_CONTRACT.md",
+    ROOT
+    / "Reframer"
+    / "Reframer"
+    / "Reframer.docc"
+    / "Articles"
+    / "KeyboardShortcuts.md",
+    ROOT
+    / "Reframer"
+    / "Reframer"
+    / "Reframer.help"
+    / "Contents"
+    / "Resources"
+    / "en.lproj"
+    / "shortcuts.html",
+)
 
 PUBLIC_DOCUMENTS = (
     ROOT / "CHANGELOG.md",
@@ -70,6 +93,124 @@ def read_public_texts() -> list[tuple[Path, str]]:
     return texts
 
 
+def normalized_prose(text: str) -> str:
+    """Make Markdown and simple Help HTML comparable without an HTML parser."""
+    without_tags = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", without_tags).strip().lower()
+
+
+def validate_shortcut_surfaces() -> None:
+    for path in SHORTCUT_DOCUMENTS:
+        if not path.is_file():
+            fail(f"required shortcut document is missing: {path.relative_to(ROOT)}")
+
+        prose = normalized_prose(path.read_text(encoding="utf-8"))
+        if re.search(r"forward.{0,100}page down", prose) is None:
+            fail(
+                f"{path.relative_to(ROOT)} does not state that Page Down "
+                "moves forward"
+            )
+        if re.search(r"backward.{0,100}page up", prose) is None:
+            fail(
+                f"{path.relative_to(ROOT)} does not state that Page Up "
+                "moves backward"
+            )
+
+        required_lifecycle_terms = (
+            "registered",
+            "loaded",
+            "locked",
+            "navigation",
+        )
+        for term in required_lifecycle_terms:
+            if term not in prose:
+                fail(
+                    f"{path.relative_to(ROOT)} omits shortcut lifecycle term: "
+                    f"{term}"
+                )
+
+        accessibility_index = prose.find("accessibility")
+        input_monitoring_index = prose.find("input monitoring")
+        if accessibility_index < 0 or input_monitoring_index < 0:
+            fail(
+                f"{path.relative_to(ROOT)} omits the global-shortcut "
+                "permission contract"
+            )
+        permission_span = prose[
+            max(0, min(accessibility_index, input_monitoring_index) - 80):
+            max(accessibility_index, input_monitoring_index) + 120
+        ]
+        if not any(
+            denial in permission_span
+            for denial in (
+                "neither accessibility",
+                "no accessibility",
+                "without accessibility",
+                "not require accessibility",
+                "accessibility or input monitoring permission are not required",
+            )
+        ):
+            fail(
+                f"{path.relative_to(ROOT)} does not clearly deny an "
+                "Accessibility/Input Monitoring requirement"
+            )
+
+
+def validate_shortcut_implementation(contract: dict[str, object]) -> None:
+    frame_step = contract["playback"]["frameStep"]
+    expected_frame_step = {
+        "forward": "Page Down",
+        "backward": "Page Up",
+        "multiplier": 10,
+    }
+    if frame_step != expected_frame_step:
+        fail(f"frame-step contract is not canonical: {frame_step}")
+
+    global_shortcuts = contract["globalShortcuts"]
+    expected_global_values = {
+        "toggleLock": "Command-Shift-L",
+        "stepForward": "Command-Page Down",
+        "stepBackward": "Command-Page Up",
+        "stepMultiplier": 10,
+        "frameStepRegistration": "Registered only while frame stepping is actionable",
+        "inactiveFrameStepHandling": (
+            "Not registered, received, or swallowed by Reframer"
+        ),
+    }
+    for key, expected in expected_global_values.items():
+        if global_shortcuts.get(key) != expected:
+            fail(
+                f"global shortcut contract {key!r} is "
+                f"{global_shortcuts.get(key)!r}, expected {expected!r}"
+            )
+
+    shortcut_source = SHORTCUT_SOURCE_PATH.read_text(encoding="utf-8")
+    source_defaults = dict(
+        re.findall(
+            r"\.(frameStepForward|frameStepBackward):\s*Binding"
+            r"\(shortcut:\s*Shortcut\(\s*"
+            r"keyCode:\s*KeyCode\.(pageDown|pageUp),",
+            shortcut_source,
+        )
+    )
+    expected_source_defaults = {
+        "frameStepForward": "pageDown",
+        "frameStepBackward": "pageUp",
+    }
+    if source_defaults != expected_source_defaults:
+        fail(
+            "Swift shortcut defaults do not match the product contract: "
+            f"{source_defaults}"
+        )
+
+    app_delegate = APP_DELEGATE_PATH.read_text(encoding="utf-8")
+    registration_guard = (
+        "includeFrameSteps: videoState.isLocked && videoState.canNavigateFrames"
+    )
+    if registration_guard not in app_delegate:
+        fail("frame hot keys are not registered behind the actionable-state guard")
+
+
 def main() -> None:
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     product = contract["product"]
@@ -85,6 +226,7 @@ def main() -> None:
         or global_shortcuts.get("requiresInputMonitoringPermission") is not False
     ):
         fail("global shortcut privacy contract must prohibit broad key observation")
+    validate_shortcut_implementation(contract)
 
     privacy = contract["privacy"]
     if privacy.get("appSandbox") is not True:
@@ -187,6 +329,8 @@ def main() -> None:
     for claim in required_claims:
         if claim not in combined:
             fail(f"public documentation does not contain required claim: {claim}")
+
+    validate_shortcut_surfaces()
 
     print(
         f"Product contract passed: Reframer {version}, "

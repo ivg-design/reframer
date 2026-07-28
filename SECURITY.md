@@ -19,8 +19,11 @@ Video decoding and filtering use Apple’s AVFoundation and Core Image
 frameworks.
 
 The app runs in App Sandbox. Its only file entitlement is user-selected,
-read-only access. Reframer holds a security-scoped URL only while that video is
-the active reference and releases it when the video changes or the app exits.
+read-only access. Each load owns one balanced security-scoped lease. A
+replacement acquires its lease before the prior player is dismantled, and the
+prior lease is released only after its player graph and any cancelling
+asynchronous work have finished. Reframer does not persist security-scoped
+bookmarks or reopen videos after relaunch.
 
 Global shortcuts use macOS registered hot keys. The enabled lock chord remains
 registered during normal operation. Frame-step chords exist only while a video

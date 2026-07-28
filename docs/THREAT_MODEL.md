@@ -9,8 +9,10 @@ scripting, third-party codecs, or persistent access to media.
 - User videos remain outside Reframer's container. App Sandbox grants
   read-only access only after the user selects, drops, or opens a video with
   Reframer.
-- A security-scoped URL is retained only while that video is active. Reframer
-  does not persist a bookmark or reopen the video after relaunch.
+- Each video load owns a balanced security-scoped lease. Replacement acquires
+  the next lease before retiring the prior player, and the old lease remains
+  valid until player teardown and cooperatively cancelling callbacks finish.
+  Reframer does not persist a bookmark or reopen the video after relaunch.
 - Preferences live in Reframer's sandbox container and contain settings, not
   video contents.
 - AVFoundation and Core Image are the only playback and image-processing
