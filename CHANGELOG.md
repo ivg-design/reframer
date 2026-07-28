@@ -91,6 +91,7 @@ development snapshots, not production releases.
   play-then-pause command
 - Ended playback can replay from the beginning
 - UI tests run serially and no longer mutate macOS privacy or signing state
+- Unit tests use minimum-Xcode-compatible weak-reference syntax
 - The UI runner forwards its explicit operator acknowledgement into XCTest
   without relying on empty-array behavior that differs in macOS Bash
 - Repository validation uses stock macOS system tools and no longer assumes a

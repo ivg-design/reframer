@@ -578,7 +578,7 @@ final class SecurityScopedURLLeaseTests: XCTestCase {
             url: url,
             access: access
         )
-        weak let weakLease = owner
+        weak var weakLease = owner
         var asyncOwner = owner
 
         XCTAssertNotNil(asyncOwner)
