@@ -40,6 +40,8 @@
 		SST001002 /* ScrollStepAccumulatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SST001001 /* ScrollStepAccumulatorTests.swift */; };
 		UIT001002 /* UITestConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = UIT001001 /* UITestConfig.swift */; };
 		VF001002 /* VideoFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF001001 /* VideoFilter.swift */; };
+		E10000000000000000000002 /* WindowPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* WindowPlacement.swift */; };
+		E10000000000000000000004 /* WindowPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000003 /* WindowPlacementTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -100,6 +102,8 @@
 		SST001001 /* ScrollStepAccumulatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollStepAccumulatorTests.swift; sourceTree = "<group>"; };
 		UIT001001 /* UITestConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestConfig.swift; sourceTree = "<group>"; };
 		VF001001 /* VideoFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilter.swift; sourceTree = "<group>"; };
+		E10000000000000000000001 /* WindowPlacement.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WindowPlacement.swift; sourceTree = "<group>"; };
+		E10000000000000000000003 /* WindowPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowPlacementTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -202,6 +206,7 @@
 				70C014B4F5CB12CD15A1A186 /* Notifications.swift */,
 				KC001001 /* KeyCodes.swift */,
 				SS001001 /* ScrollStepAccumulator.swift */,
+				E10000000000000000000001 /* WindowPlacement.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -227,6 +232,7 @@
 				DZ001001 /* DropZoneViewTests.swift */,
 				CBT001001 /* ControlBarStepTests.swift */,
 				SST001001 /* ScrollStepAccumulatorTests.swift */,
+				E10000000000000000000003 /* WindowPlacementTests.swift */,
 				DDD40001 /* TestFixtures */,
 			);
 			path = ReframerTests;
@@ -440,6 +446,7 @@
 				FM001002 /* FilterMenuButton.swift in Sources */,
 				FP001002 /* FilterPanelView.swift in Sources */,
 				1C151236800FA80F87CAAD76 /* ShortcutSettings.swift in Sources */,
+				E10000000000000000000002 /* WindowPlacement.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -453,6 +460,7 @@
 				DZ001002 /* DropZoneViewTests.swift in Sources */,
 				CBT001002 /* ControlBarStepTests.swift in Sources */,
 				SST001002 /* ScrollStepAccumulatorTests.swift in Sources */,
+				E10000000000000000000004 /* WindowPlacementTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
