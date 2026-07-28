@@ -21,7 +21,7 @@ Complete audit of the Swift implementation identifying **all UX issues** prevent
 7. [Window & UI Issues](#window--ui-issues)
 8. [File Handling Issues](#file-handling-issues)
 9. [State Management Issues](#state-management-issues)
-10. [Proposed Fixes](#proposed-fixes)
+10. [Proposed Fixes](#complete-fix-priority-list)
 
 ---
 

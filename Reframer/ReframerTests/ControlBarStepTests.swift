@@ -297,6 +297,11 @@ final class ControlBarLayoutRegressionTests: XCTestCase {
                 (slider.accessibilityMaxValue() as? NSNumber)?.doubleValue,
                 slider.maxValue
             )
+            XCTAssertGreaterThanOrEqual(
+                slider.bounds.height,
+                slider.intrinsicContentSize.height,
+                "\(identifier) must not clip its intrinsic slider content"
+            )
         }
 
         guard let totalLabel = descendant(

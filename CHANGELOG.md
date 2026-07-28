@@ -60,7 +60,8 @@ development snapshots, not production releases.
 
 - Decorative edge and status overlays no longer block pointer input
 - Opacity and other advertised preferences persist after relaunch
-- Toolbar controls no longer clip at the minimum window size
+- Toolbar controls, including intrinsic-height sliders, no longer clip at the
+  minimum window size
 - Rebinding a command removes its previous chord and prevents duplicate
   dispatch
 - Held non-repeat shortcuts are consumed without leaking into AppKit menu
