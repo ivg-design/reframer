@@ -1,82 +1,57 @@
-# Video Overlay - Feature Requirements
-liquid glass app design language  DARk MODE FIRST - macOS Tahoe style
+# Reframer feature contract
 
-## Core Window Behavior
-- [x] Transparent, frameless window NO open/close/minimize buttons
-- [x] Always-on-top by default (with toggle)
-- [x] Resizable window via NATIVE drag handles
-- [x] Draggable window via dragging the control bar area OR one handle in the app bottom  corner where there will be a visible handle on hover
-- [x] Rounded corners (macOS native appearance)
-- [x] Install to /Applications folder
+This is the shipping feature list for Reframer 0.10.0. Planned work and
+historical investigations are not product claims.
 
-## Video Playback
-- [x] Load video files (mp4, webm, mov, avi, mkv, m4v apple prores heevc, av1 etc...
-- [x] Play/pause toggle
-- [x] Timeline scrubber for seeking without ANY lag - high performacne
-- [x] Frame-accurate playback (frame-by-frame stepping) 
-- [x] Frame number overlay display-upper left corner
-- [x] Frame number input for precise navigation in toolbar with keyboard  incrementing +- frame using arrows and shift modifier for 10 frame jump
-- [x] all incremening is auto applied - no need to confirm with enter - BUT enter/esc defocusses input and returns focus to previous app (same for every input/stepper controls - like zoom and opacity)
-- [x] Muted by default, volumen control in toolbar minimized
+## Video
 
-## Zoom & Pan
-- [x] Zoom in/out on video using shift +scroll zooom 5% inrements adnd cmd+shift + scrol for fine .1%
-- [x] Pan video when zoomed - mouse click+drag 
-- [x] Zoom scales from upper-left corner of the video (not not app corner - video corner)
-- [x] Zoom percentage overlay display
-- [x] Zoom input for precise control in toolbar with keyboard incrementing +- 1% using arrows and shift modifier for 10% jump and cmd modifier for .1% fine control
-- [x] Reset view button (zoom/pan to default)
+- Open or drop local MP4, M4V, and MOV files.
+- Preflight the asset, require a playable video track, and show an actionable
+  error for unsupported or corrupt media.
+- Play, pause, replay from end of file, scrub with a coalesced preview, and
+  finish a scrub on an exact decoded sample.
+- Step by decoded sample timing rather than deriving every position from a
+  rounded nominal frame rate.
+- Preserve the requested frame across rapid step bursts and discard stale
+  callbacks from superseded loads or seeks.
 
-## Opacity
-- [x] Adjustable video opacity slider with input for precise control and arrow incrementing +-1% using arrows and shift modifier for 10% jump 
-- [x] Range from 2% opacity to 100%
+## Overlay
 
-## Lock/Ghost Mode
-- [x] Lock mode toggle - makes video area click-through to allow interaction with underlying apps - IMPORTANT NON NEGOTIALBE FEATURE!!!!
-- [x] Controls bar and keyboard shortcuts remain interactive when locked - ZOOM/PAN/WINDOW MOVEMENT/WINDOW SIZING IS LOCKED!
-- [x] Window dragging / sizing disabled when locked (prevent accidental moves)
-- [x] Visual indicator when locked (lock icon change, highlight) (USE ICONS From SF SYMBOLS NOT EMOJIs FOR ALL CONTROLS AND BUTTONS)
+- Transparent, resizable, movable video window.
+- Configurable Always on Top behavior.
+- Opacity from 2% through 100%, persisted across launches.
+- Click-through lock mode with a visible but non-interactive status overlay.
+- Window placement is clamped to an available display after display changes.
 
-## Keyboard Shortcuts (Local) when specific control is focused
-- [x] `Left Arrow` - Frame step back
-- [x] `Right Arrow` - Frame step forward
-- [x] `Shift+Left/Right` - Step 10 frames
-- [x] `Up Arrow` - Zoom in (5%)
-- [x] `Down Arrow` - Zoom out (5%)
-- [x] `Shift+Up/Down` - Zoom faster (10%)
-- [x] `+` / `-` - Zoom in/out
-- [x] `0` - Reset zoom to 100%
-- [x] `R` - Reset view (zoom/pan)
-- [x] `L` - Toggle lock mode
-- [x] `H` or `?` - Toggle help menu
-- [x] `Cmd+O` - Open file dialog
-- [x] `Esc/Enter` in inputs - Defocus and return focus to previous app
+## Inspection
 
-## Keyboard Shortcuts (Global - work even when locked)
-- [x] `Cmd+Shift+L` - Toggle lock mode
-- [x] `Cmd+PageUp` - Frame step forward (with Shift for 10 frames)
-- [x] `Cmd+PageDown` - Frame step back (with Shift for 10 frames)
+- Zoom from 10% through 1000%, including fine scroll adjustment.
+- Pan by pointer or keyboard while unlocked.
+- Frame, zoom, and opacity fields support direct entry and modified-arrow
+  increments.
+- Quick filter menu plus an advanced, keyboard-accessible filter panel.
+- Brightness, contrast, saturation, exposure, edges, sharpen, unsharp mask,
+  monochrome, invert, line art, and noir effects.
 
-## Mouse/Scroll Controls
-- [x] Scroll wheel - Frame step forward/back - disabled in lock mode
-- [x] Shift+Scroll - Zoom in/out (5% increments) - disabled in lock mode
-- [x] Cmd+Shift+Scroll - Fine zoom (0.1% increments) - disabled in lock mode
-- [x] Click+drag on video - Pan when zoomed - disabled in lock mode
-- [x] Click+drag on top bar - Move window - disabled in lock mode
-- [x] Click+drag on edges/corners - Resize window - disabled in lock mode
+## Input and accessibility
 
-## UI Elements
-- [x] Drop zone for initial state (click or Cmd+O to open)
-- [x] macOS Tahoe-style liquid glass design for the entire app and ui elements
-- [x] Control bar with all playback controls
-- [x] Help modal with all keyboard shortcuts listed
-- [x] Minimal, non-intrusive overlays for frame/zoom info
+- A single command dispatcher handles key events, menu actions, and global
+  shortcuts.
+- Shortcut defaults can be changed, cleared, disabled, or restored.
+- Invalid, reserved, duplicate, and unsafe global chords are rejected with an
+  explanation.
+- Global stepping is active only with a loaded video in lock mode.
+- Custom controls expose task-oriented VoiceOver labels, values, state, and
+  actions; keyboard focus enters and returns from panels predictably.
+- Motion and focus treatments honor Reduce Motion and remain fully visible.
 
-## File Handling
-- [x] Open file dialog with video filter
-- [x] Support common video formats
-- [x] Drag & drop video files 
+## Privacy and distribution
 
-## Custom App Icon
-- [x] Custom application icon
-- [x] video playback are is 100% transparent - only video pixels are visible - no background color and video pixels opacity is controlled by opacity setting
+- Local processing only; no analytics or network dependency.
+- Explicit runtime-resource allowlist.
+- Hardened Runtime with no private entitlements.
+- Universal Developer ID release, notarization, stapling, and Gatekeeper
+  verification.
+
+The machine-readable authority is
+[`product-contract.json`](product-contract.json).

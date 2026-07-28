@@ -6,46 +6,82 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-test:
-    name: Build and Test
-    runs-on: macos-14
+  quality:
+    name: Build, analyze, and test
+    runs-on: macos-15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - name: Validate repository contract
+        run: scripts/validate_repository.sh
 
-      - name: Build
+      - name: Build Debug
         run: |
           xcodebuild build \
+            -project Reframer/Reframer.xcodeproj \
             -scheme Reframer \
-            -destination 'platform=macOS' \
             -configuration Debug \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            | xcpretty
-
-      - name: Run Unit Tests
-        run: |
-          xcodebuild test \
-            -scheme Reframer \
             -destination 'platform=macOS' \
-            -only-testing:ReframerTests \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            | xcpretty
+            -derivedDataPath "$RUNNER_TEMP/Reframer-Debug" \
+            CODE_SIGNING_ALLOWED=NO
 
-      - name: Build Documentation
+      - name: Build Release
+        run: |
+          xcodebuild build \
+            -project Reframer/Reframer.xcodeproj \
+            -scheme Reframer \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/Reframer-Release" \
+            CODE_SIGNING_ALLOWED=NO
+          scripts/validate_bundle.sh \
+            "$RUNNER_TEMP/Reframer-Release/Build/Products/Release/Reframer.app"
+
+      - name: Static analysis
+        run: |
+          xcodebuild analyze \
+            -project Reframer/Reframer.xcodeproj \
+            -scheme Reframer \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/Reframer-Analyze" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Unit tests
+        run: |
+          scripts/runner_test.sh
+        env:
+          ARTIFACTS_BASE: ${{ runner.temp }}/reframer-test-artifacts
+          RUN_ID: unit
+          TEST_SCOPE: unit
+
+      - name: Build documentation
         run: |
           xcodebuild docbuild \
+            -project Reframer/Reframer.xcodeproj \
             -scheme Reframer \
             -destination 'platform=macOS' \
-            -derivedDataPath .build \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO
+            -derivedDataPath "$RUNNER_TEMP/Reframer-Docs" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reframer-test-diagnostics
+          path: ${{ runner.temp }}/reframer-test-artifacts
+          if-no-files-found: ignore
+          retention-days: 7

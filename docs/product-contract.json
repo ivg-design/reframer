@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "product": {
+    "name": "Reframer",
+    "bundleIdentifier": "com.reframer.app",
+    "version": "0.10.0",
+    "minimumMacOS": "15.0",
+    "license": "MIT"
+  },
+  "playback": {
+    "containers": [
+      "MP4",
+      "M4V",
+      "MOV"
+    ],
+    "decoder": "AVFoundation",
+    "frameStep": {
+      "forward": "Page Down",
+      "backward": "Page Up",
+      "multiplier": 10
+    }
+  },
+  "globalShortcuts": {
+    "availability": "Loaded video with lock mode enabled",
+    "toggleLock": "Command-Shift-L",
+    "stepForward": "Command-Page Down",
+    "stepBackward": "Command-Page Up"
+  },
+  "privacy": {
+    "networkAccess": false,
+    "analytics": false,
+    "downloadsExecutableCode": false
+  }
+}

@@ -1,5 +1,7 @@
 # VideoOverlay Interaction Failures — Investigation Report
 
+> Archived historical material. It does not describe the current product contract.
+
 Date: 2026-01-31
 
 ## Scope & Method

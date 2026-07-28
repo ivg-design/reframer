@@ -1,5 +1,7 @@
 # macOS AppKit Test Runner Setup
 
+> Archived historical material. It does not describe the current product contract.
+
 A dedicated Mac laptop on the local network runs all builds and UI tests, keeping the main Mac focus-free.
 
 ## Executive Overview

@@ -1,72 +1,32 @@
 # Playback Controls
 
-Navigate through video with frame-accurate precision.
+Play, scrub, and navigate decoded video samples precisely.
 
-## Overview
+## Play and pause
 
-Reframer provides precise control over video playback, letting you step through footage frame by frame or scrub quickly through the timeline.
+Press Space or activate the play/pause control. Invoking Play after end of file
+returns to the first sample and starts playback.
 
-## Play and Pause
+## Step
 
-| Method | Action |
-|--------|--------|
-| Keyboard | Press **Space** |
-| Control bar | Click the **▶** / **⏸** button |
+| Action | Default |
+|---|---|
+| Forward one | Command-Page Down |
+| Backward one | Command-Page Up |
+| Forward ten | Command-Shift-Page Down |
+| Backward ten | Command-Shift-Page Up |
 
-## Frame Stepping
+An unmodified scroll over unlocked video also steps. Scroll down advances and
+scroll up reverses.
 
-Move through video one frame at a time for precise positioning.
+Reframer navigates the asset’s decoded sample timing rather than repeatedly
+adding a rounded nominal frame duration. Rapid input updates one desired-sample
+cursor so stale seek completions cannot move the picture backward.
 
-### Scroll Wheel
+## Scrub
 
-When the window is unlocked, scroll the mouse wheel on the video:
+Drag the timeline for responsive preview seeks. Releasing it resolves the
+exact target sample. The frame field accepts a sample number directly.
 
-- **Scroll up** — Previous frame
-- **Scroll down** — Next frame
-
-### Global Shortcuts
-
-These work even when another app is active:
-
-| Action | Shortcut |
-|--------|----------|
-| Previous frame | **⌘ Page Up** |
-| Next frame | **⌘ Page Down** |
-| Back 10 frames | **⌘ Shift Page Up** |
-| Forward 10 frames | **⌘ Shift Page Down** |
-
-## Timeline Scrubbing
-
-Drag the timeline slider to jump to any point in the video. The slider shows your position from start to end.
-
-## Frame Input
-
-For precise navigation, type the exact frame number:
-
-1. Click the frame counter in the control bar
-2. Type the frame number
-3. Press **Enter** to jump to that frame
-
-Use arrow keys while the field is focused:
-
-- **↑ / ↓** — Step by 1 frame
-- **Shift ↑ / ↓** — Step by 10 frames
-
-## Frame Display
-
-The overlay in the upper-left corner shows:
-
-```
-Frame 142 / 720
-```
-
-This tells you the current frame and total frames in the video.
-
-## Audio
-
-| Action | Method |
-|--------|--------|
-| Toggle mute | Click the **speaker** icon |
-| Adjust volume | Drag the volume slider |
-
-Audio is muted by default to avoid interrupting your work.
+The global step chords work while another app is active only when Reframer has
+a loaded video and lock mode is enabled.

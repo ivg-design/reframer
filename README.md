@@ -1,72 +1,81 @@
 # Reframer
 
-A lightweight macOS video overlay app for frame-accurate video reference. Designed for animators, video editors, and anyone who needs to compare video frames with their work.
+Reframer is a native macOS video-reference overlay for animation, motion,
+editing, and visual comparison work. It keeps a local video above your
+workspace, gives you precise frame navigation, and can become click-through
+while you work in the app underneath.
 
-## Features
+## What it does
 
-- **Transparent Overlay**: Always-on-top transparent window that overlays other applications
-- **Frame-Accurate Playback**: Step through video frame-by-frame using keyboard shortcuts or scroll wheel
-- **Zoom & Pan**: Inspect video details with zoom (up to 1000%) and pan controls
-- **Adjustable Opacity**: Set video transparency from 2-100%
-- **Persistent Settings**: Remembers opacity, volume, and window position
-- **Lock Mode**: Click-through mode lets you interact with apps underneath
-- **Drag & Drop**: Open videos by dragging files onto the window
-- **Liquid Glass UI**: Modern macOS Tahoe-style controls with Sequoia fallback
-- **YouTube Links**: Long-press Open to paste a YouTube URL
+- Loads local `.mp4`, `.m4v`, and `.mov` files through AVFoundation
+- Steps from one decoded video sample to the next, including fractional-rate
+  and variable-timing media
+- Plays, pauses, scrubs, zooms, pans, filters, mutes, and adjusts opacity
+- Persists opacity, volume, window placement, filter settings, and customized
+  shortcuts
+- Locks into a click-through overlay
+- Supports guarded global frame stepping while a video is loaded and the
+  overlay is locked
+- Exposes keyboard and VoiceOver names, values, state, and actions
 
-## System Requirements
+Reframer does not stream media or download executable components. A file whose
+container is accepted can still be rejected when macOS cannot decode its video
+track; the app reports that failure instead of claiming the load succeeded.
 
-- macOS 15.0 (Sequoia) or later
-- macOS 26.0 (Tahoe) recommended for Liquid Glass visual effects
-- WebM/MKV playback requires libmpv (prompted on first use)
+## Requirements
 
-## Keyboard Shortcuts
+- macOS 15.0 or later
+- Xcode 16 or later to build from source
 
-| Action | Shortcut |
-|--------|----------|
-| Open File | Cmd+O |
-| Play/Pause | Space |
-| Frame Forward | Right Arrow or Scroll Down |
-| Frame Back | Left Arrow or Scroll Up |
-| 10 Frames | Shift+Arrow |
-| Zoom In | Up Arrow or + |
-| Zoom Out | Down Arrow or - |
-| Reset Zoom | 0 |
-| Reset View | R |
-| Toggle Lock | L |
-| Help | H or ? |
+## Essential controls
 
-## Mouse/Scroll Controls
+| Action | Default |
+|---|---|
+| Open video | Command-O |
+| Play or pause | Space |
+| Step forward | Command-Page Down |
+| Step backward | Command-Page Up |
+| Step 10 frames | Add Shift |
+| Pan | Arrow keys |
+| Pan 10 / 100 points | Shift / Command-Shift + Arrow |
+| Zoom / fine zoom | Shift / Command-Shift + Scroll |
+| Reset zoom / view | 0 / R |
+| Toggle lock locally / globally | L / Command-Shift-L |
+| Filters | F |
+| Help and shortcut settings | H |
 
-| Action | Gesture |
-|--------|---------|
-| Frame Step | Scroll (no modifiers) |
-| Zoom | Shift+Scroll (5% steps) |
-| Fine Zoom | Cmd+Shift+Scroll (0.1% steps) |
-| Pan | Drag video (when zoomed > 100%) |
-| Move Window | Drag control bar background |
+The frame-step chords work outside Reframer only when a video is loaded and
+lock mode is enabled. Global shortcuts require the normal macOS privacy
+consent. Defaults can be changed or disabled in Reframer’s shortcut settings.
 
-## Global Shortcuts
+See [Product Contract](docs/PRODUCT_CONTRACT.md) for exact states and guards.
 
-| Action | Shortcut |
-|--------|----------|
-| Toggle Lock | Cmd+Shift+L |
-| Frame Forward | Cmd+PageDown |
-| Frame Back | Cmd+PageUp |
+## Build and test
 
-## Building
+```bash
+xcodebuild build \
+  -project Reframer/Reframer.xcodeproj \
+  -scheme Reframer \
+  -destination 'platform=macOS' \
+  CODE_SIGNING_ALLOWED=NO
 
-1. Open `Reframer/Reframer.xcodeproj` in Xcode 15.0+
-2. Select your signing team
-3. Build and run (Cmd+R)
+scripts/runner_test.sh
+```
 
-## Documentation
+The normal CI suite builds Debug and Release, runs static analysis, validates
+the product and bundle contracts, builds DocC, and runs unit tests. The UI suite
+runs separately on a logged-in, pre-authorized macOS runner.
 
-See the `docs/` folder for detailed documentation:
-- `FEATURES.md` - Feature specifications
-- `FEATURE_TESTS.md` - Test plan
-- `MASTER_IMPLEMENTATION_PLAN.md` - Implementation details
+## Release
+
+Developer ID signing and notarization are handled by
+[`scripts/package_release.sh`](scripts/package_release.sh). The script refuses
+dirty sources, validates the universal app bundle, submits it for
+notarization, staples the ticket, runs Gatekeeper assessment, and packages the
+result.
+
+See [Release Process](docs/RELEASE.md).
 
 ## License
 
-MIT License
+[MIT](LICENSE)

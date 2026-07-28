@@ -1,249 +1,83 @@
 #!/bin/bash
+
+# Runs Reframer tests without modifying signing state, quarantine metadata, or
+# macOS privacy databases. UI tests must run from an already-authorized,
+# interactive self-hosted runner.
+
 set -euo pipefail
 
-# ===== CONFIGURATION - EDIT THESE =====
-REPO_PATH="${REPO_PATH:-$HOME/Developer/Reframer}"
-PROJECT_DIR="${PROJECT_DIR:-$REPO_PATH/Reframer}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_PATH="${REPO_PATH:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+PROJECT_PATH="$REPO_PATH/Reframer/Reframer.xcodeproj"
 SCHEME="${SCHEME:-Reframer}"
 DESTINATION="${DESTINATION:-platform=macOS}"
-ARTIFACTS_BASE="${ARTIFACTS_BASE:-$HOME/ci_artifacts}"
-KEEP_ARTIFACTS="${KEEP_ARTIFACTS:-10}"
-ONLY_TESTS="${ONLY_TESTS:-}"
-UITEST_MPV_VIDEO_PATH="${UITEST_MPV_VIDEO_PATH:-}"
-UITEST_AV1_VIDEO_PATH="${UITEST_AV1_VIDEO_PATH:-}"
-UITEST_YOUTUBE_URL="${UITEST_YOUTUBE_URL:-}"
-UITEST_CLEAN_MPV="${UITEST_CLEAN_MPV:-}"
-UITEST_CLEAN_MPV_YT="${UITEST_CLEAN_MPV_YT:-}"
-# ======================================
+TEST_SCOPE="${TEST_SCOPE:-unit}"
+ARTIFACTS_BASE="${ARTIFACTS_BASE:-$REPO_PATH/.artifacts}"
+RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+ARTIFACT_DIR="$ARTIFACTS_BASE/$RUN_ID"
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ARTIFACT_DIR/DerivedData}"
+XCRESULT_PATH="$ARTIFACT_DIR/ReframerTests.xcresult"
+LOG_PATH="$ARTIFACT_DIR/xcodebuild.log"
 
-if [ -n "${DONE_FILE:-}" ]; then
-    mkdir -p "$(dirname "$DONE_FILE")" 2>/dev/null || true
-    trap 'touch "$DONE_FILE" 2>/dev/null || true' EXIT
+case "$TEST_SCOPE" in
+    unit)
+        TEST_SELECTION=("-only-testing:ReframerTests")
+        SIGNING_ARGUMENTS=("CODE_SIGNING_ALLOWED=NO")
+        ;;
+    ui)
+        "$SCRIPT_DIR/ui_test_preflight.sh"
+        TEST_SELECTION=("-only-testing:ReframerUITests")
+        SIGNING_ARGUMENTS=()
+        ;;
+    all)
+        "$SCRIPT_DIR/ui_test_preflight.sh"
+        TEST_SELECTION=()
+        SIGNING_ARGUMENTS=()
+        ;;
+    *)
+        echo "error: TEST_SCOPE must be one of: unit, ui, all" >&2
+        exit 64
+        ;;
+esac
+
+if ! command -v xcodebuild >/dev/null 2>&1; then
+    echo "error: Xcode command-line tools are unavailable" >&2
+    exit 69
 fi
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-ARTIFACT_DIR="$ARTIFACTS_BASE/$TIMESTAMP"
-LOG_FILE="$ARTIFACT_DIR/build.log"
-SUMMARY_FILE="$ARTIFACT_DIR/summary.txt"
-XCRESULT_PATH="$ARTIFACT_DIR/TestResults.xcresult"
-DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ARTIFACT_DIR/DerivedData}"
+if [ ! -f "$PROJECT_PATH/project.pbxproj" ]; then
+    echo "error: Reframer project not found at $PROJECT_PATH" >&2
+    exit 66
+fi
 
 mkdir -p "$ARTIFACT_DIR"
 
-# Header
 {
-    echo "=== CI Test Run ==="
-    echo "Timestamp:    $TIMESTAMP"
-    echo "Scheme:       $SCHEME"
-    echo "Destination:  $DESTINATION"
-    echo "DerivedData:  $DERIVED_DATA_PATH"
-    echo "Artifact Dir: $ARTIFACT_DIR"
-    echo "Only Tests:   ${ONLY_TESTS:-<all>}"
-    echo "MPV Video:    ${UITEST_MPV_VIDEO_PATH:-<unset>}"
-    echo "AV1 Video:    ${UITEST_AV1_VIDEO_PATH:-<unset>}"
-    echo "YouTube URL:  ${UITEST_YOUTUBE_URL:-<unset>}"
-    echo ""
-} | tee "$SUMMARY_FILE"
+    echo "Reframer test run"
+    echo "Commit:      $(git -C "$REPO_PATH" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    echo "Scope:       $TEST_SCOPE"
+    echo "Destination: $DESTINATION"
+    echo "Artifacts:   $ARTIFACT_DIR"
+    xcodebuild -version
+} | tee "$LOG_PATH"
 
-cd "$PROJECT_DIR"
-
-# Update repo first
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/runner_watch_or_pull.sh" ]; then
-    REPO_PATH="$REPO_PATH" "$SCRIPT_DIR/runner_watch_or_pull.sh" 2>&1 | tee -a "$LOG_FILE"
-fi
-
-{
-    echo "Git commit: $(git rev-parse --short HEAD)"
-    echo "Git message: $(git log -1 --format='%s')"
-    echo ""
-} | tee -a "$SUMMARY_FILE"
-
-# Discover available schemes if needed
-echo "=== Available Schemes ===" >> "$LOG_FILE"
-xcodebuild -list 2>&1 | tee -a "$LOG_FILE" | grep -A 20 "Schemes:" | head -10 || true
-echo "" >> "$LOG_FILE"
-
-# Build for testing first (allows us to remove quarantine before running UI tests)
-echo "=== Build For Testing ===" | tee -a "$LOG_FILE"
-echo "Command: xcodebuild build-for-testing -scheme $SCHEME -destination '$DESTINATION'" | tee -a "$LOG_FILE"
-echo "" | tee -a "$LOG_FILE"
-
-TEST_EXIT_CODE=0
-xcodebuild build-for-testing \
+set +e
+xcodebuild test \
+    -project "$PROJECT_PATH" \
     -scheme "$SCHEME" \
     -destination "$DESTINATION" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
-    2>&1 | tee -a "$LOG_FILE" || TEST_EXIT_CODE=$?
+    -resultBundlePath "$XCRESULT_PATH" \
+    -parallel-testing-enabled NO \
+    "${SIGNING_ARGUMENTS[@]}" \
+    "${TEST_SELECTION[@]}" \
+    2>&1 | tee -a "$LOG_PATH"
+TEST_STATUS=${PIPESTATUS[0]}
+set -e
 
-if [ $TEST_EXIT_CODE -eq 0 ]; then
-    # Remove quarantine if present (fixes "damaged" UI test runner app)
-    xattr -dr com.apple.quarantine "$DERIVED_DATA_PATH" 2>/dev/null || true
-
-    # Ad-hoc re-sign built apps to avoid Gatekeeper launch failures in UI tests
-    if [ -d "$DERIVED_DATA_PATH/Build/Products" ]; then
-        while IFS= read -r app; do
-            if [ -n "$app" ]; then
-                codesign --force --deep --sign - "$app" 2>/dev/null || true
-            fi
-        done < <(find "$DERIVED_DATA_PATH/Build/Products" -name "Reframer*.app" -print 2>/dev/null)
-    fi
-
-    # Ensure Accessibility/Input Monitoring permissions for UI test runner (prevents automation prompt hang)
-    if command -v sqlite3 >/dev/null 2>&1 && [ -f "$HOME/Library/Application Support/com.apple.TCC/TCC.db" ] && command -v csreq >/dev/null 2>&1; then
-        TCC_DB="$HOME/Library/Application Support/com.apple.TCC/TCC.db"
-
-        tcc_insert() {
-            local service="$1"
-            local client="$2"
-            local client_type="$3"
-            local csreq_blob="$4"
-            sqlite3 "$TCC_DB" \
-                "INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, indirect_object_identifier) VALUES ('$service', '$client', $client_type, 2, 1, 1, X'$csreq_blob', 'UNUSED');" \
-                2>/dev/null || true
-        }
-
-        tcc_csreq_for() {
-            local target="$1"
-            local req
-            req=$(codesign -dr - "$target" 2>/dev/null | sed -n -E 's/^#?[[:space:]]*designated => //p')
-            if [ -n "$req" ]; then
-                local tmp_req
-                tmp_req=$(mktemp)
-                /usr/bin/csreq -r "=$req" -b "$tmp_req" 2>/dev/null || true
-                if [ -s "$tmp_req" ]; then
-                    xxd -p "$tmp_req" | tr -d '\n'
-                fi
-                rm -f "$tmp_req"
-            fi
-        }
-
-        RUNNER_APP=$(find "$DERIVED_DATA_PATH/Build/Products" -name "ReframerUITests-Runner.app" -print -quit 2>/dev/null || true)
-        if [ -n "$RUNNER_APP" ]; then
-            CSREQ_BLOB=$(tcc_csreq_for "$RUNNER_APP")
-            if [ -n "$CSREQ_BLOB" ]; then
-                tcc_insert "kTCCServiceAccessibility" "com.reframer.app.ReframerUITests.xctrunner" 0 "$CSREQ_BLOB"
-            fi
-        fi
-
-        XCODE_APP="/Applications/Xcode.app/Contents/MacOS/Xcode"
-        DTSERVICEHUB="/Applications/Xcode.app/Contents/SharedFrameworks/DVTInstrumentsFoundation.framework/Versions/A/Resources/DTServiceHub"
-        SWBBUILDSERVICE="/Applications/Xcode.app/Contents/SharedFrameworks/SwiftBuild.framework/Versions/A/PlugIns/SWBBuildService.bundle/Contents/MacOS/SWBBuildService"
-        TERMINAL_APP="/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal"
-        if [ -x "$XCODE_APP" ]; then
-            CSREQ_BLOB=$(tcc_csreq_for "$XCODE_APP")
-            if [ -n "$CSREQ_BLOB" ]; then
-                tcc_insert "kTCCServiceListenEvent" "com.apple.dt.Xcode" 0 "$CSREQ_BLOB"
-                tcc_insert "kTCCServiceAccessibility" "com.apple.dt.Xcode" 0 "$CSREQ_BLOB"
-            fi
-        fi
-        if [ -x "$DTSERVICEHUB" ]; then
-            CSREQ_BLOB=$(tcc_csreq_for "$DTSERVICEHUB")
-            if [ -n "$CSREQ_BLOB" ]; then
-                tcc_insert "kTCCServiceListenEvent" "com.apple.DTServiceHub" 0 "$CSREQ_BLOB"
-            fi
-        fi
-        if [ -x "$SWBBUILDSERVICE" ]; then
-            CSREQ_BLOB=$(tcc_csreq_for "$SWBBUILDSERVICE")
-            if [ -n "$CSREQ_BLOB" ]; then
-                tcc_insert "kTCCServiceDeveloperTool" "com.apple.dt.SWBBuildService" 0 "$CSREQ_BLOB"
-            fi
-        fi
-        if [ -x "$TERMINAL_APP" ]; then
-            CSREQ_BLOB=$(tcc_csreq_for "$TERMINAL_APP")
-            if [ -n "$CSREQ_BLOB" ]; then
-                tcc_insert "kTCCServiceListenEvent" "com.apple.Terminal" 0 "$CSREQ_BLOB"
-                tcc_insert "kTCCServiceAccessibility" "com.apple.Terminal" 0 "$CSREQ_BLOB"
-            fi
-        fi
-
-        killall tccd >/dev/null 2>&1 || true
-    fi
-
-    echo "=== Running Tests ===" | tee -a "$LOG_FILE"
-    echo "Command: xcodebuild test-without-building -scheme $SCHEME -destination '$DESTINATION'" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-
-    TEST_ARGS=()
-    if [ -n "$ONLY_TESTS" ]; then
-        IFS=',' read -r -a TEST_ARRAY <<< "$ONLY_TESTS"
-        for test in "${TEST_ARRAY[@]}"; do
-            if [ -n "$test" ]; then
-                TEST_ARGS+=("-only-testing:$test")
-            fi
-        done
-    fi
-
-    export UITEST_MPV_VIDEO_PATH UITEST_AV1_VIDEO_PATH UITEST_YOUTUBE_URL UITEST_CLEAN_MPV UITEST_CLEAN_MPV_YT
-
-    xcodebuild test-without-building \
-        -scheme "$SCHEME" \
-        -destination "$DESTINATION" \
-        -derivedDataPath "$DERIVED_DATA_PATH" \
-        -resultBundlePath "$XCRESULT_PATH" \
-        "${TEST_ARGS[@]}" \
-        2>&1 | tee -a "$LOG_FILE" || TEST_EXIT_CODE=$?
+if [ "$TEST_STATUS" -ne 0 ]; then
+    echo "Reframer tests failed. Result bundle: $XCRESULT_PATH" >&2
+    exit "$TEST_STATUS"
 fi
 
-# Extract summary from xcresult
-{
-    echo ""
-    echo "=== Test Results ==="
-} | tee -a "$SUMMARY_FILE"
-
-if [ -d "$XCRESULT_PATH" ]; then
-    # Try to get human-readable summary
-    xcrun xcresulttool get --format human-readable --path "$XCRESULT_PATH" 2>/dev/null | \
-        grep -E "(Test Suite|passed|failed|skipped|Test case)" | \
-        head -100 | tee -a "$SUMMARY_FILE" || true
-
-    # Count pass/fail from log
-    PASSED=$(grep -c " passed " "$LOG_FILE" 2>/dev/null || true)
-    FAILED=$(grep -c " failed " "$LOG_FILE" 2>/dev/null || true)
-    PASSED=${PASSED:-0}
-    FAILED=${FAILED:-0}
-    TOTAL=$((PASSED + FAILED))
-
-    {
-        echo ""
-        echo "Summary: $PASSED passed, $FAILED failed (total: $TOTAL)"
-    } | tee -a "$SUMMARY_FILE"
-else
-    echo "WARNING: No xcresult bundle found at $XCRESULT_PATH" | tee -a "$SUMMARY_FILE"
-fi
-
-# Final status
-{
-    echo ""
-    if [ $TEST_EXIT_CODE -eq 0 ]; then
-        echo "STATUS: ✅ SUCCESS"
-    else
-        echo "STATUS: ❌ FAILED (exit code $TEST_EXIT_CODE)"
-    fi
-    echo ""
-} | tee -a "$SUMMARY_FILE"
-
-# Cleanup old artifacts (keep last N)
-echo "=== Cleanup ===" >> "$LOG_FILE"
-cd "$ARTIFACTS_BASE"
-OLD_ARTIFACTS=$(ls -dt */ 2>/dev/null | tail -n +$((KEEP_ARTIFACTS + 1)) | wc -l | tr -d ' ')
-if [ "$OLD_ARTIFACTS" -gt 0 ]; then
-    ls -dt */ 2>/dev/null | tail -n +$((KEEP_ARTIFACTS + 1)) | xargs rm -rf 2>/dev/null || true
-    echo "Removed $OLD_ARTIFACTS old artifact directories" >> "$LOG_FILE"
-fi
-echo "Keeping last $KEEP_ARTIFACTS runs" >> "$LOG_FILE"
-
-# Print artifact locations
-{
-    echo "=== Artifacts ==="
-    echo "Directory: $ARTIFACT_DIR"
-    echo "Log:       $LOG_FILE"
-    echo "Summary:   $SUMMARY_FILE"
-    echo "xcresult:  $XCRESULT_PATH"
-} | tee -a "$SUMMARY_FILE"
-
-if [ -n "${DONE_FILE:-}" ]; then
-    touch "$DONE_FILE" 2>/dev/null || true
-fi
-
-exit $TEST_EXIT_CODE
+echo "Reframer tests passed. Result bundle: $XCRESULT_PATH"

@@ -1,5 +1,7 @@
 # Reframer Codebase Audit Report
 
+> Archived historical material. It does not describe the current product contract.
+
 Date: 2026-02-01
 Scope: `Reframer-filters/Reframer` (feature branch worktree), focusing on playback pipeline (AVFoundation + libmpv), filter rendering, UI state flow, install/update paths, and usage behavior.
 

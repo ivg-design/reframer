@@ -1,5 +1,7 @@
 # Reframer Codebase Audit (2026-02-02)
 
+> Archived historical material. It does not describe the current product contract.
+
 Scope: `/Users/ivg/github/video-overlay/Reframer-filters` on branch `feature/video-filters`.
 
 ## Recent changes observed

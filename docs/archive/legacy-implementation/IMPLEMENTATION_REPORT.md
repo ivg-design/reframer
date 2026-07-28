@@ -1,5 +1,7 @@
 # Video Overlay - Swift/macOS Tahoe Implementation Report
 
+> Archived historical material. It does not describe the current product contract.
+
 ## Executive Summary
 
 This report analyzes the requirements from `FEATURES.md` and provides comprehensive guidance for implementing a 100% accurate native Swift/macOS application targeting **macOS Tahoe (26)** using **Xcode 26** and **Swift 6**. The current Xcode project already has a solid foundation using AppKit, SwiftUI, and AVFoundation.

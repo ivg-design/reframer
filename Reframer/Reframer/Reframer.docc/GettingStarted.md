@@ -1,71 +1,35 @@
 # Getting Started
 
-Install Reframer and load your first video overlay.
+Load a local video and turn it into a reference overlay.
 
-## Overview
+## Requirements
 
-Reframer is a single-window app that creates a transparent video overlay on your screen. This guide covers installation, first launch, and basic usage.
+Reframer requires macOS 15.0 or later.
 
-## Installation
+## Load your first video
 
-### From Release
+1. Launch Reframer.
+2. Activate the empty-state Open action, drop a file on the window, or press
+   Command-O.
+3. Choose an MP4, M4V, or MOV file with a video track macOS can decode.
+4. Use Space or the play control to play and pause.
+5. Use Command-Page Down and Command-Page Up to step forward and backward.
 
-1. Download `Reframer.app` from the releases page
-2. Move to `/Applications`
-3. Launch the app — it will prompt to move itself if needed
+An accepted file extension is not enough by itself: Reframer verifies that the
+asset is playable and has a decodable video track.
 
-### From Source
+## Position the reference
 
-```bash
-git clone https://github.com/ivg-design/reframer.git
-cd reframer/Reframer
-open Reframer.xcodeproj
-# Build and run (Cmd+R)
-```
+Drag the control-bar background to move the window. Resize from an edge, zoom
+with Shift-scroll, pan with the arrow keys or pointer, and set opacity from 2%
+through 100%.
 
-## First Launch
+Press L to lock the overlay. Video-area clicks then pass through to the app
+underneath. Press Command-Shift-L when Reframer is not active to unlock it.
 
-When you first launch Reframer:
+## Learn more
 
-1. A transparent window appears with a **drop zone**
-2. The control bar floats at the bottom of the screen
-3. Drop a video file or press **⌘O** to open one
-
-## Loading a Video
-
-You can load videos in several ways:
-
-- **Drag and drop** — Drop a video file onto the window
-- **Click the drop zone** — Opens a file picker
-- **Keyboard** — Press **⌘O** to open a file
-
-Supported formats include MP4, MOV, AVI, and ProRes.
-
-## Basic Controls
-
-Once a video is loaded:
-
-| Action | Control |
-|--------|---------|
-| Play/Pause | **Space** or click the play button |
-| Step frames | **← →** arrow keys |
-| Zoom | **↑ ↓** arrow keys or **+ -** |
-| Pan | Click and drag the video |
-| Adjust opacity | Drag the opacity slider |
-| Lock window | Press **L** or click the lock icon |
-
-## Window Behavior
-
-The Reframer window:
-
-- Has no title bar or buttons (transparent and frameless)
-- Floats above all other windows by default
-- Can be resized by dragging edges (when unlocked)
-- Can be moved by dragging the control bar or the handle
-
-## Next Steps
-
-- <doc:PlaybackControls> — Learn frame-accurate navigation
-- <doc:ZoomAndPan> — Inspect video details
-- <doc:LockMode> — Click through to apps below
-- <doc:KeyboardShortcuts> — Master all shortcuts
+- <doc:PlaybackControls>
+- <doc:ZoomAndPan>
+- <doc:LockMode>
+- <doc:KeyboardShortcuts>

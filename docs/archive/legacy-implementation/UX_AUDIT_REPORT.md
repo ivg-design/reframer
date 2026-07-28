@@ -1,5 +1,7 @@
 # Video Overlay - Comprehensive UX Audit Report
 
+> Archived historical material. It does not describe the current product contract.
+
 ## Executive Summary
 
 Complete audit of the Swift implementation identifying **all UX issues** preventing the app from functioning as specified in FEATURES.md. The app compiles but is ~95% non-functional due to critical bugs in event handling, state management, and API usage.

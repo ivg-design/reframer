@@ -1,5 +1,7 @@
 # Reframer — Master Implementation Plan
 
+> Archived historical material. It does not describe the current product contract.
+
 **Date**: 2026-01-31
 **Status**: Comprehensive Audit & Implementation Plan (Revision 11)
 **Target Platform**: macOS 26 (Tahoe) with macOS 15 (Sequoia) fallback

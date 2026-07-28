@@ -1,0 +1,46 @@
+name: UI Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    types: [labeled, synchronize, reopened]
+
+concurrency:
+  group: ui-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ui-tests:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'run-ui-tests')
+    name: Interactive macOS UI suite
+    runs-on: [self-hosted, macOS, reframer-ui]
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Runner preflight
+        run: scripts/ui_test_preflight.sh
+        env:
+          REFRAMER_UI_RUNNER_AUTHORIZED: ${{ vars.REFRAMER_UI_RUNNER_AUTHORIZED }}
+
+      - name: Run UI tests serially
+        run: scripts/runner_test.sh
+        env:
+          ARTIFACTS_BASE: ${{ runner.temp }}/reframer-ui-test-artifacts
+          REFRAMER_UI_RUNNER_AUTHORIZED: ${{ vars.REFRAMER_UI_RUNNER_AUTHORIZED }}
+          RUN_ID: ui
+          TEST_SCOPE: ui
+
+      - name: Upload UI test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reframer-ui-test-diagnostics
+          path: ${{ runner.temp }}/reframer-ui-test-artifacts
+          if-no-files-found: ignore
+          retention-days: 14

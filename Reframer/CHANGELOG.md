@@ -1,69 +1,65 @@
 # Changelog
 
-All notable changes to Reframer will be documented in this file.
+Notable Reframer changes are recorded here. The project uses semantic
+versioning once a build is published; earlier repository milestones were
+development snapshots, not production releases.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [0.8.0] - 2025-02-01
+## [0.10.0] - Unreleased
 
 ### Added
-- Real-time video filters (Grayscale, Sepia, Invert, Noir, etc.)
-- Quick filter dropdown in toolbar with adjustable intensity
-- Advanced filter panel for stacking multiple effects
-- Edge glow indicators with soft gradient effect for resize handle discovery
-- Subtle visual hints appear when hovering near window edges (when unlocked)
-- 100ms debounce to prevent flickering on edge hover
-- Preference persistence for opacity, volume, mute state, always-on-top, and window position
-- Scroll step accumulator for precise trackpad stepping
-- Expanded unit test coverage for filters and persistence
-- Cmd+A select-all support in numeric input fields
+
+- Canonical command registry and single dispatcher for key, menu, and global
+  input
+- Shortcut validation, clear/disable/reset behavior, persistence migration,
+  permission status, and deterministic command tests
+- Desired-sample playback cursor, generation-scoped async work, exact final
+  scrub seeks, load/error/end-state handling, and media preflight
+- Keyboard and VoiceOver semantics for the empty state, toolbar, filters,
+  panels, overlays, and status
+- Reduce Motion and multi-display-safe presentation behavior
+- Machine-readable product contract and repository/bundle validators
+- Separate CI and interactive macOS UI-test workflows
+- Developer ID archive, universal-binary verification, notarization, stapling,
+  and Gatekeeper packaging
+- MIT license and security/threat-model documentation
 
 ### Changed
-- Toolbar now positioned below video canvas instead of overlapping
-- Video canvas has rounded corners on all four sides
-- Pan now requires Ctrl+drag to prevent conflict with window dragging
-- Improved drag-and-drop registration for video files
-- Timeline scrubbing uses fast seeks while dragging and accurate seeks on release
-- Open panel is asynchronous (non-blocking)
-- Default appearance forced to Dark mode
-- Control bar height increased to 80pt to avoid clipping
-- Quick filter slider disables for parameterless filters (Invert/Noir)
-- Global frame-step shortcuts now only fire when lock mode is enabled
+
+- Minimum system and public documentation are aligned at macOS 15.0
+- Shipping containers are explicitly MP4, M4V, and MOV through AVFoundation
+- Page Down advances and Page Up reverses
+- Global frame stepping requires a loaded video and lock mode
+- Frame navigation uses decoded sample timing instead of rounded nominal-rate
+  arithmetic
+- Quick filters use a conventional primary-click menu with a separate advanced
+  panel
+- App resources are explicitly allowlisted; engineering reports remain outside
+  the app bundle
+- Version and build metadata now derive from Xcode build settings and include a
+  source stamp
 
 ### Fixed
-- Global shortcut permission prompt handled explicitly
-- Frame/zoom/opacity inputs capture Cmd+Shift/Option/Ctrl arrow selectors
-- Scroll wheel discrete stepping triggers on any tick
-- Parameterless quick filters now keep the opacity field readable while disabling edits
-- Supported format detection checks UTType in addition to extensions
-- Mute toggle restores last volume instead of resetting
-- Toolbar and canvas width mismatch (was 861px vs 800px)
-- Scrubbar not resetting when loading a new video
-- Scrubbar not reaching the last frame
-- Window dragging accidentally causing video panning
-- Timeline slider now properly updates maxValue on video load
 
-## [1.0.0] - 2025-01-31
+- Decorative edge and status overlays no longer block pointer input
+- Opacity and other advertised preferences persist after relaunch
+- Toolbar controls no longer clip at the minimum window size
+- Rebinding a command removes its previous chord and prevents duplicate
+  dispatch
+- Stale load, seek, scrub, and filter completions cannot overwrite newer state
+- Ended playback can replay from the beginning
+- UI tests run serially and no longer mutate macOS privacy or signing state
 
-### Added
-- Pure AppKit implementation (migrated from SwiftUI)
-- Transparent frameless window with video overlay
-- Always-on-top window mode
-- Frame-accurate video navigation (step forward/backward)
-- Zoom and pan controls with keyboard and mouse support
-- Adjustable opacity (2-100%)
-- Lock mode to click through video
-- Comprehensive keyboard shortcuts
-- Drag-and-drop video loading
-- Apple Help Book documentation
-- DocC API documentation
-- CI workflow for automated builds
+### Security
 
-### Supported Formats
-- MP4, MOV, ProRes, H.264, H.265, AVI
+- Removed the obsolete library-validation exception
+- Removed scripts that wrote to privacy databases, restarted privacy services,
+  stripped provenance, or re-signed test products
+- Documented the deliberate non-sandboxed global-shortcut posture and release
+  gates
 
-## [0.1.0] - 2025-01-30
+## Development snapshots
 
-### Added
-- Initial commit with basic video overlay functionality
+The prior 0.1 and 0.8 repository snapshots established the AppKit overlay,
+playback controls, zoom/pan, filters, persistence, help content, and initial
+tests. Their feature reports are preserved under
+`docs/archive/legacy-implementation/` and do not define current behavior.

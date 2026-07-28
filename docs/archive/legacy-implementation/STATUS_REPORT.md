@@ -1,5 +1,7 @@
 # Status Report (2026-02-01 - Session 5)
 
+> Archived historical material. It does not describe the current product contract.
+
 ## Current Status: 🟡 MPV Integration In Progress (UI Automation Blocked)
 
 ## Session 5 Summary

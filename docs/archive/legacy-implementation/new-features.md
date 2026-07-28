@@ -1,5 +1,7 @@
 # Planned Features
 
+> Archived historical material. It does not describe the current product contract.
+
 ## Navigable Markers with Shortcuts
 
 Add the ability to set markers on the timeline and navigate between them with keyboard shortcuts.

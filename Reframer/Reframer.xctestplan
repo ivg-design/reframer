@@ -25,7 +25,7 @@
       }
     },
     {
-      "parallelizable" : true,
+      "parallelizable" : false,
       "target" : {
         "containerPath" : "container:Reframer.xcodeproj",
         "identifier" : "CCC50001",

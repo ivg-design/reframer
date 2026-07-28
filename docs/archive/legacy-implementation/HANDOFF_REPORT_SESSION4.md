@@ -1,5 +1,7 @@
 # Handoff Report (Session 4) — Remote Test Runner
 
+> Archived historical material. It does not describe the current product contract.
+
 This handoff is retained for the remote test runner setup and workflow. Legacy playback notes were removed in favor of the current libmpv implementation.
 
 ## Remote Test Runner Summary

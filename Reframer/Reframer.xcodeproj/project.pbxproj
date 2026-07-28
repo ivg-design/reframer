@@ -14,7 +14,6 @@
 		2491A9B249AD2563B719271A /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C014B4F5CB12CD15A1A186 /* Notifications.swift */; };
 		370628C9CD00AD6AA6DF0707 /* ControlBar.xib in Resources */ = {isa = PBXBuildFile; fileRef = B972E974DDAFCDB4952DE88C /* ControlBar.xib */; };
 		5E887FAA7C23F19E7451BD73 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8072E56EC759E00E54249624 /* MainViewController.swift */; };
-		6E1F01CFBCE69080FA2B16F6 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 331DF56DBDF1FEEE4E142195 /* MainMenu.xib */; };
 		7148C7DD0239873CFBA24CB6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12166D40D39C3C452F590B2E /* AppDelegate.swift */; };
 		7C580FCBE04BAD9DED666438 /* DropZoneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 205A94D5C521D2C8598E3FAA /* DropZoneView.swift */; };
 		903D85FA96F4D67AAE7D51A6 /* EdgeIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */; };
@@ -65,7 +64,6 @@
 		1DD11BE9E49C9FFF9BB26A6E /* HelpView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		205A94D5C521D2C8598E3FAA /* DropZoneView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DropZoneView.swift; sourceTree = "<group>"; };
 		242CE7E3F5EFF404409747F7 /* ControlBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlBar.swift; sourceTree = "<group>"; };
-		331DF56DBDF1FEEE4E142195 /* MainMenu.xib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.xib; path = MainMenu.xib; sourceTree = "<group>"; };
 		56A76BD7926C2FA781BB04D1 /* ShortcutSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShortcutSettings.swift; sourceTree = "<group>"; };
 		5F1E904417161A398ABD5FE0 /* VideoView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		70C014B4F5CB12CD15A1A186 /* Notifications.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
@@ -104,20 +102,6 @@
 		VF001001 /* VideoFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		B214C6102F2E40FA0048F524 /* ../docs */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = ../docs;
-			sourceTree = SOURCE_ROOT;
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
-
 /* Begin PBXFrameworksBuildPhase section */
 		AAA30001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -146,7 +130,6 @@
 		AAA40001 = {
 			isa = PBXGroup;
 			children = (
-				B214C6102F2E40FA0048F524 /* ../docs */,
 				AAA40002 /* Reframer */,
 				BBB40001 /* ReframerTests */,
 				CCC40001 /* ReframerUITests */,
@@ -229,7 +212,6 @@
 				AAA10011 /* Assets.xcassets */,
 				AAA10012 /* Reframer.entitlements */,
 				AAA10013 /* Info.plist */,
-				331DF56DBDF1FEEE4E142195 /* MainMenu.xib */,
 				B972E974DDAFCDB4952DE88C /* ControlBar.xib */,
 			);
 			name = Resources;
@@ -279,16 +261,15 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = AAA60003 /* Build configuration list for PBXNativeTarget "Reframer" */;
 			buildPhases = (
+				AAA50008 /* Pre-Archive Check */,
 				AAA50002 /* Sources */,
 				AAA30001 /* Frameworks */,
 				AAA50003 /* Resources */,
+				AAA50007 /* Stamp Build Info */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				B214C6102F2E40FA0048F524 /* ../docs */,
 			);
 			name = Reframer;
 			productName = Reframer;
@@ -320,7 +301,6 @@
 				CCC50002 /* Sources */,
 				CCC30001 /* Frameworks */,
 				CCC50003 /* Resources */,
-				CCC50005 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -382,7 +362,6 @@
 			files = (
 				AAA00011 /* Assets.xcassets in Resources */,
 				FFF00001 /* Reframer.help in Resources */,
-				6E1F01CFBCE69080FA2B16F6 /* MainMenu.xib in Resources */,
 				370628C9CD00AD6AA6DF0707 /* ControlBar.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -407,18 +386,35 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		CCC50005 /* ShellScript */ = {
+		AAA50007 /* Stamp Build Info */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			inputPaths = (
 			);
+			name = "Stamp Build Info";
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "runner=\"${BUILT_PRODUCTS_DIR}/ReframerUITests-Runner.app\"\napp=\"${BUILT_PRODUCTS_DIR}/Reframer.app\"\nif [ -d \"$runner\" ]; then\n  /usr/bin/xattr -dr com.apple.quarantine \"$runner\" || true\n  /usr/bin/xattr -dr com.apple.provenance \"$runner\" || true\n  /usr/bin/xattr -dr com.apple.macl \"$runner\" || true\n  /usr/bin/codesign --force --deep --sign - \"$runner\" || true\nfi\nif [ -d \"$app\" ]; then\n  /usr/bin/xattr -dr com.apple.quarantine \"$app\" || true\n  /usr/bin/xattr -dr com.apple.provenance \"$app\" || true\n  /usr/bin/xattr -dr com.apple.macl \"$app\" || true\n  /usr/bin/codesign --force --deep --sign - \"$app\" || true\nfi\n";
+			shellPath = /bin/bash;
+			shellScript = "set -euo pipefail\nplist=\"${BUILT_PRODUCTS_DIR}/${INFOPLIST_PATH}\"\nif [ ! -f \"$plist\" ]; then\n  echo \"warning: Build Info.plist was not available for stamping\"\n  exit 0\nfi\ncommit=\"nogit\"\ndirty=false\nif /usr/bin/git -C \"${SRCROOT}/..\" rev-parse --git-dir >/dev/null 2>&1; then\n  commit=$(/usr/bin/git -C \"${SRCROOT}/..\" rev-parse --short HEAD 2>/dev/null || echo unknown)\n  if ! /usr/bin/git -C \"${SRCROOT}/..\" diff --quiet || ! /usr/bin/git -C \"${SRCROOT}/..\" diff --cached --quiet; then\n    dirty=true\n  fi\nfi\ntimestamp=$(/bin/date -u +\"%Y-%m-%dT%H:%M:%SZ\")\n/usr/libexec/PlistBuddy -c \"Delete :ReframerGitCommit\" \"$plist\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :ReframerGitCommit string $commit\" \"$plist\"\n/usr/libexec/PlistBuddy -c \"Delete :ReframerBuildTimestamp\" \"$plist\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :ReframerBuildTimestamp string $timestamp\" \"$plist\"\n/usr/libexec/PlistBuddy -c \"Delete :ReframerGitDirty\" \"$plist\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :ReframerGitDirty bool $dirty\" \"$plist\"\necho \"Stamped Reframer $commit @ $timestamp (dirty: $dirty)\"\n";
+		};
+		AAA50008 /* Pre-Archive Check */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Pre-Archive Check";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "set -euo pipefail\nif [ \"${ACTION:-}\" != \"install\" ] || [ \"${CONFIGURATION:-}\" != \"Release\" ]; then\n  exit 0\nfi\nrepo=\"${SRCROOT}/..\"\nif ! /usr/bin/git -C \"$repo\" diff --quiet || ! /usr/bin/git -C \"$repo\" diff --cached --quiet; then\n  echo \"error: Refusing to archive Reframer with uncommitted changes\"\n  exit 1\nfi\nif [ \"${MARKETING_VERSION:-}\" = \"1.0\" ]; then\n  echo \"error: MARKETING_VERSION must use three-part semantic versioning\"\n  exit 1\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -633,11 +629,12 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
 		};
@@ -647,6 +644,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Reframer/Resources/Reframer.entitlements;
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -665,11 +663,12 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
 		};
@@ -682,7 +681,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -700,7 +699,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -717,7 +716,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -734,7 +733,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
