@@ -2,6 +2,19 @@ import AppKit
 import XCTest
 
 enum UITestVideoLoader {
+    static func fixtureURL(
+        named name: String,
+        extension fileExtension: String = "mp4",
+        relativeTo testSourceFile: StaticString = #filePath
+    ) -> URL {
+        URL(fileURLWithPath: "\(testSourceFile)")
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ReframerTests/TestFixtures", isDirectory: true)
+            .appendingPathComponent(name)
+            .appendingPathExtension(fileExtension)
+    }
+
     /// Opens a fixture through Launch Services so the sandbox receives the
     /// same user-selected read-only extension as Finder's Open With flow.
     static func open(

@@ -2,60 +2,93 @@ import XCTest
 
 final class ZoomScreenshotTest: XCTestCase {
 
-    private func fixtureURL(_ name: String, ext: String = "mp4") -> URL {
-        let fileURL = URL(fileURLWithPath: #file)
-        let baseURL = fileURL.deletingLastPathComponent().deletingLastPathComponent() // .../Reframer
-        return baseURL.appendingPathComponent("ReframerTests/TestFixtures/\(name).\(ext)")
-    }
+    private let screenshotDirectory = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("ReframerScreenshots", isDirectory: true)
 
-    let screenshotDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("ReframerScreenshots", isDirectory: true)
-    
-    func testZoomVisualVerification() throws {
-        guard ProcessInfo.processInfo.environment["UITEST_SCREENSHOTS"] == "1" else {
-            throw XCTSkip("Set UITEST_SCREENSHOTS=1 to capture screenshots")
-        }
-
-        // Create screenshot directory
-        try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
-        
+    func testZoomFieldChangesFrom100To200Percent() throws {
+        let fixture = UITestVideoLoader.fixtureURL(
+            named: "test-video",
+            relativeTo: #filePath
+        )
         let app = XCUIApplication()
         app.launchEnvironment["UITEST_MODE"] = "1"
+        app.launchArguments += [
+            "-ApplePersistenceIgnoreState", "YES",
+            "-VideoOverlay.quickFilter", "__UITEST_NONE__",
+            "-VideoOverlay.opacity", "1.0"
+        ]
         app.launch()
+
+        addTeardownBlock {
+            app.terminate()
+        }
+
         XCTAssertTrue(
-            UITestVideoLoader.open(fixtureURL("test-video"), in: app),
+            UITestVideoLoader.open(fixture, in: app),
             "Fixture should open through Launch Services"
         )
-        
-        // Wait for video to load
+
         let zoomField = app.textFields["input-zoom"]
-        XCTAssertTrue(zoomField.waitForExistence(timeout: 5), "Zoom field should exist")
-        Thread.sleep(forTimeInterval: 1)
-        
-        // Verify initial zoom is 100%
-        let zoom1 = zoomField.value as? String ?? "?"
-        XCTAssertEqual(zoom1, "100", "Initial zoom should be 100%")
-        
-        // Screenshot at 100%
-        let screen1 = XCUIScreen.main.screenshot()
-        let url1 = screenshotDir.appendingPathComponent("zoom_100_percent.png")
-        try screen1.pngRepresentation.write(to: url1)
-        
-        // Zoom to 200%
-        zoomField.doubleTap()
-        Thread.sleep(forTimeInterval: 0.2)
+        XCTAssertTrue(
+            zoomField.waitForExistence(timeout: 8),
+            "A loaded fixture should expose the zoom field"
+        )
+        XCTAssertTrue(
+            waitForZoom(100, in: zoomField),
+            "Initial zoom should settle at 100%"
+        )
+        try captureIfRequested(named: "zoom_100_percent")
+
+        zoomField.click()
+        app.typeKey("a", modifierFlags: .command)
         app.typeText("200")
         app.typeKey(.return, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.5)
-        
-        // Verify zoom is now 200%
-        let zoom2 = zoomField.value as? String ?? "?"
-        XCTAssertEqual(zoom2, "200", "Zoom should be 200% after typing")
-        
-        // Screenshot at 200%
-        let screen2 = XCUIScreen.main.screenshot()
-        let url2 = screenshotDir.appendingPathComponent("zoom_200_percent.png")
-        try screen2.pngRepresentation.write(to: url2)
-        
-        app.terminate()
+
+        XCTAssertTrue(
+            waitForZoom(200, in: zoomField),
+            "Entering 200 should update the observable zoom value to 200%"
+        )
+        try captureIfRequested(named: "zoom_200_percent")
+    }
+
+    private func waitForZoom(
+        _ expected: Double,
+        in field: XCUIElement,
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let predicate = NSPredicate { _, _ in
+            let value: Double?
+            if let number = field.value as? NSNumber {
+                value = number.doubleValue
+            } else if let rawValue = field.value as? String {
+                value = Double(rawValue.replacingOccurrences(of: "%", with: ""))
+            } else {
+                value = nil
+            }
+            guard let value else { return false }
+            return abs(value - expected) < 0.05
+        }
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: field)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func captureIfRequested(named name: String) throws {
+        guard ProcessInfo.processInfo.environment["UITEST_SCREENSHOTS"] == "1" else {
+            return
+        }
+
+        try FileManager.default.createDirectory(
+            at: screenshotDirectory,
+            withIntermediateDirectories: true
+        )
+        let screenshot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        try screenshot.pngRepresentation.write(
+            to: screenshotDirectory.appendingPathComponent("\(name).png")
+        )
     }
 }

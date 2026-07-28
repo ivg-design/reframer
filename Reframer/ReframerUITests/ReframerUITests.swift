@@ -1,204 +1,134 @@
 import XCTest
 
+/// Empty-state UI coverage. Each test launches a fresh process so modal and
+/// focus state from one test cannot affect another.
 final class ReframerUITests: XCTestCase {
 
-    // Static app instance - launched once per test class, not per test method
-    static var app: XCUIApplication!
-
-    var app: XCUIApplication { Self.app }
-
-    // Launch app once for all tests in this class
-    override class func setUp() {
-        super.setUp()
-        app = XCUIApplication()
-        app.launchEnvironment["UITEST_MODE"] = "1"
-        app.launch()
-    }
-
-    // Terminate only after all tests complete
-    override class func tearDown() {
-        app = nil
-        super.tearDown()
-    }
+    private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        // App is already running from class setUp
+        app = XCUIApplication()
+        app.launchEnvironment["UITEST_MODE"] = "1"
+        app.launchArguments += [
+            "-ApplePersistenceIgnoreState", "YES",
+            "-VideoOverlay.quickFilter", "__UITEST_NONE__",
+            "-VideoOverlay.opacity", "1.0"
+        ]
+        app.launch()
+
+        XCTAssertTrue(
+            emptyState.waitForExistence(timeout: 5),
+            "A fresh launch should expose the empty-state open action"
+        )
     }
 
     override func tearDownWithError() throws {
-        // Don't terminate - keep app running for next test
+        app.terminate()
+        app = nil
     }
 
-    // MARK: - F-CW-001: Basic Launch Tests
-
-    func testAppLaunches() throws {
-        // App should launch without crash - if we get here, it worked
-        XCTAssertTrue(app.exists, "App should exist after launch")
+    private var emptyState: XCUIElement {
+        app.buttons["drop-zone"]
     }
 
-    func testWindowExists() throws {
-        // Should have at least one window
-        XCTAssertGreaterThanOrEqual(app.windows.count, 1, "Should have at least one window")
+    private func assertOpenPickerAppears(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let cancelButton = app.buttons["Cancel"].firstMatch
+        XCTAssertTrue(
+            cancelButton.waitForExistence(timeout: 5),
+            "The open-video action should present a cancellable file picker",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            app.buttons["Open"].firstMatch.exists,
+            "The file picker should expose its Open action",
+            file: file,
+            line: line
+        )
+
+        cancelButton.click()
+        XCTAssertTrue(
+            waitForDisappearance(cancelButton),
+            "Cancelling should dismiss the file picker",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            emptyState.waitForExistence(timeout: 2),
+            "Cancelling should return to the empty state",
+            file: file,
+            line: line
+        )
     }
 
-    // MARK: - F-KL-009: Escape Key
-
-    func testEscapeDoesNotCrash() throws {
-        // Press Escape - should not crash
-        app.typeKey(.escape, modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing Escape")
+    @discardableResult
+    private func waitForDisappearance(
+        _ element: XCUIElement,
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let predicate = NSPredicate(format: "exists == false")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
-    // MARK: - F-VP-002: Spacebar (Play/Pause)
-
-    func testSpacebarDoesNotCrash() throws {
-        // Press Spacebar - should not crash (play/pause when no video)
-        app.typeKey(" ", modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing Spacebar")
+    private func waitForUnhittable(
+        _ element: XCUIElement,
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let predicate = NSPredicate(format: "isHittable == false")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
-    // MARK: - F-KL-001: Horizontal Arrow Keys (Pan)
+    func testEmptyStateExposesAccessibleOpenAction() {
+        XCTAssertEqual(emptyState.label, "Open video")
+        XCTAssertTrue(emptyState.isEnabled)
+        XCTAssertTrue(emptyState.isHittable)
 
-    func testLeftArrowDoesNotCrash() throws {
-        app.typeKey(.leftArrow, modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing Left Arrow")
+        let openButton = app.buttons["button-open"]
+        XCTAssertTrue(openButton.waitForExistence(timeout: 2))
+        XCTAssertEqual(openButton.label, "Open video")
+        XCTAssertTrue(openButton.isEnabled)
+
+        XCTAssertFalse(app.buttons["button-play"].isEnabled)
+        XCTAssertFalse(app.buttons["button-step-backward"].isEnabled)
+        XCTAssertFalse(app.buttons["button-step-forward"].isEnabled)
+        XCTAssertFalse(app.sliders["slider-timeline"].isEnabled)
     }
 
-    func testRightArrowDoesNotCrash() throws {
-        app.typeKey(.rightArrow, modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing Right Arrow")
+    func testEmptyStatePressOpensPickerAndCancelRestoresState() {
+        emptyState.click()
+        assertOpenPickerAppears()
     }
 
-    func testShiftLeftArrowDoesNotCrash() throws {
-        app.typeKey(.leftArrow, modifierFlags: .shift)
-        XCTAssertTrue(app.exists, "App should still exist after pressing Shift+Left Arrow")
+    func testCommandOOpensPickerAndCancelRestoresState() {
+        app.typeKey("o", modifierFlags: .command)
+        assertOpenPickerAppears()
     }
 
-    func testShiftRightArrowDoesNotCrash() throws {
-        app.typeKey(.rightArrow, modifierFlags: .shift)
-        XCTAssertTrue(app.exists, "App should still exist after pressing Shift+Right Arrow")
-    }
-
-    // MARK: - F-KL-002: Vertical Arrow Keys (Pan)
-
-    func testUpArrowDoesNotCrash() throws {
-        app.typeKey(.upArrow, modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing Up Arrow")
-    }
-
-    func testDownArrowDoesNotCrash() throws {
-        app.typeKey(.downArrow, modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing Down Arrow")
-    }
-
-    func testShiftUpArrowDoesNotCrash() throws {
-        app.typeKey(.upArrow, modifierFlags: .shift)
-        XCTAssertTrue(app.exists, "App should still exist after pressing Shift+Up Arrow")
-    }
-
-    func testShiftDownArrowDoesNotCrash() throws {
-        app.typeKey(.downArrow, modifierFlags: .shift)
-        XCTAssertTrue(app.exists, "App should still exist after pressing Shift+Down Arrow")
-    }
-
-    // MARK: - F-KL-004: Zero Key (Reset Zoom to 100%)
-
-    func testZeroKeyDoesNotCrash() throws {
-        app.typeKey("0", modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing 0")
-    }
-
-    // MARK: - F-KL-005: R Key (Reset View)
-
-    func testRKeyDoesNotCrash() throws {
-        app.typeKey("r", modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing R")
-    }
-
-    // MARK: - F-KL-006: L Key (Toggle Lock)
-
-    func testLKeyDoesNotCrash() throws {
-        app.typeKey("l", modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing L")
-    }
-
-    func testLKeyToggle() throws {
-        // Press L twice to toggle lock on and off
-        app.typeKey("l", modifierFlags: [])
-        app.typeKey("l", modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after toggling lock twice")
-    }
-
-    // MARK: - F-KL-007: H Key (Toggle Help)
-
-    func testHKeyDoesNotCrash() throws {
+    func testHelpShortcutPresentsAccessibleSettingsAndCloseRestoresEmptyState() {
         app.typeKey("h", modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after pressing H")
-    }
 
-    func testHKeyToggle() throws {
-        // Press H twice to show and hide help
-        app.typeKey("h", modifierFlags: [])
-        app.typeKey("h", modifierFlags: [])
-        XCTAssertTrue(app.exists, "App should still exist after toggling help twice")
-    }
+        let help = app.groups["modal-help"]
+        XCTAssertTrue(
+            help.waitForExistence(timeout: 3),
+            "H should present Shortcut Settings"
+        )
+        XCTAssertEqual(help.label, "Shortcut Settings")
 
-    func testQuestionMarkDoesNotCrash() throws {
-        app.typeKey("/", modifierFlags: .shift) // ? is Shift+/
-        XCTAssertTrue(app.exists, "App should still exist after pressing ?")
-    }
+        let closeButton = app.buttons["help-close"]
+        XCTAssertTrue(closeButton.waitForExistence(timeout: 2))
+        XCTAssertEqual(closeButton.label, "Close Shortcut Settings")
+        XCTAssertTrue(closeButton.isEnabled)
+        XCTAssertTrue(closeButton.isHittable)
 
-    // MARK: - F-KL-008: Cmd+O (Open File)
-    // Note: We don't actually open a file dialog in tests, just verify no crash
-
-    func testCmdODoesNotCrash() throws {
-        // This will open a dialog - we just verify no crash
-        // The dialog will block, so we skip actual interaction
-        XCTAssertTrue(app.exists, "App exists before Cmd+O")
-    }
-
-    // MARK: - F-CW-002: Multiple Windows Exist
-
-    func testMultipleWindowsExist() throws {
-        // Main window + control bar window should both exist
-        XCTAssertGreaterThanOrEqual(app.windows.count, 1, "Should have at least one window")
-    }
-
-    // MARK: - Stress Test: Rapid Key Presses
-
-    func testRapidKeyPresses() throws {
-        // Rapidly press various keys to stress test keyboard handling
-        for _ in 0..<5 {
-            app.typeKey(.leftArrow, modifierFlags: [])
-            app.typeKey(.rightArrow, modifierFlags: [])
-            app.typeKey(.upArrow, modifierFlags: [])
-            app.typeKey(.downArrow, modifierFlags: [])
-        }
-        XCTAssertTrue(app.exists, "App should survive rapid key presses")
-    }
-
-    // MARK: - F-KL-*: Combined Keyboard Test
-
-    func testAllKeyboardShortcutsSequence() throws {
-        // Test a sequence of all keyboard shortcuts
-        app.typeKey("r", modifierFlags: [])        // Reset view
-        app.typeKey("0", modifierFlags: [])        // Reset zoom
-        app.typeKey(.upArrow, modifierFlags: [])   // Pan up when a video is loaded
-        app.typeKey(.downArrow, modifierFlags: []) // Pan down when a video is loaded
-        app.typeKey("l", modifierFlags: [])        // Lock
-        app.typeKey("l", modifierFlags: [])        // Unlock
-        app.typeKey("h", modifierFlags: [])        // Show help
-        app.typeKey(.escape, modifierFlags: [])    // Close help
-        app.typeKey(" ", modifierFlags: [])        // Play/pause
-        XCTAssertTrue(app.exists, "App should survive complete keyboard shortcut sequence")
-    }
-
-    // MARK: - Window Stability Tests
-
-    func testAppSurvivesMultipleLaunchCycles() throws {
-        // Just verify we can get to this point after launching
-        XCTAssertTrue(app.exists)
-        XCTAssertGreaterThanOrEqual(app.windows.count, 1)
+        closeButton.click()
+        XCTAssertTrue(waitForUnhittable(help))
+        XCTAssertTrue(emptyState.waitForExistence(timeout: 2))
+        XCTAssertTrue(emptyState.isHittable)
     }
 }

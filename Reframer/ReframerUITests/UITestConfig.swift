@@ -8,7 +8,7 @@ enum UITestConfig {
 
         let home = FileManager.default.homeDirectoryForCurrentUser
         let envPath = home.appendingPathComponent("ci_artifacts/reframer/launchd/runner.env")
-        guard let contents = try? String(contentsOf: envPath) else {
+        guard let contents = try? String(contentsOf: envPath, encoding: .utf8) else {
             return nil
         }
 

@@ -1,110 +1,77 @@
 import XCTest
 
-private func fixtureURL(_ name: String, ext: String = "mp4") -> URL {
-    let fileURL = URL(fileURLWithPath: #file)
-    let baseURL = fileURL.deletingLastPathComponent().deletingLastPathComponent() // .../Reframer
-    return baseURL.appendingPathComponent("ReframerTests/TestFixtures/\(name).\(ext)")
-}
-
-/// Path to test video fixture
-let testVideoPath = fixtureURL("test-video").path
-
 /// Comprehensive integration tests with video loaded.
-/// These tests verify actual functionality, not just UI element existence.
-/// Uses shared app instance to avoid relaunching for every test.
+/// Each test launches with its own sandbox-staged fixture and restores a known
+/// UI state, so execution order cannot change the result.
 final class ReframerIntegrationTests: XCTestCase {
 
-    /// Shared app instance - launched once per test suite
-    private static var _app: XCUIApplication?
-    private static var appLaunched = false
-
-    var app: XCUIApplication {
-        if Self._app == nil {
-            Self._app = XCUIApplication()
-        }
-        return Self._app!
-    }
+    private var app: XCUIApplication!
+    private var fixtureURL: URL!
 
     override func setUpWithError() throws {
-        continueAfterFailure = true
-
-        // Only launch app once for entire test suite
-        if !Self.appLaunched {
-            app.launchEnvironment["UITEST_MODE"] = "1"
-            app.launch()
-            XCTAssertTrue(
-                UITestVideoLoader.open(URL(fileURLWithPath: testVideoPath), in: app),
-                "Fixture should open through Launch Services"
-            )
-            Self.appLaunched = true
-
-            // Wait for video to load
-            waitForVideoReady()
-        } else {
-            // Ensure app is active
-            app.activate()
-        }
-
-        // Reset to known state
-        // 1. Close any open help modal
-        app.typeKey(.escape, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.1)
-
-        // 2. Defocus any text fields by clicking on the app window
-        // This ensures we're not stuck in a text field
-        app.windows.firstMatch.click()
-        Thread.sleep(forTimeInterval: 0.1)
-
-        // 3. Ensure unlocked since R key doesn't work when locked
-        ensureUnlocked()
-
-        // 4. Pause any playing video
-        let playButton = app.buttons["button-play"]
-        if playButton.exists && playButton.value as? String == "Playing" {
-            app.typeKey(" ", modifierFlags: []) // Pause
-            Thread.sleep(forTimeInterval: 0.1)
-        }
-
-        // 5. Reset view (zoom and pan)
-        app.typeKey("r", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
+        continueAfterFailure = false
+        fixtureURL = UITestVideoLoader.fixtureURL(
+            named: "test-video",
+            relativeTo: #filePath
+        )
+        app = XCUIApplication()
+        app.launchEnvironment["UITEST_MODE"] = "1"
+        app.launchArguments += [
+            "-ApplePersistenceIgnoreState", "YES",
+            "-VideoOverlay.quickFilter", "__UITEST_NONE__",
+            "-VideoOverlay.opacity", "1.0",
+            "-VideoOverlay.muted", "YES",
+            "-VideoOverlay.volume", "0.5",
+            "-VideoOverlay.lastVolume", "0.5"
+        ]
+        app.launch()
+        XCTAssertTrue(
+            UITestVideoLoader.open(fixtureURL, in: app),
+            "Fixture should open through Launch Services"
+        )
+        waitForVideoReady()
     }
 
-    override class func tearDown() {
-        _app?.terminate()
-        _app = nil
-        appLaunched = false
-        super.tearDown()
+    override func tearDownWithError() throws {
+        app.terminate()
+        app = nil
+        fixtureURL = nil
     }
 
     // MARK: - Helpers
 
     func getZoomValue() -> Double {
         let zoomField = app.textFields["input-zoom"]
-        guard zoomField.exists else { return 100 }
-        let value = zoomField.value as? String ?? "100"
-        return Double(value) ?? 100
+        return numericValue(of: zoomField) ?? 100
     }
 
     func getFrameValue() -> Int {
         let frameField = app.textFields["input-frame"]
-        guard frameField.exists else { return 0 }
-        let value = frameField.value as? String ?? "0"
-        return Int(value) ?? 0
+        return Int((numericValue(of: frameField) ?? 0).rounded())
     }
 
     func getOpacityValue() -> Int {
         let opacityField = app.textFields["input-opacity"]
-        guard opacityField.exists else { return 100 }
-        let value = opacityField.value as? String ?? "100"
-        return Int(value) ?? 100
+        return Int((numericValue(of: opacityField) ?? 100).rounded())
     }
 
     func getSliderValue(_ identifier: String) -> Double {
-        let slider = app.sliders[identifier]
-        guard slider.exists else { return 0 }
-        let raw = slider.value as? String ?? "0"
-        return Double(raw) ?? 0
+        numericValue(of: app.sliders[identifier]) ?? 0
+    }
+
+    private func numericValue(of element: XCUIElement) -> Double? {
+        if let number = element.value as? NSNumber {
+            return number.doubleValue
+        }
+        guard let rawValue = element.value as? String else { return nil }
+
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isPercent = trimmed.hasSuffix("%")
+        let numericText = trimmed
+            .replacingOccurrences(of: "%", with: "")
+            .replacingOccurrences(of: ",", with: ".")
+        guard let value = Double(numericText) else { return nil }
+        return isPercent && element.elementType == .slider ? value / 100 : value
     }
 
     func isLocked() -> Bool {
@@ -114,13 +81,14 @@ final class ReframerIntegrationTests: XCTestCase {
     }
 
     func ensureUnlocked() {
-        // Check if we can determine lock state
         let lockButton = app.buttons["button-lock"]
         if lockButton.waitForExistence(timeout: 1) {
-            // Press L if we're locked
             if isLocked() {
                 app.typeKey("l", modifierFlags: [])
-                Thread.sleep(forTimeInterval: 0.3)
+                XCTAssertTrue(
+                    waitForValue("Unlocked", in: lockButton),
+                    "L should unlock the overlay"
+                )
             }
         }
     }
@@ -128,7 +96,10 @@ final class ReframerIntegrationTests: XCTestCase {
     func ensureLocked() {
         if !isLocked() {
             app.typeKey("l", modifierFlags: [])
-            Thread.sleep(forTimeInterval: 0.3)
+            XCTAssertTrue(
+                waitForValue("Locked", in: app.buttons["button-lock"]),
+                "L should lock the overlay"
+            )
         }
     }
 
@@ -145,6 +116,63 @@ final class ReframerIntegrationTests: XCTestCase {
         if result != .completed {
             XCTFail("Video failed to load in setup - timeline slider not enabled")
         }
+    }
+
+    private func waitForValue(
+        _ expected: String,
+        in element: XCUIElement,
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let predicate = NSPredicate(format: "value == %@", expected)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func waitForNumericValue(
+        _ expected: Double,
+        in element: XCUIElement,
+        accuracy: Double = 0.05,
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let predicate = NSPredicate { _, _ in
+            guard let value = self.numericValue(of: element) else { return false }
+            return abs(value - expected) <= accuracy
+        }
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func waitForNumericChange(
+        from initial: Double,
+        in element: XCUIElement,
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let predicate = NSPredicate { _, _ in
+            guard let value = self.numericValue(of: element) else { return false }
+            return abs(value - initial) > 0.001
+        }
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func waitForEnabled(
+        _ expected: Bool,
+        element: XCUIElement,
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let predicate = NSPredicate(format: "isEnabled == %@", NSNumber(value: expected))
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func waitForHittable(
+        _ expected: Bool,
+        element: XCUIElement,
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let predicate = NSPredicate(format: "isHittable == %@", NSNumber(value: expected))
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
     // MARK: - Video Loading
@@ -169,19 +197,15 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertTrue(isVideoLoaded(), "Video must be loaded")
 
         let initialFrame = getFrameValue()
+        let frameField = app.textFields["input-frame"]
 
-        // Press Space to play
         app.typeKey(" ", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.5)
-
-        // Press Space to pause
+        XCTAssertTrue(
+            waitForNumericChange(from: Double(initialFrame), in: frameField),
+            "Space should start playback and advance the frame"
+        )
         app.typeKey(" ", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
-
-        let frameAfterPlayPause = getFrameValue()
-
-        // Frame should have advanced during playback
-        XCTAssertGreaterThan(frameAfterPlayPause, initialFrame, "Frame should advance when video plays")
+        XCTAssertTrue(waitForValue("Paused", in: app.buttons["button-play"]))
     }
 
     // MARK: - F-VP-003: Play Button
@@ -193,17 +217,15 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertTrue(playButton.exists, "Play button must exist")
 
         let initialFrame = getFrameValue()
+        let frameField = app.textFields["input-frame"]
 
-        // Click to play
         playButton.click()
-        Thread.sleep(forTimeInterval: 0.5)
-
-        // Click to pause
+        XCTAssertTrue(
+            waitForNumericChange(from: Double(initialFrame), in: frameField),
+            "Clicking Play should advance the frame"
+        )
         playButton.click()
-        Thread.sleep(forTimeInterval: 0.2)
-
-        let frameAfter = getFrameValue()
-        XCTAssertGreaterThan(frameAfter, initialFrame, "Frame should advance after clicking play")
+        XCTAssertTrue(waitForValue("Paused", in: playButton))
     }
 
     // MARK: - F-VP-004: Step Forward/Backward Buttons
@@ -214,23 +236,23 @@ final class ReframerIntegrationTests: XCTestCase {
         // Ensure paused - check play button state first
         let playButton = app.buttons["button-play"]
         if playButton.exists && playButton.value as? String == "Playing" {
-            // Video is playing, pause it
             app.typeKey(" ", modifierFlags: [])
-            Thread.sleep(forTimeInterval: 0.3)
+            XCTAssertTrue(waitForValue("Paused", in: playButton))
         }
 
         let stepForward = app.buttons["button-step-forward"]
         XCTAssertTrue(stepForward.exists)
 
-        // Get initial frame
         let initialFrame = getFrameValue()
 
-        // Step forward once
         stepForward.click()
-        Thread.sleep(forTimeInterval: 0.3)
-
-        let newFrame = getFrameValue()
-        XCTAssertEqual(newFrame, initialFrame + 1, "Frame should advance by exactly 1")
+        XCTAssertTrue(
+            waitForNumericValue(
+                Double(initialFrame + 1),
+                in: app.textFields["input-frame"]
+            ),
+            "Frame should advance by exactly 1"
+        )
     }
 
     func testStepBackwardButton_RegressesOneFrame() throws {
@@ -243,16 +265,22 @@ final class ReframerIntegrationTests: XCTestCase {
         stepForward.click()
         stepForward.click()
         stepForward.click()
-        Thread.sleep(forTimeInterval: 0.3)
+        XCTAssertTrue(
+            waitForNumericValue(3, in: app.textFields["input-frame"]),
+            "Three forward steps should reach frame 3"
+        )
 
         let frameBeforeBack = getFrameValue()
         XCTAssertGreaterThanOrEqual(frameBeforeBack, 3, "Should have advanced at least 3 frames")
 
         stepBackward.click()
-        Thread.sleep(forTimeInterval: 0.3)
-
-        let frameAfterBack = getFrameValue()
-        XCTAssertEqual(frameAfterBack, frameBeforeBack - 1, "Frame should decrease by exactly 1")
+        XCTAssertTrue(
+            waitForNumericValue(
+                Double(frameBeforeBack - 1),
+                in: app.textFields["input-frame"]
+            ),
+            "Frame should decrease by exactly 1"
+        )
     }
 
     func testTimelineScrubUpdatesFrame() throws {
@@ -261,11 +289,15 @@ final class ReframerIntegrationTests: XCTestCase {
         let slider = app.sliders["slider-timeline"]
         XCTAssertTrue(slider.exists)
 
+        let initialFrame = getFrameValue()
         slider.adjust(toNormalizedSliderPosition: 0.5)
-        Thread.sleep(forTimeInterval: 0.4)
-
-        let frameAfterScrub = getFrameValue()
-        XCTAssertGreaterThan(frameAfterScrub, 0, "Scrubbing should move to a later frame")
+        XCTAssertTrue(
+            waitForNumericChange(
+                from: Double(initialFrame),
+                in: app.textFields["input-frame"]
+            ),
+            "Scrubbing should move to a different decoded frame"
+        )
     }
 
     // MARK: - F-ZP-001: Zoom via Scroll Wheel with Shift
@@ -282,19 +314,14 @@ final class ReframerIntegrationTests: XCTestCase {
         let zoomField = app.textFields["input-zoom"]
         XCTAssertTrue(zoomField.exists)
 
-        // Get initial zoom
         let initialZoom = getZoomValue()
 
-        // Click to focus
         zoomField.click()
-        Thread.sleep(forTimeInterval: 0.2)
-
-        // Press Up arrow
         app.typeKey(.upArrow, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.3)
-
-        let newZoom = getZoomValue()
-        XCTAssertEqual(newZoom, initialZoom + 1, accuracy: 0.1, "Zoom should increase by 1")
+        XCTAssertTrue(
+            waitForNumericValue(initialZoom + 1, in: zoomField),
+            "Zoom should increase by 1"
+        )
 
         // Defocus
         app.typeKey(.escape, modifierFlags: [])
@@ -306,16 +333,14 @@ final class ReframerIntegrationTests: XCTestCase {
 
         let zoomField = app.textFields["input-zoom"]
         zoomField.click()
-        Thread.sleep(forTimeInterval: 0.2)
 
         let initialZoom = getZoomValue()
 
-        // Press Shift+Up
         app.typeKey(.upArrow, modifierFlags: .shift)
-        Thread.sleep(forTimeInterval: 0.3)
-
-        let newZoom = getZoomValue()
-        XCTAssertEqual(newZoom, initialZoom + 10, accuracy: 0.5, "Shift+Up should increase zoom by 10")
+        XCTAssertTrue(
+            waitForNumericValue(initialZoom + 10, in: zoomField, accuracy: 0.5),
+            "Shift+Up should increase zoom by 10"
+        )
 
         app.typeKey(.escape, modifierFlags: [])
     }
@@ -327,33 +352,20 @@ final class ReframerIntegrationTests: XCTestCase {
         let zoomField = app.textFields["input-zoom"]
         XCTAssertTrue(zoomField.exists)
 
-        // Set a known value first
-        zoomField.doubleTap()
-        Thread.sleep(forTimeInterval: 0.1)
-        app.typeText("120")
-        app.typeKey(.return, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
-
-        // Cmd+A should select all so the next entry replaces the value
         zoomField.click()
         app.typeKey("a", modifierFlags: .command)
-        Thread.sleep(forTimeInterval: 0.1)
+        app.typeText("120")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitForNumericValue(120, in: zoomField))
+
+        zoomField.click()
+        app.typeKey("a", modifierFlags: .command)
         app.typeText("80")
         app.typeKey(.return, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
-
-        let newZoom = getZoomValue()
-        XCTAssertEqual(newZoom, 80, accuracy: 0.5, "Cmd+A should select all and replace the value")
-    }
-
-    // Note: Cmd+UpArrow in text fields is intercepted by macOS for document navigation
-    // (moveToBeginningOfDocument:) before reaching the text field's command delegate.
-    // This fine-grained zoom control is tested manually but not automatable via XCUITest.
-    func testZoomField_CmdUpArrowIncrementsBy01() throws {
-        // Skip this test - Cmd+arrow key events are handled specially by macOS
-        // and don't reliably trigger the text field delegate in the XCUITest environment.
-        // The 0.1% fine zoom increment still works when used manually.
-        throw XCTSkip("Cmd+UpArrow is intercepted by macOS before reaching text field delegate")
+        XCTAssertTrue(
+            waitForNumericValue(80, in: zoomField, accuracy: 0.5),
+            "Cmd+A should select all and replace the value"
+        )
     }
 
     // MARK: - F-ZP-004: Zero Key Resets Zoom
@@ -368,22 +380,21 @@ final class ReframerIntegrationTests: XCTestCase {
         app.typeKey(.upArrow, modifierFlags: .shift) // +10
         app.typeKey(.upArrow, modifierFlags: .shift) // +10
         app.typeKey(.escape, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
+        XCTAssertTrue(
+            waitForNumericValue(120, in: zoomField, accuracy: 0.5),
+            "Two Shift-Up events should set 120% before reset"
+        )
 
-        let zoomBefore = getZoomValue()
-        XCTAssertGreaterThan(zoomBefore, 100, "Zoom should be > 100 before reset")
-
-        // Press 0
         app.typeKey("0", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.3)
-
-        let zoomAfter = getZoomValue()
-        XCTAssertEqual(zoomAfter, 100, accuracy: 0.5, "Zoom should reset to 100")
+        XCTAssertTrue(
+            waitForNumericValue(100, in: zoomField, accuracy: 0.5),
+            "0 should reset zoom to 100%"
+        )
     }
 
     // MARK: - F-ZP-005: R Key Resets View
 
-    func testRKey_ResetsZoomAndPan() throws {
+    func testRKey_ResetsObservableZoom() throws {
         XCTAssertTrue(isVideoLoaded())
         ensureUnlocked()
 
@@ -392,50 +403,13 @@ final class ReframerIntegrationTests: XCTestCase {
         zoomField.click()
         app.typeKey(.upArrow, modifierFlags: .shift)
         app.typeKey(.escape, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
+        XCTAssertTrue(waitForNumericValue(110, in: zoomField, accuracy: 0.5))
 
-        // Pan with arrow keys
-        app.typeKey(.leftArrow, modifierFlags: .shift)
-        app.typeKey(.upArrow, modifierFlags: .shift)
-        Thread.sleep(forTimeInterval: 0.2)
-
-        // Press R
         app.typeKey("r", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.3)
-
-        let zoomAfter = getZoomValue()
-        XCTAssertEqual(zoomAfter, 100, accuracy: 0.5, "Zoom should reset to 100 after R")
-    }
-
-    // MARK: - F-ZP-002: Arrow Keys Pan
-
-    func testArrowKeys_PanVideo() throws {
-        XCTAssertTrue(isVideoLoaded())
-        ensureUnlocked()
-
-        // Reset first
-        app.typeKey("r", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
-
-        // Press arrow keys - should not crash and video should remain
-        app.typeKey(.leftArrow, modifierFlags: [])
-        app.typeKey(.rightArrow, modifierFlags: [])
-        app.typeKey(.upArrow, modifierFlags: [])
-        app.typeKey(.downArrow, modifierFlags: [])
-
-        // Shift+arrows for 10px
-        app.typeKey(.leftArrow, modifierFlags: .shift)
-        app.typeKey(.rightArrow, modifierFlags: .shift)
-        app.typeKey(.upArrow, modifierFlags: .shift)
-        app.typeKey(.downArrow, modifierFlags: .shift)
-
-        // Cmd+Shift+arrows for 100px
-        app.typeKey(.leftArrow, modifierFlags: [.command, .shift])
-        app.typeKey(.rightArrow, modifierFlags: [.command, .shift])
-        app.typeKey(.upArrow, modifierFlags: [.command, .shift])
-        app.typeKey(.downArrow, modifierFlags: [.command, .shift])
-
-        XCTAssertTrue(isVideoLoaded(), "Video should still be displayed after panning")
+        XCTAssertTrue(
+            waitForNumericValue(100, in: zoomField, accuracy: 0.5),
+            "R should reset zoom to 100%"
+        )
     }
 
     // MARK: - F-LK-001: Lock Toggle
@@ -445,14 +419,10 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertFalse(isLocked(), "Should start unlocked")
 
         app.typeKey("l", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.3)
-
-        XCTAssertTrue(isLocked(), "Should be locked after pressing L")
+        XCTAssertTrue(waitForValue("Locked", in: app.buttons["button-lock"]))
 
         app.typeKey("l", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.3)
-
-        XCTAssertFalse(isLocked(), "Should be unlocked after pressing L again")
+        XCTAssertTrue(waitForValue("Unlocked", in: app.buttons["button-lock"]))
     }
 
     func testLockButton_TogglesLock() throws {
@@ -462,14 +432,10 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertTrue(lockButton.exists)
 
         lockButton.click()
-        Thread.sleep(forTimeInterval: 0.3)
-
-        XCTAssertTrue(isLocked(), "Should be locked after clicking lock button")
+        XCTAssertTrue(waitForValue("Locked", in: lockButton))
 
         lockButton.click()
-        Thread.sleep(forTimeInterval: 0.3)
-
-        XCTAssertFalse(isLocked(), "Should be unlocked after clicking again")
+        XCTAssertTrue(waitForValue("Unlocked", in: lockButton))
     }
 
     // MARK: - F-LK-002: Lock Disables Controls
@@ -489,44 +455,25 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertTrue(zoomField.isEnabled, "Zoom field should be enabled after unlocking")
     }
 
-    func testLock_ArrowKeysDontPan() throws {
-        XCTAssertTrue(isVideoLoaded())
-
-        // Reset first
-        ensureUnlocked()
-        app.typeKey("r", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
-
-        // Lock
-        ensureLocked()
-
-        // Arrow keys should do nothing (no pan)
-        app.typeKey(.leftArrow, modifierFlags: .shift)
-        app.typeKey(.upArrow, modifierFlags: .shift)
-
-        // Video should still be at reset position (can't easily verify pan, but no crash)
-        XCTAssertTrue(isVideoLoaded())
-
-        ensureUnlocked()
-    }
-
-    /// The app-active path is testable without global Accessibility permission.
+    /// The app-active path exercises the same command resolver without leaving
+    /// the test process.
     func testLockMode_CmdPageDownStepsFrames() throws {
         XCTAssertTrue(isVideoLoaded())
         ensureLocked()
 
         let initialFrame = getFrameValue()
         app.typeKey(.pageDown, modifierFlags: .command)
-        Thread.sleep(forTimeInterval: 0.3)
+        let frameField = app.textFields["input-frame"]
+        XCTAssertTrue(
+            waitForNumericValue(Double(initialFrame + 1), in: frameField),
+            "Cmd+PageDown should step 1 frame when locked"
+        )
 
-        let newFrame = getFrameValue()
-        XCTAssertEqual(newFrame, initialFrame + 1, "Cmd+PageDown should step 1 frame when locked")
-
-        // Shift+Cmd should step 10 frames
         app.typeKey(.pageDown, modifierFlags: [.command, .shift])
-        Thread.sleep(forTimeInterval: 0.3)
-        let afterShift = getFrameValue()
-        XCTAssertEqual(afterShift, newFrame + 10, "Cmd+Shift+PageDown should step 10 frames when locked")
+        XCTAssertTrue(
+            waitForNumericValue(Double(initialFrame + 11), in: frameField),
+            "Cmd+Shift+PageDown should step 10 frames when locked"
+        )
 
         ensureUnlocked()
     }
@@ -540,18 +487,16 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertTrue(opacityField.exists)
 
         opacityField.click()
-        Thread.sleep(forTimeInterval: 0.2)
-
         let initialOpacity = getOpacityValue()
 
         app.typeKey(.downArrow, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
-
-        let newOpacity = getOpacityValue()
-
-        if initialOpacity > 2 { // Min is 2
-            XCTAssertLessThan(newOpacity, initialOpacity, "Opacity should decrease after Down arrow")
-        }
+        XCTAssertTrue(
+            waitForNumericValue(
+                Double(max(2, initialOpacity - 1)),
+                in: opacityField
+            ),
+            "Down should decrease opacity by one percentage point"
+        )
 
         app.typeKey(.escape, modifierFlags: [])
     }
@@ -561,15 +506,15 @@ final class ReframerIntegrationTests: XCTestCase {
 
         let opacityField = app.textFields["input-opacity"]
         opacityField.click()
-        Thread.sleep(forTimeInterval: 0.2)
-
-        let initialOpacity = getOpacityValue()
-
+        app.typeKey("a", modifierFlags: .command)
+        app.typeText("50")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitForNumericValue(50, in: opacityField))
         app.typeKey(.upArrow, modifierFlags: .shift)
-        Thread.sleep(forTimeInterval: 0.3)
-
-        let newOpacity = getOpacityValue()
-        XCTAssertEqual(newOpacity, min(100, initialOpacity + 10), "Shift+Up should increase opacity by 10%")
+        XCTAssertTrue(
+            waitForNumericValue(60, in: opacityField),
+            "Shift+Up should increase opacity by 10 percentage points"
+        )
 
         app.typeKey(.escape, modifierFlags: [])
     }
@@ -583,41 +528,53 @@ final class ReframerIntegrationTests: XCTestCase {
         // Select Invert (parameterless)
         filterButton.click()
         let invertItem = app.menuItems["quick-filter-invert"]
-        guard invertItem.waitForExistence(timeout: 2) else {
-            throw XCTSkip("Filter menu did not appear")
-        }
+        XCTAssertTrue(
+            invertItem.waitForExistence(timeout: 2),
+            "The quick-filter button should present the Invert menu item"
+        )
         invertItem.click()
-        Thread.sleep(forTimeInterval: 0.3)
 
         let opacitySlider = app.sliders["slider-opacity"]
         let opacityField = app.textFields["input-opacity"]
-        XCTAssertFalse(opacitySlider.isEnabled, "Opacity slider should be disabled for parameterless filter")
-        XCTAssertEqual(opacityField.value as? String, "On", "Opacity field should show On for parameterless filter")
+        XCTAssertTrue(
+            waitForEnabled(false, element: opacitySlider),
+            "Opacity slider should be disabled for a parameterless filter"
+        )
+        XCTAssertTrue(
+            waitForValue("On", in: opacityField),
+            "Opacity field should show On for a parameterless filter"
+        )
 
         // Select Brightness (adjustable) to restore slider
         filterButton.click()
         let brightnessItem = app.menuItems["quick-filter-brightness"]
-        if brightnessItem.waitForExistence(timeout: 2) {
-            brightnessItem.click()
-            Thread.sleep(forTimeInterval: 0.3)
-            XCTAssertTrue(opacitySlider.isEnabled, "Opacity slider should be enabled for adjustable filter")
-        }
+        XCTAssertTrue(
+            brightnessItem.waitForExistence(timeout: 2),
+            "The quick-filter button should present the Brightness menu item"
+        )
+        brightnessItem.click()
+        XCTAssertTrue(
+            waitForEnabled(true, element: opacitySlider),
+            "Opacity slider should be enabled for an adjustable filter"
+        )
     }
 
     // MARK: - F-UI-004: Help Modal
 
     func testHKey_TogglesHelp() throws {
         app.typeKey("h", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.3)
 
-        // Help modal appears as a group element, not otherElements
         let helpModal = app.groups["modal-help"]
-        XCTAssertTrue(helpModal.exists, "Help modal should appear after pressing H")
+        XCTAssertTrue(
+            helpModal.waitForExistence(timeout: 3),
+            "Help modal should appear after pressing H"
+        )
 
         app.typeKey(.escape, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.3)
-
-        XCTAssertFalse(helpModal.isHittable, "Help modal should close after pressing Escape")
+        XCTAssertTrue(
+            waitForHittable(false, element: helpModal),
+            "Help modal should close after pressing Escape"
+        )
     }
 
     // Note: Help button removed from toolbar per design decision
@@ -631,17 +588,14 @@ final class ReframerIntegrationTests: XCTestCase {
         let frameField = app.textFields["input-frame"]
         XCTAssertTrue(frameField.exists)
 
-        // Double-click to select the word (all digits in this case)
-        frameField.doubleTap()
-        Thread.sleep(forTimeInterval: 0.2)
-
-        // Type new value (replaces selected text)
+        frameField.click()
+        app.typeKey("a", modifierFlags: .command)
         app.typeText("30")
         app.typeKey(.return, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.5)
-
-        let newFrame = getFrameValue()
-        XCTAssertEqual(newFrame, 30, "Frame should be 30 after typing and pressing Enter")
+        XCTAssertTrue(
+            waitForNumericValue(30, in: frameField),
+            "Frame should be 30 after typing and pressing Return"
+        )
     }
 
     func testFrameField_ArrowKeysStep() throws {
@@ -649,15 +603,14 @@ final class ReframerIntegrationTests: XCTestCase {
 
         let frameField = app.textFields["input-frame"]
         frameField.click()
-        Thread.sleep(forTimeInterval: 0.2)
 
         let initialFrame = getFrameValue()
 
         app.typeKey(.upArrow, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
-
-        let newFrame = getFrameValue()
-        XCTAssertEqual(newFrame, initialFrame + 1, "Frame should increment by 1 with Up arrow")
+        XCTAssertTrue(
+            waitForNumericValue(Double(initialFrame + 1), in: frameField),
+            "Frame should increment by 1 with Up"
+        )
 
         app.typeKey(.escape, modifierFlags: [])
     }
@@ -667,15 +620,14 @@ final class ReframerIntegrationTests: XCTestCase {
 
         let frameField = app.textFields["input-frame"]
         frameField.click()
-        Thread.sleep(forTimeInterval: 0.2)
 
         let initialFrame = getFrameValue()
 
         app.typeKey(.upArrow, modifierFlags: .shift)
-        Thread.sleep(forTimeInterval: 0.3)
-
-        let newFrame = getFrameValue()
-        XCTAssertEqual(newFrame, initialFrame + 10, "Shift+Up should increment by 10 frames")
+        XCTAssertTrue(
+            waitForNumericValue(Double(initialFrame + 10), in: frameField),
+            "Shift+Up should increment by 10 frames"
+        )
 
         app.typeKey(.escape, modifierFlags: [])
     }
@@ -686,15 +638,10 @@ final class ReframerIntegrationTests: XCTestCase {
         let muteButton = app.buttons["button-mute"]
         XCTAssertTrue(muteButton.exists)
 
-        // Toggle twice
         muteButton.click()
-        Thread.sleep(forTimeInterval: 0.2)
-
+        XCTAssertTrue(waitForValue("Audible", in: muteButton))
         muteButton.click()
-        Thread.sleep(forTimeInterval: 0.2)
-
-        // Button should still exist (no crash)
-        XCTAssertTrue(muteButton.exists)
+        XCTAssertTrue(waitForValue("Muted", in: muteButton))
     }
 
     func testMuteRestoresPreviousVolume() throws {
@@ -705,21 +652,22 @@ final class ReframerIntegrationTests: XCTestCase {
         // Ensure unmuted so slider is visible
         if !volumeSlider.isHittable {
             muteButton.click()
-            Thread.sleep(forTimeInterval: 0.2)
         }
 
         XCTAssertTrue(volumeSlider.waitForExistence(timeout: 2))
+        XCTAssertTrue(waitForHittable(true, element: volumeSlider))
         volumeSlider.adjust(toNormalizedSliderPosition: 0.7)
-        Thread.sleep(forTimeInterval: 0.2)
+        XCTAssertTrue(
+            waitForNumericChange(from: 0.5, in: volumeSlider),
+            "Adjusting the volume slider should change its value"
+        )
         let initialVolume = getSliderValue("slider-volume")
 
-        // Mute
         muteButton.click()
-        Thread.sleep(forTimeInterval: 0.2)
-
-        // Unmute
+        XCTAssertTrue(waitForValue("Muted", in: muteButton))
         muteButton.click()
-        Thread.sleep(forTimeInterval: 0.2)
+        XCTAssertTrue(waitForValue("Audible", in: muteButton))
+        XCTAssertTrue(waitForHittable(true, element: volumeSlider))
 
         let restoredVolume = getSliderValue("slider-volume")
         XCTAssertEqual(restoredVolume, initialVolume, accuracy: 0.05, "Unmute should restore previous volume")
@@ -734,38 +682,32 @@ final class ReframerIntegrationTests: XCTestCase {
         let stepBackward = app.buttons["button-step-backward"]
         let frameField = app.textFields["input-frame"]
 
-        // 1. Step forward to get to a known position
         stepForward.click()
         stepForward.click()
-        Thread.sleep(forTimeInterval: 0.3)
+        XCTAssertTrue(waitForNumericValue(2, in: frameField))
 
-        let afterStepForward = getFrameValue()
-
-        // 2. Step backward 1 time
         stepBackward.click()
-        Thread.sleep(forTimeInterval: 0.3)
+        XCTAssertTrue(
+            waitForNumericValue(1, in: frameField),
+            "A backward step should move from frame 2 to frame 1"
+        )
 
-        let afterStepBackward = getFrameValue()
-        XCTAssertLessThan(afterStepBackward, afterStepForward, "Frame should decrease after stepping backward")
-
-        // 3. Verify frame field can be edited
-        frameField.doubleTap()
-        Thread.sleep(forTimeInterval: 0.1)
+        frameField.click()
+        app.typeKey("a", modifierFlags: .command)
         app.typeText("0")
         app.typeKey(.return, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.3)
+        XCTAssertTrue(
+            waitForNumericValue(0, in: frameField),
+            "Entering 0 should seek to the first frame"
+        )
 
-        let afterSeek = getFrameValue()
-        XCTAssertEqual(afterSeek, 0, "Should be at frame 0 after typing in field")
-
-        // 4. Play briefly and verify frame advances
         app.typeKey(" ", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertTrue(
+            waitForNumericChange(from: 0, in: frameField),
+            "Playback should advance after the exact seek"
+        )
         app.typeKey(" ", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
-
-        let finalFrame = getFrameValue()
-        XCTAssertGreaterThan(finalFrame, afterSeek, "Frame should advance after playing")
+        XCTAssertTrue(waitForValue("Paused", in: app.buttons["button-play"]))
     }
 
     func testFullZoomWorkflow() throws {
@@ -774,37 +716,37 @@ final class ReframerIntegrationTests: XCTestCase {
 
         let zoomField = app.textFields["input-zoom"]
 
-        // 1. Reset
         app.typeKey("r", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
+        XCTAssertTrue(
+            waitForNumericValue(100, in: zoomField),
+            "Zoom should be 100 after reset"
+        )
 
-        XCTAssertEqual(getZoomValue(), 100, accuracy: 0.5, "Zoom should be 100 after reset")
-
-        // 2. Increase zoom via field
         zoomField.click()
         app.typeKey(.upArrow, modifierFlags: .shift) // +10
         app.typeKey(.upArrow, modifierFlags: .shift) // +10
         app.typeKey(.escape, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
+        XCTAssertTrue(
+            waitForNumericValue(120, in: zoomField, accuracy: 1),
+            "Zoom should be 120 after two Shift+Up events"
+        )
 
-        XCTAssertEqual(getZoomValue(), 120, accuracy: 1, "Zoom should be ~120 after two Shift+Up")
-
-        // 3. Reset with 0
         app.typeKey("0", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
+        XCTAssertTrue(
+            waitForNumericValue(100, in: zoomField),
+            "Zoom should be 100 after pressing 0"
+        )
 
-        XCTAssertEqual(getZoomValue(), 100, accuracy: 0.5, "Zoom should be 100 after pressing 0")
-
-        // 4. Change again and reset with R
         zoomField.click()
         app.typeKey(.upArrow, modifierFlags: .shift)
         app.typeKey(.escape, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
+        XCTAssertTrue(waitForNumericValue(110, in: zoomField))
 
         app.typeKey("r", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.2)
-
-        XCTAssertEqual(getZoomValue(), 100, accuracy: 0.5, "Zoom should be 100 after R")
+        XCTAssertTrue(
+            waitForNumericValue(100, in: zoomField),
+            "Zoom should be 100 after R"
+        )
     }
 
     func testLockWorkflow() throws {
@@ -813,37 +755,31 @@ final class ReframerIntegrationTests: XCTestCase {
         let zoomField = app.textFields["input-zoom"]
         let lockButton = app.buttons["button-lock"]
 
-        // 1. Ensure unlocked
         ensureUnlocked()
-
         XCTAssertTrue(zoomField.isEnabled, "Zoom field enabled when unlocked")
 
-        // 2. Change zoom
         zoomField.click()
         app.typeKey(.upArrow, modifierFlags: .shift)
         app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(
+            waitForNumericValue(110, in: zoomField),
+            "Shift+Up should change zoom before locking"
+        )
 
-        let zoomAfterChange = getZoomValue()
-        XCTAssertGreaterThan(zoomAfterChange, 100, "Zoom should have changed")
-
-        // 3. Lock
         lockButton.click()
-        Thread.sleep(forTimeInterval: 0.3)
+        XCTAssertTrue(waitForValue("Locked", in: lockButton))
+        XCTAssertTrue(
+            waitForEnabled(false, element: zoomField),
+            "Zoom field should be disabled while locked"
+        )
 
-        XCTAssertTrue(isLocked(), "Should be locked")
-        XCTAssertFalse(zoomField.isEnabled, "Zoom field disabled when locked")
-
-        // 4. Try to change zoom (should fail since disabled)
-        // Field is disabled so can't click
-
-        // 5. Unlock with L key
         app.typeKey("l", modifierFlags: [])
-        Thread.sleep(forTimeInterval: 0.3)
+        XCTAssertTrue(waitForValue("Unlocked", in: lockButton))
+        XCTAssertTrue(
+            waitForEnabled(true, element: zoomField),
+            "Zoom field should be enabled after unlocking"
+        )
 
-        XCTAssertFalse(isLocked(), "Should be unlocked")
-        XCTAssertTrue(zoomField.isEnabled, "Zoom field enabled again")
-
-        // 6. Reset
         app.typeKey("r", modifierFlags: [])
     }
 }

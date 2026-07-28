@@ -1,79 +1,123 @@
 # Reframer feature verification
 
-Shipping claims must have deterministic automated coverage where possible and
-a named interactive check where macOS UI automation is involved.
+Feature claims use four distinct evidence classes. A source build is not runtime
+evidence, a unit test is not an AppKit interaction, and an XCUITest that only
+finds an element is not proof of the action behind it.
 
-## Required automated gates
+## Automated quality gates
 
-| Area | Required evidence |
-|---|---|
-| Repository | Product metadata, public docs, project, scheme, XIB, and unsafe-runner checks pass |
-| Build | Clean Debug and Release builds for the explicit Xcode project |
-| Static quality | `xcodebuild analyze` succeeds |
-| Unit suite | All model, command, format, playback, filter, persistence, and accessibility-contract tests pass |
-| Documentation | DocC builds and Apple Help is present in the built bundle |
-| Bundle | Only allowlisted runtime resources and sandbox entitlements; version 0.10.0; build integer; macOS 15.0 minimum |
-| Release | Universal binary, strict code-sign verification, successful notarization/stapling, successful Gatekeeper assessment |
+| Gate | What a passing result proves | What it does not prove |
+|---|---|---|
+| `scripts/validate_repository.sh` | Metadata, public-doc, project, scheme, XIB, resource, and workflow invariants match the repository contract | Runtime behavior |
+| Debug and Release builds | All production sources and resources compile and link in both configurations | A user can complete a workflow |
+| `xcodebuild analyze` | Xcode static analysis reports no blocking issue | Absence of every runtime defect |
+| `TEST_SCOPE=unit scripts/runner_test.sh` | Deterministic model and AppKit contract tests pass | WindowServer event routing, visual output, or another-app shortcuts |
+| `xcodebuild docbuild` | DocC compiles; bundle validation separately checks Apple Help packaging | Documentation accuracy beyond the validated contract |
+| `scripts/validate_bundle.sh` | The unsigned bundle has the expected version, deployment target, architecture, help book, resources, and privacy metadata | Developer ID trust, notarization, or Gatekeeper acceptance |
+| Release packaging workflow | The exact artifact passed signing verification, notarization, stapling, and Gatekeeper assessment | Behavior not exercised by the preceding test jobs |
 
-## Playback matrix
+`build-for-testing` is a compile gate for both test targets. It is not recorded
+as a UI-test pass unless `xcodebuild test` executes the tests and produces a
+successful result bundle.
 
-- 30 fps and 60 fps constant-rate fixtures
-- Fractional-rate fixture
-- Variable-timing fixture
-- First and last sample clamping
-- One-frame and 10-frame steps in both directions
-- Rapid alternating and repeated step bursts
-- Preview scrub coalescing and exact final seek
-- Load A immediately superseded by load B
-- Seek immediately superseded by load
-- End-of-file transition and replay
-- Missing track, unsupported track, corrupt file, and cancelled load
-- Filter replacement and cancellation during playback and seek
+## Deterministic unit evidence
 
-The current repository fixtures cover constant-rate media. Fractional and
-variable-timing fixture generation is part of the deterministic test target and
-must remain offline.
+The unit target currently proves:
 
-## Shortcut state matrix
+- MP4, M4V, and MOV are the only advertised extensions and content types, and
+  preflight accepts a known playable fixture while rejecting a missing file.
+- Frame lookup uses presentation timestamps, including an in-memory
+  variable-timing table. Packaged media exercises 29.97 and 60 fps sample
+  indexing. First/last clamping, repeated generations, 1/10-frame direction,
+  and rapid burst accumulation are deterministic model checks.
+- Playback, scrub, zoom, opacity, mute, filter, and persistence state
+  transitions obey their model contracts.
+- Shortcut defaults, local/global scope, 1/10/100 multipliers, repeat policy,
+  collision/reserved-key rejection, migration, clear/disable/re-enable, and
+  persistence resolve to typed commands. The exact Carbon registration plan,
+  AppKit-to-Carbon modifier mapping, conflict/retry state, focused-control
+  ownership, and active-versus-inactive dispatch policy also have unit coverage.
+- Window recovery, toolbar reservation, attached-panel placement, and invalid
+  geometry handling are checked as pure geometry.
+- Drop-zone actionability, quick-filter menu contents, advanced-filter control
+  naming/focus, lock-aware drag-handle state, status text, and pointer-transparent
+  overlays are checked through AppKit objects.
 
-Every command is checked across:
+These checks do not prove that macOS delivered a physical key, pointer, drag,
+display, accessibility, or workspace event to the running app.
 
-- app active and inactive
-- video unloaded and loaded
-- overlay unlocked and locked
-- ordinary focus, text editing, modal panel, and shortcut recording
-- key repeat allowed and suppressed
-- default, rebound, cleared, disabled, persisted, and migrated settings
+## XCUITest evidence contract
 
-The expected global defaults are Command-Page Down for forward,
-Command-Page Up for backward, and Command-Shift-L for lock. Stepping outside
-the app is rejected unless a video is loaded and the overlay is locked. One
-physical event must produce exactly one command.
+The serial UI target launches a new app process for every test and opens its
+fixture through Launch Services, exercising the same user-selected read-only
+sandbox extension as Finder's Open With flow. A passing execution proves these
+observable outcomes:
 
-Unit coverage also verifies the exact registered-hot-key descriptor plan,
-AppKit-to-Carbon modifier mapping, registration status/recovery model, and the
-focused-control ownership policy. Global shortcut tests must not depend on
-Accessibility or Input Monitoring permission.
+- the empty state exposes a labeled, enabled Open video action;
+- clicking the empty state and pressing Command-O each present a cancellable
+  system file picker, and Cancel restores the empty state;
+- H presents the labeled Shortcut Settings group and its labeled Close action
+  dismisses it;
+- the staged fixture reaches a ready, enabled timeline and exposes frame, zoom,
+  and lock status elements;
+- Space and the Play button advance frames and return to an observable paused
+  state;
+- step buttons, frame entry, timeline adjustment, and active-app locked
+  Command-Page Down update the frame field;
+- zoom entry, arrow increments, 0, and R update the zoom field;
+- lock input updates the lock value and zoom-control enabled state;
+- opacity entry and arrow increments update the field;
+- selecting Invert disables its parameter control and shows `On`, while
+  Brightness re-enables the adjustable control;
+- mute/unmute updates the exposed audio state and restores the prior slider value;
+- while Finder is active, each enabled registered hotkey appears exactly once,
+  Command-Page Down advances exactly one frame while locked, Command-Shift-L
+  unlocks, and further background stepping is rejected while unlocked.
 
-## Interactive macOS suite
+`ZoomScreenshotTest` always asserts the 100% to 200% zoom transition.
+`UITEST_SCREENSHOTS=1` only adds retained PNG evidence; omitting that variable
+does not skip the behavioral assertions.
 
-The serial UI suite runs on a logged-in self-hosted runner. A person grants
-the runner normal UI-automation authorization once and sets
-`REFRAMER_UI_RUNNER_AUTHORIZED=1`. Scripts must not alter privacy databases,
-restart privacy services, remove provenance, or re-sign test products.
+Run the target only in a logged-in, pre-authorized session:
 
-The suite verifies:
+```bash
+REFRAMER_UI_RUNNER_AUTHORIZED=1 \
+TEST_SCOPE=ui \
+scripts/runner_test.sh
+```
 
-- exact-once registered lock and frame-step delivery while Finder is active,
-  plus the loaded-and-locked global guard
-- open picker, click-to-open empty state, and drag/drop
-- load, play, pause, step, scrub, filter, opacity, mute, zoom, and pan
-- resize and toolbar behavior at minimum size
-- move, Always on Top, lock, click-through, unlock, and multi-display clamping
-- keyboard-only traversal and panel focus return
-- VoiceOver roles, labels, values, state, and actions
-- Reduce Motion presentation
-- persistence after terminate and relaunch
+The preflight never edits TCC databases, restarts privacy services, strips
+provenance, or re-signs a test product. Global shortcut delivery uses registered
+system hotkeys and does not require Accessibility or Input Monitoring permission.
 
-Run unit tests with `scripts/runner_test.sh`. Run the full serial suite on an
-authorized runner with `TEST_SCOPE=all scripts/runner_test.sh`.
+## Live macOS evidence still required
+
+The following claims need an observed live pass because the current automated
+suite does not measure their result:
+
+- selecting a real file in the picker and Finder Open With;
+- valid/invalid file drag-and-drop feedback and loading;
+- video-surface pointer pan at 1x and above, including reversal across the drag
+  origin;
+- toolbar drag-handle movement, lock suppression, and visible lock/status HUD;
+- resize behavior at minimum size and toolbar attachment while moving;
+- Always on Top, click-through, and recovery/unlock from another app;
+- registered global shortcuts while Reframer is inactive, including
+  registration-conflict reporting and exactly-once dispatch;
+- multi-display placement, display removal, and visible-frame clamping;
+- keyboard-only traversal and focus restoration for shortcut, filter, and
+  documentation panels;
+- VoiceOver announcements/actions, Increase Contrast/Reduce Transparency, and
+  Reduce Motion;
+- visual filter correctness, composited opacity, and VFR audiovisual playback;
+- preferences after termination and relaunch.
+
+Record the macOS version, hardware, app commit, fixture, starting state,
+interaction, observed result, and screenshot/screen recording for each live
+claim. Do not mark a row passed from a build log or from an element-existence
+assertion.
+
+The release workflow requires both the deterministic quality job and an
+executed self-hosted UI job before signing and notarization. The live checks
+above remain release evidence that must be attached to the candidate when
+their behavior changes.
