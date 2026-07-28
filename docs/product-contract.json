@@ -38,12 +38,21 @@
     }
   },
   "globalShortcuts": {
-    "availability": "Loaded video with lock mode enabled",
+    "mechanism": "exclusive registered system hot keys",
+    "observesUnregisteredKeys": false,
+    "requiresAccessibilityPermission": false,
+    "requiresInputMonitoringPermission": false,
+    "toggleLockAvailability": "Always while the global lock binding is enabled",
+    "frameStepAvailability": "Loaded video with lock mode enabled",
     "toggleLock": "Command-Shift-L",
     "stepForward": "Command-Page Down",
-    "stepBackward": "Command-Page Up"
+    "stepBackward": "Command-Page Up",
+    "stepMultiplier": 10,
+    "failureRecovery": "Shortcut Settings reports conflicts and offers retry"
   },
   "privacy": {
+    "appSandbox": true,
+    "userSelectedFileAccess": "read-only",
     "networkAccess": false,
     "analytics": false,
     "downloadsExecutableCode": false

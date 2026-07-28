@@ -80,6 +80,25 @@ if /usr/bin/grep -Eq \
     exit 65
 fi
 
+ENTITLEMENT_PATH="$WORK_DIR/Reframer-release-entitlements.plist"
+/usr/bin/codesign --display --entitlements :- "$APP_PATH" >"$ENTITLEMENT_PATH" 2>/dev/null
+/usr/bin/python3 - "$ENTITLEMENT_PATH" <<'PY'
+import plistlib
+import sys
+
+path = sys.argv[1]
+with open(path, "rb") as entitlement_file:
+    actual = plistlib.load(entitlement_file)
+expected = {
+    "com.apple.security.app-sandbox": True,
+    "com.apple.security.files.user-selected.read-only": True,
+}
+if actual != expected:
+    raise SystemExit(
+        f"error: release entitlements do not equal the allowlist: {actual}"
+    )
+PY
+
 ARCHITECTURES="$(/usr/bin/lipo -archs "$APP_PATH/Contents/MacOS/Reframer")"
 if [[ " $ARCHITECTURES " != *" arm64 "* ]] || [[ " $ARCHITECTURES " != *" x86_64 "* ]]; then
     echo "error: release executable is not universal: $ARCHITECTURES" >&2

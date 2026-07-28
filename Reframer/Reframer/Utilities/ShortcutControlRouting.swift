@@ -1,0 +1,96 @@
+import Cocoa
+
+enum FocusedControlKind {
+    case none
+    case textEditor
+    case button
+    case slider
+    case popUpButton
+    case otherControl
+}
+
+enum ShortcutControlRouting {
+    static func kind(for responder: NSResponder?) -> FocusedControlKind {
+        switch responder {
+        case is NSTextView:
+            return .textEditor
+        case is NSPopUpButton:
+            return .popUpButton
+        case is NSButton:
+            return .button
+        case is NSSlider:
+            return .slider
+        case is NSControl:
+            return .otherControl
+        default:
+            return .none
+        }
+    }
+
+    /// Returns true only when AppKit convention assigns this key to the
+    /// focused control. Product shortcuts remain available while a control is
+    /// focused unless activation, navigation, or text editing owns the key.
+    static func focusedControlOwns(
+        stroke: ShortcutKeystroke,
+        kind: FocusedControlKind
+    ) -> Bool {
+        let flags = NSEvent.ModifierFlags(rawValue: stroke.modifiers)
+        let hasCommand = flags.contains(.command)
+        let hasControl = flags.contains(.control)
+
+        switch kind {
+        case .none:
+            return false
+        case .textEditor:
+            if hasCommand {
+                return isStandardTextCommand(stroke)
+                    || isTextNavigationKey(stroke.keyCode)
+            }
+            // Option produces alternate text and Control participates in
+            // Cocoa text bindings, so both remain native while editing.
+            return true
+        case .button:
+            return !hasCommand && !hasControl
+                && [KeyCode.space, KeyCode.returnKey].contains(stroke.keyCode)
+        case .slider:
+            return !hasCommand && !hasControl && [
+                KeyCode.leftArrow, KeyCode.rightArrow,
+                KeyCode.upArrow, KeyCode.downArrow,
+                KeyCode.pageUp, KeyCode.pageDown,
+                KeyCode.home, KeyCode.end
+            ].contains(stroke.keyCode)
+        case .popUpButton:
+            return !hasCommand && !hasControl && [
+                KeyCode.space, KeyCode.returnKey, KeyCode.escape,
+                KeyCode.upArrow, KeyCode.downArrow
+            ].contains(stroke.keyCode)
+        case .otherControl:
+            return false
+        }
+    }
+
+    private static func isTextNavigationKey(_ keyCode: UInt16) -> Bool {
+        [
+            KeyCode.leftArrow, KeyCode.rightArrow,
+            KeyCode.upArrow, KeyCode.downArrow,
+            KeyCode.pageUp, KeyCode.pageDown,
+            KeyCode.home, KeyCode.end,
+            KeyCode.delete, KeyCode.forwardDelete,
+            KeyCode.returnKey, KeyCode.tab, KeyCode.escape
+        ].contains(keyCode)
+    }
+
+    private static func isStandardTextCommand(_ stroke: ShortcutKeystroke) -> Bool {
+        let flags = NSEvent.ModifierFlags(rawValue: stroke.modifiers)
+        let command = NSEvent.ModifierFlags.command
+        let commandShift: NSEvent.ModifierFlags = [.command, .shift]
+        switch stroke.keyCode {
+        case KeyCode.a, KeyCode.x, KeyCode.c, KeyCode.v:
+            return flags == command
+        case KeyCode.z:
+            return flags == command || flags == commandShift
+        default:
+            return false
+        }
+    }
+}

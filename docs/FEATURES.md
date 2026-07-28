@@ -43,6 +43,9 @@ historical investigations are not product claims.
 - Shortcut defaults can be changed, cleared, disabled, or restored.
 - Invalid, reserved, duplicate, and unsafe global chords are rejected with an
   explanation.
+- Only enabled global lock and frame-step variants are registered with macOS.
+  Conflicts are reported with an accessible retry action; broad keyboard
+  monitoring and privacy permission prompts are not used.
 - Global stepping is active only with a loaded video in lock mode.
 - Custom controls expose task-oriented VoiceOver labels, values, state, and
   actions; keyboard focus enters and returns from panels predictably.
@@ -51,8 +54,9 @@ historical investigations are not product claims.
 ## Privacy and distribution
 
 - Local processing only; no analytics or network dependency.
+- App Sandbox with user-selected, read-only video access.
 - Explicit runtime-resource allowlist.
-- Hardened Runtime with no private entitlements.
+- Hardened Runtime with only the two allowlisted sandbox entitlements.
 - Universal Developer ID release, notarization, stapling, and Gatekeeper
   verification.
 

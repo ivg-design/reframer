@@ -61,10 +61,79 @@ enum ReframerCommand: Equatable {
     case toggleMinimize
 }
 
-enum ReframerCommandOrigin {
+enum ReframerCommandOrigin: Equatable {
     case localShortcut
     case globalShortcut
     case menu
+}
+
+struct ReframerCommandAvailabilityContext {
+    let isVideoLoaded: Bool
+    let isLocked: Bool
+    let isHelpVisible: Bool
+    let isFilterPanelVisible: Bool
+    let isDocumentationVisible: Bool
+}
+
+enum ReframerCommandAvailability {
+    static func isAvailable(
+        _ command: ReframerCommand,
+        origin: ReframerCommandOrigin,
+        context: ReframerCommandAvailabilityContext
+    ) -> Bool {
+        switch command {
+        case .togglePlayPause:
+            return context.isVideoLoaded
+        case .step:
+            return context.isVideoLoaded
+                && (origin != .globalShortcut || context.isLocked)
+        case .pan, .resetZoom, .resetView:
+            return context.isVideoLoaded && !context.isLocked
+        case .toggleFilterPanel:
+            return context.isVideoLoaded
+        case .closeContext:
+            return context.isHelpVisible
+                || context.isFilterPanelVisible
+                || context.isDocumentationVisible
+        case .openVideo, .toggleLock, .toggleAlwaysOnTop,
+             .toggleShortcutSettings, .openDocumentation, .toggleMinimize:
+            return true
+        }
+    }
+}
+
+enum RegisteredHotKeyRouting {
+    static func origin(isApplicationActive: Bool) -> ReframerCommandOrigin {
+        isApplicationActive ? .localShortcut : .globalShortcut
+    }
+}
+
+struct GlobalShortcutRegistrationFailure: Equatable {
+    let action: ShortcutSettings.Action
+    let variant: ShortcutVariant
+    let shortcut: String
+    let statusCode: Int32
+
+    var recoveryDescription: String {
+        if statusCode == -9878 {
+            return "\(shortcut) is already reserved by Reframer or another app."
+        }
+        return "\(shortcut) could not be registered (system status \(statusCode))."
+    }
+}
+
+enum GlobalShortcutRegistrationStatus: Equatable {
+    case pending
+    case disabled
+    case active(count: Int)
+    case partial(registered: Int, failures: [GlobalShortcutRegistrationFailure])
+
+    var hasFailures: Bool {
+        if case .partial = self {
+            return true
+        }
+        return false
+    }
 }
 
 /// Manages validated, configurable keyboard shortcuts with versioned
@@ -151,7 +220,7 @@ final class ShortcutSettings: ObservableObject {
             }
         }
 
-        fileprivate var supportedFactors: [Int] {
+        var supportedFactors: [Int] {
             if hasHundredVariant {
                 return [100, 10, 1]
             }
@@ -348,6 +417,7 @@ final class ShortcutSettings: ObservableObject {
     @Published private(set) var globalShortcutsEnabled: Bool
     @Published private(set) var recordingAction: Action?
     @Published private(set) var validationMessage: String?
+    @Published private(set) var globalRegistrationStatus: GlobalShortcutRegistrationStatus
 
     private let userDefaults: UserDefaults
 
@@ -364,6 +434,7 @@ final class ShortcutSettings: ObservableObject {
         self.userDefaults = userDefaults
         self.bindings = Self.defaults
         self.globalShortcutsEnabled = true
+        self.globalRegistrationStatus = .pending
         load()
     }
 
@@ -371,6 +442,7 @@ final class ShortcutSettings: ObservableObject {
         self.userDefaults = .standard
         self.bindings = [:]
         self.globalShortcutsEnabled = true
+        self.globalRegistrationStatus = .pending
     }
 
     func binding(for action: Action) -> Binding {
@@ -416,6 +488,15 @@ final class ShortcutSettings: ObservableObject {
 
     func command(for match: ShortcutMatch) -> ReframerCommand {
         match.action.command(factor: match.variant.factor)
+    }
+
+    func keystroke(for match: ShortcutMatch, isRepeat: Bool = false) -> ShortcutKeystroke? {
+        guard let shortcut = binding(for: match.action).shortcut else { return nil }
+        return ShortcutKeystroke(
+            keyCode: shortcut.keyCode,
+            modifiers: shortcut.expandedModifiers(factor: match.variant.factor),
+            isRepeat: isRepeat
+        )
     }
 
     @discardableResult
@@ -505,7 +586,12 @@ final class ShortcutSettings: ObservableObject {
 
     func setGlobalShortcutsEnabled(_ isEnabled: Bool) {
         globalShortcutsEnabled = isEnabled
+        globalRegistrationStatus = isEnabled ? .pending : .disabled
         save()
+    }
+
+    func setGlobalRegistrationStatus(_ status: GlobalShortcutRegistrationStatus) {
+        globalRegistrationStatus = status
     }
 
     func beginRecording(for action: Action) {

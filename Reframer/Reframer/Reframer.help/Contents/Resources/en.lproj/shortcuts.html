@@ -28,14 +28,18 @@
   <h2>Scope</h2>
   <p>Playback and inspection commands require a loaded video. Pan and zoom
   require an unlocked overlay. Frame stepping works outside Reframer only with
-  a loaded, locked overlay. Text editing keeps normal field behavior.</p>
+  a loaded, locked overlay. Focused controls keep only their conventional
+  activation and navigation keys, while text editing keeps normal field
+  behavior.</p>
 
   <h2>Customize</h2>
   <p>Open shortcut settings with <kbd>H</kbd>. Change, clear, disable, or reset
   an action. Reframer rejects duplicate, reserved, modifier-collapsing, and
   unsafe global chords. A new chord replaces the old one and persists. Global
-  shortcuts can be disabled independently, and this panel reports whether
-  Accessibility permission is granted.</p>
+  shortcuts can be disabled independently. Reframer registers only the exact
+  enabled global chords, so Accessibility and Input Monitoring permission are
+  not required. If another app owns a chord, this panel reports the conflict
+  and offers a retry action.</p>
 
   <div class="nav-links">
     <p><a href="index.html">← Reframer Help</a></p>

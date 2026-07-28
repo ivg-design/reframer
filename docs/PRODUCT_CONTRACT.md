@@ -47,6 +47,12 @@ collapse, and unsafe unmodified global keys. A customized chord replaces its
 old chord completely and fires once. Clearing or disabling an action survives
 relaunch.
 
+Global actions use exclusive system-registered hot keys. Reframer registers
+only enabled global lock and frame-step variants, re-registers when settings
+change, and unregisters on shutdown. It does not install a broad global event
+monitor and requires neither Accessibility nor Input Monitoring permission.
+Registration conflicts are surfaced in Shortcut Settings with a retry action.
+
 ## State
 
 - Loading, ready, playing, paused, ended, and failed are distinct states.
@@ -70,8 +76,13 @@ the locked state persistently visible. Focused controls do not dim. Reduce
 Motion removes nonessential fades and pulses, and Reduce Transparency uses
 opaque status backgrounds.
 
+A focused text editor retains text and standard editing commands. Other
+controls retain only their conventional activation and navigation keys; they
+do not suppress plain or Shift-based Reframer shortcuts they do not own.
+
 ## Release
 
-The shipping app is a universal, Hardened Runtime Developer ID build with an
-empty entitlement set. It is notarized, stapled, Gatekeeper-assessed, and
-checked for internal-document or test-artifact leakage.
+The shipping app is a universal, Hardened Runtime Developer ID build in App
+Sandbox with only user-selected, read-only file access. It is notarized,
+stapled, Gatekeeper-assessed, and checked for internal-document or
+test-artifact leakage.

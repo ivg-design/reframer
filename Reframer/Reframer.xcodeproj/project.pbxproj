@@ -45,6 +45,10 @@
 		E10000000000000000000004 /* WindowPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000003 /* WindowPlacementTests.swift */; };
 		E20000000000000000000002 /* VideoFrameTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000001 /* VideoFrameTimeline.swift */; };
 		E20000000000000000000004 /* VideoFrameTimelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000003 /* VideoFrameTimelineTests.swift */; };
+		F30000000000000000000002 /* GlobalHotKeyRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F30000000000000000000001 /* GlobalHotKeyRegistrar.swift */; };
+		F40000000000000000000002 /* ShortcutControlRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000001 /* ShortcutControlRouting.swift */; };
+		F50000000000000000000002 /* UITestVideoLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F50000000000000000000001 /* UITestVideoLoader.swift */; };
+		F60000000000000000000002 /* GlobalHotKeyIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60000000000000000000001 /* GlobalHotKeyIntegrationTests.swift */; };
 		DDD00004 /* test-video.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10004 /* test-video.mp4 */; };
 		DDD00005 /* test_23976fps_24f.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10005 /* test_23976fps_24f.mp4 */; };
 		DDD00006 /* test_5994fps_60f.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10006 /* test_5994fps_60f.mp4 */; };
@@ -119,6 +123,10 @@
 		E10000000000000000000003 /* WindowPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowPlacementTests.swift; sourceTree = "<group>"; };
 		E20000000000000000000001 /* VideoFrameTimeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFrameTimeline.swift; sourceTree = "<group>"; };
 		E20000000000000000000003 /* VideoFrameTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameTimelineTests.swift; sourceTree = "<group>"; };
+		F30000000000000000000001 /* GlobalHotKeyRegistrar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyRegistrar.swift; sourceTree = "<group>"; };
+		F40000000000000000000001 /* ShortcutControlRouting.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShortcutControlRouting.swift; sourceTree = "<group>"; };
+		F50000000000000000000001 /* UITestVideoLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestVideoLoader.swift; sourceTree = "<group>"; };
+		F60000000000000000000001 /* GlobalHotKeyIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyIntegrationTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -223,6 +231,8 @@
 				SS001001 /* ScrollStepAccumulator.swift */,
 				E10000000000000000000001 /* WindowPlacement.swift */,
 				E20000000000000000000001 /* VideoFrameTimeline.swift */,
+				F30000000000000000000001 /* GlobalHotKeyRegistrar.swift */,
+				F40000000000000000000001 /* ShortcutControlRouting.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -263,6 +273,8 @@
 				CCC10002 /* ReframerUITestsLaunchTests.swift */,
 				CCC10003 /* ReframerIntegrationTests.swift */,
 				UIT001001 /* UITestConfig.swift */,
+				F50000000000000000000001 /* UITestVideoLoader.swift */,
+				F60000000000000000000001 /* GlobalHotKeyIntegrationTests.swift */,
 			);
 			path = ReframerUITests;
 			sourceTree = "<group>";
@@ -475,6 +487,8 @@
 				1C151236800FA80F87CAAD76 /* ShortcutSettings.swift in Sources */,
 				E10000000000000000000002 /* WindowPlacement.swift in Sources */,
 				E20000000000000000000002 /* VideoFrameTimeline.swift in Sources */,
+				F30000000000000000000002 /* GlobalHotKeyRegistrar.swift in Sources */,
+				F40000000000000000000002 /* ShortcutControlRouting.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -502,6 +516,8 @@
 				CCC00002 /* ReframerUITestsLaunchTests.swift in Sources */,
 				CCC00003 /* ReframerIntegrationTests.swift in Sources */,
 				UIT001002 /* UITestConfig.swift in Sources */,
+				F50000000000000000000002 /* UITestVideoLoader.swift in Sources */,
+				F60000000000000000000002 /* GlobalHotKeyIntegrationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -654,10 +670,10 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Reframer/Preview Content\"";
-				ENABLE_APP_SANDBOX = NO;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readwrite;
+				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Reframer/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Reframer;
@@ -688,10 +704,10 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Reframer/Preview Content\"";
-				ENABLE_APP_SANDBOX = NO;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readwrite;
+				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Reframer/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Reframer;

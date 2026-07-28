@@ -1,8 +1,7 @@
 # Reframer feature verification
 
 Shipping claims must have deterministic automated coverage where possible and
-a named interactive check where macOS UI automation or privacy consent is
-involved.
+a named interactive check where macOS UI automation is involved.
 
 ## Required automated gates
 
@@ -13,7 +12,7 @@ involved.
 | Static quality | `xcodebuild analyze` succeeds |
 | Unit suite | All model, command, format, playback, filter, persistence, and accessibility-contract tests pass |
 | Documentation | DocC builds and Apple Help is present in the built bundle |
-| Bundle | Only allowlisted runtime resources; version 0.10.0; build integer; macOS 15.0 minimum |
+| Bundle | Only allowlisted runtime resources and sandbox entitlements; version 0.10.0; build integer; macOS 15.0 minimum |
 | Release | Universal binary, strict code-sign verification, successful notarization/stapling, successful Gatekeeper assessment |
 
 ## Playback matrix
@@ -51,15 +50,22 @@ Command-Page Up for backward, and Command-Shift-L for lock. Stepping outside
 the app is rejected unless a video is loaded and the overlay is locked. One
 physical event must produce exactly one command.
 
+Unit coverage also verifies the exact registered-hot-key descriptor plan,
+AppKit-to-Carbon modifier mapping, registration status/recovery model, and the
+focused-control ownership policy. Global shortcut tests must not depend on
+Accessibility or Input Monitoring permission.
+
 ## Interactive macOS suite
 
 The serial UI suite runs on a logged-in self-hosted runner. A person grants
-normal macOS automation/privacy consent once and sets
+the runner normal UI-automation authorization once and sets
 `REFRAMER_UI_RUNNER_AUTHORIZED=1`. Scripts must not alter privacy databases,
 restart privacy services, remove provenance, or re-sign test products.
 
 The suite verifies:
 
+- exact-once registered lock and frame-step delivery while Finder is active,
+  plus the loaded-and-locked global guard
 - open picker, click-to-open empty state, and drag/drop
 - load, play, pause, step, scrub, filter, opacity, mute, zoom, and pan
 - resize and toolbar behavior at minimum size

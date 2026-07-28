@@ -1,6 +1,5 @@
 import Cocoa
 import Combine
-import ApplicationServices
 
 /// Keyboard shortcut settings presented in a floating AppKit panel.
 final class HelpView: NSView {
@@ -14,7 +13,7 @@ final class HelpView: NSView {
         target: nil,
         action: nil
     )
-    private let permissionButton = NSButton()
+    private let retryRegistrationButton = NSButton()
     private var cancellables = Set<AnyCancellable>()
 
     private var shortcutButtons: [ShortcutSettings.Action: NSButton] = [:]
@@ -59,9 +58,12 @@ final class HelpView: NSView {
             .sink { [weak self] _ in self?.updateStatus() }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+        shortcutSettings.$globalRegistrationStatus
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.updateGlobalControls() }
+            .sink { [weak self] _ in
+                self?.updateStatus()
+                self?.updateGlobalControls()
+            }
             .store(in: &cancellables)
     }
 
@@ -182,19 +184,23 @@ final class HelpView: NSView {
         globalShortcutsButton.action = #selector(globalShortcutsChanged(_:))
         globalShortcutsButton.controlSize = .small
         globalShortcutsButton.setAccessibilityHelp(
-            "Allows lock and frame-step shortcuts to work from other applications."
+            "Registers only the enabled lock and frame-step chords with macOS. No Accessibility or Input Monitoring permission is required."
         )
 
-        permissionButton.title = "Grant Accessibility Access…"
-        permissionButton.target = self
-        permissionButton.action = #selector(requestAccessibilityAccess(_:))
-        permissionButton.bezelStyle = .rounded
-        permissionButton.controlSize = .small
+        retryRegistrationButton.title = "Retry Global Shortcuts"
+        retryRegistrationButton.target = self
+        retryRegistrationButton.action = #selector(retryGlobalShortcutRegistration(_:))
+        retryRegistrationButton.bezelStyle = .rounded
+        retryRegistrationButton.controlSize = .small
+        retryRegistrationButton.setAccessibilityLabel("Retry global shortcut registration")
+        retryRegistrationButton.setAccessibilityHelp(
+            "Try again after changing a conflicting shortcut in Reframer or another app."
+        )
 
         footerStack.addArrangedSubview(resetButton)
         footerStack.addArrangedSubview(globalShortcutsButton)
         footerStack.addArrangedSubview(NSView())
-        footerStack.addArrangedSubview(permissionButton)
+        footerStack.addArrangedSubview(retryRegistrationButton)
         addSubview(footerStack)
 
         let topDivider = NSBox()
@@ -468,9 +474,34 @@ final class HelpView: NSView {
             statusLabel.superview?.layer?.backgroundColor =
                 NSColor.systemBlue.withAlphaComponent(0.15).cgColor
             statusLabel.setAccessibilityLabel(statusLabel.stringValue)
-        } else {
+        } else if case .partial(let registered, let failures) =
+                    shortcutSettings.globalRegistrationStatus,
+                  let firstFailure = failures.first {
+            let remainingCount = failures.count - 1
+            let suffix = remainingCount > 0
+                ? " \(remainingCount) additional shortcut\(remainingCount == 1 ? "" : "s") failed."
+                : ""
             statusLabel.stringValue =
-                "Shortcuts are validated for duplicates and unsafe global keys. Disable preserves a chord; Clear removes it."
+                "\(firstFailure.recoveryDescription) \(registered) global shortcut\(registered == 1 ? "" : "s") remain active.\(suffix) Change the chord or close the conflicting app, then retry."
+            statusLabel.textColor = .systemRed
+            statusLabel.superview?.layer?.backgroundColor =
+                NSColor.systemRed.withAlphaComponent(0.13).cgColor
+            statusLabel.setAccessibilityLabel(
+                "Global shortcut registration error: \(statusLabel.stringValue)"
+            )
+        } else {
+            switch shortcutSettings.globalRegistrationStatus {
+            case .disabled:
+                statusLabel.stringValue =
+                    "Global shortcuts are off. Local shortcuts remain available while Reframer is active."
+            case .active(let count):
+                statusLabel.stringValue =
+                    "\(count) global shortcut\(count == 1 ? "" : "s") registered. Reframer observes only those exact chords; no Accessibility or Input Monitoring permission is required."
+            case .pending:
+                statusLabel.stringValue = "Registering enabled global shortcuts…"
+            case .partial:
+                statusLabel.stringValue = "One or more global shortcuts could not be registered."
+            }
             statusLabel.textColor = .secondaryLabelColor
             statusLabel.superview?.layer?.backgroundColor =
                 NSColor.systemBlue.withAlphaComponent(0.15).cgColor
@@ -480,12 +511,14 @@ final class HelpView: NSView {
 
     private func updateGlobalControls() {
         globalShortcutsButton.state = shortcutSettings.globalShortcutsEnabled ? .on : .off
-        let trusted = AXIsProcessTrusted()
-        permissionButton.title = trusted
-            ? "Accessibility Access Granted"
-            : "Grant Accessibility Access…"
-        permissionButton.isEnabled = !trusted && shortcutSettings.globalShortcutsEnabled
-        permissionButton.setAccessibilityValue(trusted ? "Granted" : "Not granted")
+        retryRegistrationButton.isEnabled =
+            shortcutSettings.globalShortcutsEnabled
+            && shortcutSettings.globalRegistrationStatus.hasFailures
+        retryRegistrationButton.setAccessibilityValue(
+            retryRegistrationButton.isEnabled
+                ? "Registration failed; retry available"
+                : "No retry needed"
+        )
     }
 
     @objc private func closeHelp() {
@@ -502,23 +535,11 @@ final class HelpView: NSView {
         updateGlobalControls()
     }
 
-    @objc private func requestAccessibilityAccess(_ sender: NSButton) {
-        let options = [
-            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
-        ] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
-        if let settingsURL = URL(
-            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-        ) {
-            NSWorkspace.shared.open(settingsURL)
-        }
+    @objc private func retryGlobalShortcutRegistration(_ sender: NSButton) {
         NotificationCenter.default.post(
-            name: .reconfigureGlobalShortcutMonitor,
+            name: .reconfigureGlobalHotKeys,
             object: nil
         )
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            self?.updateGlobalControls()
-        }
     }
 
     @objc private func shortcutButtonClicked(_ sender: NSButton) {

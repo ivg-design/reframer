@@ -62,6 +62,14 @@ if rg -n \
 fi
 
 if rg -n \
+    'NSEvent\.addGlobalMonitorForEvents|AXIsProcessTrusted|AXIsProcessTrustedWithOptions|CGEvent\.tapCreate' \
+    Reframer/Reframer \
+    --glob '*.swift'; then
+    echo "error: broad or permission-gated global keyboard observation found" >&2
+    exit 65
+fi
+
+if rg -n \
     'PBXFileSystemSynchronizedRootGroup|MainMenu\.xib|default\.profraw|ControlBar\.xib\.new' \
     Reframer/Reframer.xcodeproj/project.pbxproj; then
     echo "error: obsolete or internal resources remain in the app target" >&2

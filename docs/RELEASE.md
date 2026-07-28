@@ -28,7 +28,8 @@ The packager:
 
 1. refuses a dirty worktree or version mismatch;
 2. archives a universal Release build with Hardened Runtime;
-3. validates bundle metadata and resource allowlisting;
+3. validates bundle metadata, resource allowlisting, App Sandbox, and the
+   user-selected read-only entitlement;
 4. verifies the Developer ID signature;
 5. submits the app to Apple, waits for notarization, and staples the ticket;
 6. validates the staple and runs Gatekeeper assessment;
@@ -48,8 +49,10 @@ On a macOS 15.0 or later machine with no Reframer preferences:
    Top;
 5. lock, click through, use Command-Page Down and Command-Page Up from another
    app, then unlock with Command-Shift-L;
-6. relaunch and verify persisted preferences;
-7. complete a keyboard and VoiceOver pass.
+6. confirm Shortcut Settings reports successful registration without an
+   Accessibility or Input Monitoring prompt;
+7. relaunch and verify persisted preferences;
+8. complete a keyboard and VoiceOver pass.
 
 Record the commit, version/build, macOS version, hardware architecture, test
 result, notarization submission ID, and artifact checksum in the GitHub

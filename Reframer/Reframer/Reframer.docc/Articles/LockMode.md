@@ -15,5 +15,7 @@ When locked:
 - Command-Page Down and Command-Page Up can step a loaded video globally.
 
 Global frame stepping is ignored when no video is loaded or the overlay is
-unlocked. Reframer reports whether the required macOS permission is enabled and
-provides a route to retry or open System Settings.
+unlocked. Reframer registers only these exact global chords, so it requires no
+Accessibility or Input Monitoring permission. Shortcut Settings reports a
+registration conflict and provides a retry action when another app owns a
+chord.

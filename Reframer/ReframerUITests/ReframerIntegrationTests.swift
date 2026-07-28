@@ -31,8 +31,11 @@ final class ReframerIntegrationTests: XCTestCase {
         // Only launch app once for entire test suite
         if !Self.appLaunched {
             app.launchEnvironment["UITEST_MODE"] = "1"
-            app.launchEnvironment["TEST_VIDEO_PATH"] = testVideoPath
             app.launch()
+            XCTAssertTrue(
+                UITestVideoLoader.open(URL(fileURLWithPath: testVideoPath), in: app),
+                "Fixture should open through Launch Services"
+            )
             Self.appLaunched = true
 
             // Wait for video to load
@@ -147,7 +150,7 @@ final class ReframerIntegrationTests: XCTestCase {
     // MARK: - Video Loading
 
     func testVideoLoads() throws {
-        XCTAssertTrue(isVideoLoaded(), "Video should be loaded via TEST_VIDEO_PATH")
+        XCTAssertTrue(isVideoLoaded(), "Video should be loaded through Launch Services")
 
         // Verify overlays appear
         let frameField = app.textFields["input-frame"]

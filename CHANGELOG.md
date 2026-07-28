@@ -11,7 +11,7 @@ development snapshots, not production releases.
 - Canonical command registry and single dispatcher for key, menu, and global
   input
 - Shortcut validation, clear/disable/reset behavior, persistence migration,
-  permission status, and deterministic command tests
+  registered-hot-key conflict status, and deterministic command tests
 - Desired-sample playback cursor, generation-scoped async work, exact final
   scrub seeks, load/error/end-state handling, and media preflight
 - Keyboard and VoiceOver semantics for the empty state, toolbar, filters,
@@ -45,6 +45,8 @@ development snapshots, not production releases.
 - Toolbar controls no longer clip at the minimum window size
 - Rebinding a command removes its previous chord and prevents duplicate
   dispatch
+- Focused buttons and generic controls no longer swallow plain or Shift-based
+  Reframer shortcuts they do not own
 - Stale load, seek, scrub, and filter completions cannot overwrite newer state
 - Ended playback can replay from the beginning
 - UI tests run serially and no longer mutate macOS privacy or signing state
@@ -52,10 +54,12 @@ development snapshots, not production releases.
 ### Security
 
 - Removed the obsolete library-validation exception
+- Replaced broad global keyboard monitoring with exact, exclusive registered
+  hot keys that require no Accessibility or Input Monitoring permission
+- Enabled App Sandbox with user-selected, read-only video access
 - Removed scripts that wrote to privacy databases, restarted privacy services,
   stripped provenance, or re-signed test products
-- Documented the deliberate non-sandboxed global-shortcut posture and release
-  gates
+- Documented keyboard and file-access trust boundaries and release gates
 
 ## Development snapshots
 

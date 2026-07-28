@@ -16,6 +16,8 @@ while you work in the app underneath.
 - Locks into a click-through overlay
 - Supports guarded global frame stepping while a video is loaded and the
   overlay is locked
+- Registers only the configured global chords with macOS; it never monitors
+  general keyboard input
 - Exposes keyboard and VoiceOver names, values, state, and actions
 
 Reframer does not stream media or download executable components. A file whose
@@ -45,10 +47,17 @@ track; the app reports that failure instead of claiming the load succeeded.
 | Help and shortcut settings | H |
 
 The frame-step chords work outside Reframer only when a video is loaded and
-lock mode is enabled. Global shortcuts require the normal macOS privacy
-consent. Defaults can be changed or disabled in Reframer’s shortcut settings.
+lock mode is enabled. Global shortcuts use privacy-safe registered hot keys and
+require neither Accessibility nor Input Monitoring permission. Registration
+conflicts are reported in Shortcut Settings with a retry action. Defaults can
+be changed or disabled there.
+
+Reframer runs in App Sandbox and receives read-only access only to videos the
+user explicitly opens or drops.
 
 See [Product Contract](docs/PRODUCT_CONTRACT.md) for exact states and guards.
+See [Threat Model](docs/THREAT_MODEL.md) for the keyboard and file-access trust
+boundaries.
 
 ## Build and test
 

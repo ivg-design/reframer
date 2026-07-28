@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import XCTest
 @testable import Reframer
 
@@ -285,6 +286,212 @@ final class ShortcutSettingsTests: XCTestCase {
             .consumed
         )
         XCTAssertNil(settings.binding(for: .panLeft).shortcut)
+    }
+
+    func testGlobalHotKeyPlanRegistersOnlyEnabledGlobalVariants() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+
+        let descriptors = GlobalHotKeyPlan.descriptors(for: settings)
+
+        XCTAssertEqual(descriptors.count, 5)
+        XCTAssertEqual(
+            descriptors.map(\.match),
+            [
+                ShortcutMatch(action: .frameStepForward, variant: .primary),
+                ShortcutMatch(action: .frameStepForward, variant: .multiplied(10)),
+                ShortcutMatch(action: .frameStepBackward, variant: .primary),
+                ShortcutMatch(action: .frameStepBackward, variant: .multiplied(10)),
+                ShortcutMatch(action: .globalToggleLock, variant: .primary)
+            ]
+        )
+        XCTAssertEqual(descriptors.map(\.identifier), [1, 2, 3, 4, 5])
+        XCTAssertEqual(descriptors.filter(\.allowsRepeat).count, 4)
+        XCTAssertFalse(descriptors.last!.allowsRepeat)
+
+        assertSuccess(settings.setEnabled(false, for: .frameStepBackward))
+        let reducedDescriptors = GlobalHotKeyPlan.descriptors(for: settings)
+        XCTAssertEqual(reducedDescriptors.count, 3)
+        XCTAssertEqual(reducedDescriptors.map(\.identifier), [1, 2, 5])
+
+        settings.setGlobalShortcutsEnabled(false)
+        XCTAssertTrue(GlobalHotKeyPlan.descriptors(for: settings).isEmpty)
+    }
+
+    func testGlobalHotKeyPlanMapsAppKitModifiersToCarbon() {
+        let commandShiftOptionControl = NSEvent.ModifierFlags([
+            .command, .shift, .option, .control
+        ]).rawValue
+
+        XCTAssertEqual(
+            GlobalHotKeyPlan.carbonModifiers(from: commandShiftOptionControl),
+            UInt32(cmdKey | shiftKey | optionKey | controlKey)
+        )
+        XCTAssertEqual(GlobalHotKeyPlan.carbonModifiers(from: 0), 0)
+
+        let settings = ShortcutSettings(userDefaults: defaults)
+        let forward = GlobalHotKeyPlan.descriptors(for: settings).first {
+            $0.match == ShortcutMatch(action: .frameStepForward, variant: .primary)
+        }
+        let forwardTen = GlobalHotKeyPlan.descriptors(for: settings).first {
+            $0.match == ShortcutMatch(
+                action: .frameStepForward,
+                variant: .multiplied(10)
+            )
+        }
+        XCTAssertEqual(forward?.carbonModifiers, UInt32(cmdKey))
+        XCTAssertEqual(forwardTen?.carbonModifiers, UInt32(cmdKey | shiftKey))
+    }
+
+    func testGlobalRegistrationStatusExposesConflictRecovery() {
+        let failure = GlobalShortcutRegistrationFailure(
+            action: .globalToggleLock,
+            variant: .primary,
+            shortcut: "⌘⇧L",
+            statusCode: Int32(eventHotKeyExistsErr)
+        )
+        let status = GlobalShortcutRegistrationStatus.partial(
+            registered: 4,
+            failures: [failure]
+        )
+
+        XCTAssertTrue(status.hasFailures)
+        XCTAssertTrue(failure.recoveryDescription.contains("another app"))
+
+        let settings = ShortcutSettings(userDefaults: defaults)
+        settings.setGlobalRegistrationStatus(status)
+        XCTAssertEqual(settings.globalRegistrationStatus, status)
+        settings.setGlobalShortcutsEnabled(false)
+        XCTAssertEqual(settings.globalRegistrationStatus, .disabled)
+    }
+
+    func testFocusedButtonsDoNotSwallowPlainOrShiftProductShortcuts() {
+        for keyCode in [KeyCode.h, KeyCode.f, KeyCode.l, KeyCode.r, KeyCode.zero] {
+            XCTAssertFalse(ShortcutControlRouting.focusedControlOwns(
+                stroke: ShortcutKeystroke(keyCode: keyCode, modifiers: 0),
+                kind: .button
+            ))
+            XCTAssertFalse(ShortcutControlRouting.focusedControlOwns(
+                stroke: ShortcutKeystroke(
+                    keyCode: keyCode,
+                    modifiers: NSEvent.ModifierFlags.shift.rawValue
+                ),
+                kind: .button
+            ))
+        }
+
+        XCTAssertTrue(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(keyCode: KeyCode.space, modifiers: 0),
+            kind: .button
+        ))
+        XCTAssertTrue(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(keyCode: KeyCode.returnKey, modifiers: 0),
+            kind: .button
+        ))
+    }
+
+    func testFocusedSliderAndPopUpRetainOnlyNativeNavigationAndActivation() {
+        XCTAssertTrue(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(keyCode: KeyCode.leftArrow, modifiers: 0),
+            kind: .slider
+        ))
+        XCTAssertFalse(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(keyCode: KeyCode.h, modifiers: 0),
+            kind: .slider
+        ))
+        XCTAssertFalse(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(
+                keyCode: KeyCode.leftArrow,
+                modifiers: NSEvent.ModifierFlags.control.rawValue
+            ),
+            kind: .slider
+        ))
+        XCTAssertTrue(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(keyCode: KeyCode.downArrow, modifiers: 0),
+            kind: .popUpButton
+        ))
+        XCTAssertFalse(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(keyCode: KeyCode.f, modifiers: 0),
+            kind: .popUpButton
+        ))
+    }
+
+    func testTextEditorRetainsTextAndStandardEditingButNotAppCommands() {
+        XCTAssertTrue(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(keyCode: KeyCode.h, modifiers: 0),
+            kind: .textEditor
+        ))
+        XCTAssertTrue(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(
+                keyCode: KeyCode.h,
+                modifiers: NSEvent.ModifierFlags.shift.rawValue
+            ),
+            kind: .textEditor
+        ))
+        XCTAssertTrue(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(
+                keyCode: KeyCode.c,
+                modifiers: NSEvent.ModifierFlags.command.rawValue
+            ),
+            kind: .textEditor
+        ))
+        XCTAssertFalse(ShortcutControlRouting.focusedControlOwns(
+            stroke: ShortcutKeystroke(
+                keyCode: KeyCode.o,
+                modifiers: NSEvent.ModifierFlags.command.rawValue
+            ),
+            kind: .textEditor
+        ))
+    }
+
+    func testRegisteredHotKeyUsesLocalGuardWhileActiveAndGlobalGuardWhileInactive() {
+        let unlocked = ReframerCommandAvailabilityContext(
+            isVideoLoaded: true,
+            isLocked: false,
+            isHelpVisible: false,
+            isFilterPanelVisible: false,
+            isDocumentationVisible: false
+        )
+        let locked = ReframerCommandAvailabilityContext(
+            isVideoLoaded: true,
+            isLocked: true,
+            isHelpVisible: false,
+            isFilterPanelVisible: false,
+            isDocumentationVisible: false
+        )
+        let command = ReframerCommand.step(.forward, amount: 1)
+
+        let activeOrigin = RegisteredHotKeyRouting.origin(isApplicationActive: true)
+        XCTAssertEqual(activeOrigin, .localShortcut)
+        XCTAssertTrue(ReframerCommandAvailability.isAvailable(
+            command,
+            origin: activeOrigin,
+            context: unlocked
+        ))
+
+        let inactiveOrigin = RegisteredHotKeyRouting.origin(isApplicationActive: false)
+        XCTAssertEqual(inactiveOrigin, .globalShortcut)
+        XCTAssertFalse(ReframerCommandAvailability.isAvailable(
+            command,
+            origin: inactiveOrigin,
+            context: unlocked
+        ))
+        XCTAssertTrue(ReframerCommandAvailability.isAvailable(
+            command,
+            origin: inactiveOrigin,
+            context: locked
+        ))
+    }
+
+    func testActiveTextEditorOwnsRegisteredPageNavigationChord() {
+        let settings = ShortcutSettings(userDefaults: defaults)
+        let match = ShortcutMatch(action: .frameStepForward, variant: .primary)
+        let stroke = settings.keystroke(for: match)
+
+        XCTAssertNotNil(stroke)
+        XCTAssertTrue(ShortcutControlRouting.focusedControlOwns(
+            stroke: stroke!,
+            kind: .textEditor
+        ))
     }
 
     private func assertSuccess(

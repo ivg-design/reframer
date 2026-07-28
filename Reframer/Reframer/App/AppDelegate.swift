@@ -1,6 +1,5 @@
 import Cocoa
 import Combine
-import ApplicationServices
 import WebKit
 
 // Custom window that can become key
@@ -48,7 +47,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     // MARK: - Properties
 
-    private var globalShortcutMonitor: Any?
+    private var globalHotKeyRegistrar: GlobalHotKeyRegistrar?
     private var localShortcutMonitor: Any?
     var mainWindow: TransparentWindow!
     private var controlWindow: TransparentWindow!
@@ -92,7 +91,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // Skip move-to-Applications prompt (disabled for development)
         // ensureInstalledInApplications()
 
-        // Auto-load test video if specified (for UI testing)
+        #if DEBUG
+        // Development-only convenience hook. The shipping app accepts video
+        // URLs only through user-mediated open, drop, or Open With flows.
         if let testVideoPath = ProcessInfo.processInfo.environment["TEST_VIDEO_PATH"] {
             let url = URL(fileURLWithPath: testVideoPath)
             if FileManager.default.fileExists(atPath: testVideoPath) {
@@ -102,14 +103,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 }
             }
         }
+        #endif
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         windowReclampWorkItem?.cancel()
         NotificationCenter.default.removeObserver(self)
-        if let monitor = globalShortcutMonitor {
-            NSEvent.removeMonitor(monitor)
-        }
+        globalHotKeyRegistrar?.invalidate()
+        globalHotKeyRegistrar = nil
         if let monitor = localShortcutMonitor {
             NSEvent.removeMonitor(monitor)
         }
@@ -598,6 +599,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.syncShortcutMenuItems()
+                self?.registerGlobalHotKeys()
             }
             .store(in: &cancellables)
 
@@ -605,23 +607,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] action in
                 self?.videoState.isRecordingShortcut = action != nil
+                self?.registerGlobalHotKeys()
             }
             .store(in: &cancellables)
 
         videoState.shortcutSettings.$globalShortcutsEnabled
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.installGlobalShortcutMonitor()
+                self?.registerGlobalHotKeys()
             }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: .reconfigureGlobalShortcutMonitor)
-            .merge(with: NotificationCenter.default.publisher(
-                for: NSApplication.didBecomeActiveNotification
-            ))
+        NotificationCenter.default.publisher(for: .reconfigureGlobalHotKeys)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.installGlobalShortcutMonitor()
+                self?.registerGlobalHotKeys()
             }
             .store(in: &cancellables)
     }
@@ -629,8 +629,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     // MARK: - Global Shortcuts
 
     private func setupGlobalShortcuts() {
-        requestAccessibilityPermissionIfNeeded()
-        installGlobalShortcutMonitor()
+        globalHotKeyRegistrar = GlobalHotKeyRegistrar { [weak self] match in
+            guard let self else { return }
+            let origin = RegisteredHotKeyRouting.origin(
+                isApplicationActive: NSApp.isActive
+            )
+            if origin == .localShortcut,
+               self.deliverRegisteredHotKeyToFocusedControlIfOwned(match) {
+                return
+            }
+            let command = self.videoState.shortcutSettings.command(for: match)
+            _ = self.dispatch(command, origin: origin)
+        }
+        registerGlobalHotKeys()
 
         localShortcutMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.keyDown, .flagsChanged]
@@ -642,55 +653,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
-    private func installGlobalShortcutMonitor() {
-        if let monitor = globalShortcutMonitor {
-            NSEvent.removeMonitor(monitor)
-            globalShortcutMonitor = nil
-        }
-        guard videoState.shortcutSettings.globalShortcutsEnabled else { return }
-        globalShortcutMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) {
-            [weak self] event in
-            self?.handleGlobalKey(event)
-        }
-    }
-
-    private func requestAccessibilityPermissionIfNeeded() {
-        // Already have permission - no need to prompt
-        if AXIsProcessTrusted() {
-            return
-        }
-
-        // Skip for UI tests
-        if ProcessInfo.processInfo.environment["UITEST_MODE"] != nil {
-            return
-        }
-
-        // Only prompt once per install (user can manually enable in System Settings)
-        let promptedKey = "Reframer.accessibilityPromptShown"
-        if UserDefaults.standard.bool(forKey: promptedKey) {
-            return
-        }
-        UserDefaults.standard.set(true, forKey: promptedKey)
-
-        // Show the system accessibility prompt
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
-    }
-
-    @discardableResult
-    private func handleGlobalKey(_ event: NSEvent) -> Bool {
+    private func registerGlobalHotKeys() {
         let settings = videoState.shortcutSettings
-        guard let match = settings.resolve(
-            stroke: ShortcutKeystroke(event: event),
-            scope: .global
-        ) else {
-            return false
+        guard let globalHotKeyRegistrar else {
+            settings.setGlobalRegistrationStatus(.pending)
+            return
         }
-        return dispatch(settings.command(for: match), origin: .globalShortcut)
+        let status = globalHotKeyRegistrar.apply(
+            settings: settings,
+            suspended: settings.recordingAction != nil
+        )
+        settings.setGlobalRegistrationStatus(status)
     }
 
-    /// Handles recording first, protects field-editor input second, and then
-    /// resolves and dispatches an app shortcut exactly once.
+    /// Handles recording first, preserves only the native keys a focused
+    /// control actually owns, and dispatches an app shortcut exactly once.
     @discardableResult
     private func handleLocalEvent(_ event: NSEvent) -> Bool {
         let settings = videoState.shortcutSettings
@@ -705,43 +682,72 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         guard event.type == .keyDown else { return false }
         let stroke = ShortcutKeystroke(event: event)
 
-        // A customized chord must never replace native text entry. Sending
-        // matching events directly to the field editor also prevents an
-        // unmodified NSMenuItem key equivalent from stealing typed letters.
-        if let fieldEditor = activeFieldEditor() {
-            if settings.resolve(stroke: stroke, scope: .local) != nil ||
-                NSEvent.ModifierFlags(rawValue: stroke.modifiers)
-                    .intersection([.command, .control, .option]).isEmpty {
-                fieldEditor.keyDown(with: event)
-                return true
-            }
-            return false
-        }
-
-        if let control = NSApp.keyWindow?.firstResponder as? NSControl,
-           NSEvent.ModifierFlags(rawValue: stroke.modifiers)
-               .intersection([.command, .control, .option]).isEmpty {
-            control.keyDown(with: event)
-            return true
-        }
-
         guard let match = settings.resolve(stroke: stroke, scope: .local) else {
             return false
         }
+
+        // Registered global variants are delivered through the Carbon event
+        // handler even while Reframer is active. Consuming the corresponding
+        // local event first prevents both command and native-control delivery
+        // from occurring twice.
+        if match.action.isGlobal,
+           globalHotKeyRegistrar?.isRegistered(match: match) == true {
+            return true
+        }
+
+        let responder = activeFieldEditor() ?? NSApp.keyWindow?.firstResponder
+        let controlKind = ShortcutControlRouting.kind(for: responder)
+        if ShortcutControlRouting.focusedControlOwns(stroke: stroke, kind: controlKind) {
+            responder?.keyDown(with: event)
+            return true
+        }
+
         return dispatch(settings.command(for: match), origin: .localShortcut)
     }
 
     private func activeFieldEditor() -> NSTextView? {
-        for window in NSApp.windows {
-            if let textView = window.firstResponder as? NSTextView {
-                return textView
-            }
-            if let textField = window.firstResponder as? NSTextField,
-               let editor = window.fieldEditor(false, for: textField) as? NSTextView {
-                return editor
-            }
+        guard let window = NSApp.keyWindow else { return nil }
+        if let textView = window.firstResponder as? NSTextView {
+            return textView
+        }
+        if let textField = window.firstResponder as? NSTextField,
+           let editor = window.fieldEditor(false, for: textField) as? NSTextView {
+            return editor
         }
         return nil
+    }
+
+    private func deliverRegisteredHotKeyToFocusedControlIfOwned(
+        _ match: ShortcutMatch
+    ) -> Bool {
+        let settings = videoState.shortcutSettings
+        guard let stroke = settings.keystroke(for: match) else { return false }
+        let responder = activeFieldEditor() ?? NSApp.keyWindow?.firstResponder
+        let kind = ShortcutControlRouting.kind(for: responder)
+        guard ShortcutControlRouting.focusedControlOwns(stroke: stroke, kind: kind),
+              let responder,
+              let window = NSApp.keyWindow else {
+            return false
+        }
+
+        let shortcut = settings.binding(for: match.action).shortcut
+        let characters = shortcut?.menuKeyEquivalent ?? ""
+        guard let event = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: NSEvent.ModifierFlags(rawValue: stroke.modifiers),
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: characters,
+            charactersIgnoringModifiers: characters,
+            isARepeat: stroke.isRepeat,
+            keyCode: stroke.keyCode
+        ) else {
+            return true
+        }
+        responder.keyDown(with: event)
+        return true
     }
 
     // MARK: - Unified Command Dispatch
@@ -801,24 +807,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         _ command: ReframerCommand,
         origin: ReframerCommandOrigin
     ) -> Bool {
-        switch command {
-        case .togglePlayPause:
-            return videoState.isVideoLoaded
-        case .step:
-            return videoState.isVideoLoaded
-                && (origin != .globalShortcut || videoState.isLocked)
-        case .pan, .resetZoom, .resetView:
-            return videoState.isVideoLoaded && !videoState.isLocked
-        case .toggleFilterPanel:
-            return videoState.isVideoLoaded
-        case .closeContext:
-            return videoState.showHelp
-                || videoState.showFilterPanel
-                || documentationWindow?.isVisible == true
-        case .openVideo, .toggleLock, .toggleAlwaysOnTop,
-             .toggleShortcutSettings, .openDocumentation, .toggleMinimize:
-            return true
-        }
+        ReframerCommandAvailability.isAvailable(
+            command,
+            origin: origin,
+            context: ReframerCommandAvailabilityContext(
+                isVideoLoaded: videoState.isVideoLoaded,
+                isLocked: videoState.isLocked,
+                isHelpVisible: videoState.showHelp,
+                isFilterPanelVisible: videoState.showFilterPanel,
+                isDocumentationVisible: documentationWindow?.isVisible == true
+            )
+        )
     }
 
     @objc private func performCommandMenuItem(_ sender: NSMenuItem) {

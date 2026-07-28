@@ -20,8 +20,11 @@ final class ZoomScreenshotTest: XCTestCase {
         
         let app = XCUIApplication()
         app.launchEnvironment["UITEST_MODE"] = "1"
-        app.launchEnvironment["TEST_VIDEO_PATH"] = fixtureURL("test-video").path
         app.launch()
+        XCTAssertTrue(
+            UITestVideoLoader.open(fixtureURL("test-video"), in: app),
+            "Fixture should open through Launch Services"
+        )
         
         // Wait for video to load
         let zoomField = app.textFields["input-zoom"]

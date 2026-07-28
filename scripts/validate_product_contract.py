@@ -15,15 +15,20 @@ ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_PATH = ROOT / "docs" / "product-contract.json"
 PROJECT_PATH = ROOT / "Reframer" / "Reframer.xcodeproj" / "project.pbxproj"
 INFO_PATH = ROOT / "Reframer" / "Reframer" / "Resources" / "Info.plist"
+ENTITLEMENTS_PATH = (
+    ROOT / "Reframer" / "Reframer" / "Resources" / "Reframer.entitlements"
+)
 
 PUBLIC_DOCUMENTS = (
     ROOT / "CHANGELOG.md",
     ROOT / "README.md",
+    ROOT / "SECURITY.md",
     ROOT / "Reframer" / "README.md",
     ROOT / "docs" / "FEATURES.md",
     ROOT / "docs" / "FEATURE_TESTS.md",
     ROOT / "docs" / "PRODUCT_CONTRACT.md",
     ROOT / "docs" / "RELEASE.md",
+    ROOT / "docs" / "THREAT_MODEL.md",
     ROOT / "Reframer" / "CHANGELOG.md",
 )
 
@@ -38,6 +43,12 @@ STALE_CLAIMS = {
     "webm": "WebM is not in the supported container contract",
     "mkv": "Matroska is not in the supported container contract",
     "macos 14": "the deployment target is macOS 15.0",
+    "global shortcuts require the normal macos privacy": (
+        "registered hot keys require no Accessibility or Input Monitoring permission"
+    ),
+    "grant accessibility access": (
+        "global shortcuts no longer use Accessibility permission"
+    ),
 }
 
 
@@ -67,6 +78,20 @@ def main() -> None:
     minimum_macos = product["minimumMacOS"]
     bundle_identifier = product["bundleIdentifier"]
 
+    global_shortcuts = contract["globalShortcuts"]
+    if (
+        global_shortcuts.get("observesUnregisteredKeys") is not False
+        or global_shortcuts.get("requiresAccessibilityPermission") is not False
+        or global_shortcuts.get("requiresInputMonitoringPermission") is not False
+    ):
+        fail("global shortcut privacy contract must prohibit broad key observation")
+
+    privacy = contract["privacy"]
+    if privacy.get("appSandbox") is not True:
+        fail("product contract must require App Sandbox")
+    if privacy.get("userSelectedFileAccess") != "read-only":
+        fail("product contract must allow only user-selected read-only files")
+
     if re.fullmatch(r"\d+\.\d+\.\d+", version) is None:
         fail(f"contract version is not semantic: {version}")
 
@@ -94,6 +119,30 @@ def main() -> None:
 
     if f"PRODUCT_BUNDLE_IDENTIFIER = {bundle_identifier};" not in project:
         fail(f"app bundle identifier is not {bundle_identifier}")
+
+    sandbox_settings = set(re.findall(r"ENABLE_APP_SANDBOX = ([^;]+);", project))
+    if sandbox_settings != {"YES"}:
+        fail(f"App Sandbox build settings are not uniformly enabled: {sandbox_settings}")
+    selected_file_settings = set(
+        re.findall(r"ENABLE_USER_SELECTED_FILES = ([^;]+);", project)
+    )
+    if selected_file_settings != {"readonly"}:
+        fail(
+            "user-selected file build settings are not uniformly read-only: "
+            f"{selected_file_settings}"
+        )
+
+    with ENTITLEMENTS_PATH.open("rb") as entitlement_file:
+        entitlements = plistlib.load(entitlement_file)
+    expected_entitlements = {
+        "com.apple.security.app-sandbox": True,
+        "com.apple.security.files.user-selected.read-only": True,
+    }
+    if entitlements != expected_entitlements:
+        fail(
+            "source entitlements do not equal the sandbox allowlist: "
+            f"{entitlements}"
+        )
 
     expected_content_types = {
         document_type["contentType"]
@@ -132,6 +181,8 @@ def main() -> None:
         "MP4",
         "M4V",
         "MOV",
+        "no Accessibility or Input Monitoring permission",
+        "App Sandbox",
     )
     for claim in required_claims:
         if claim not in combined:

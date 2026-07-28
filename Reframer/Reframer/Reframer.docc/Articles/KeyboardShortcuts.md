@@ -27,13 +27,17 @@ An unmodified scroll over unlocked video steps samples.
 Commands do not replace text-field editing shortcuts. Playback and inspection
 commands require a loaded video. Pan and zoom require the overlay to be
 unlocked. Frame stepping works outside the app only with a loaded, locked
-overlay.
+overlay. Focused controls keep only the activation and navigation keys they
+normally own, so H, F, L, R, 0, and customized plain or Shift chords continue
+to work from buttons and other unrelated controls. Text editors retain normal
+typing and editing.
 
 ## Customize
 
 Open shortcut settings with H. A shortcut can be changed, cleared, disabled,
 or reset. Reframer rejects duplicate, reserved, modifier-collapsing, and unsafe
 global chords. A replacement survives relaunch and the old chord no longer
-fires. Global shortcuts can be disabled independently; the same panel reports
-Accessibility permission and links back to System Settings when access is
-missing.
+fires. Global shortcuts can be disabled independently. Reframer registers only
+the enabled global chords, so Accessibility and Input Monitoring permission
+are not required. If another app already owns a chord, the same panel
+identifies the failure and offers a retry action.
