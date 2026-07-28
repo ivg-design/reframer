@@ -57,6 +57,7 @@ class FilterMenuButton: NSView {
     private func bindState() {
         cancellables.removeAll()
         guard let state = videoState else { return }
+        updateIcon()
 
         // Only update icon based on quickFilter (not advancedFilters)
         state.$quickFilter
@@ -97,9 +98,8 @@ class FilterMenuButton: NSView {
     private func resetFilterToDefault() {
         guard let state = videoState else { return }
 
-        if state.quickFilter != nil {
-            // Reset filter value to middle (0.5 normalized = default)
-            state.quickFilterValue = 0.5
+        if let filter = state.quickFilter {
+            state.quickFilterValue = filter.defaultNormalizedValue
         } else {
             // Reset opacity to 100%
             state.opacity = 1.0
