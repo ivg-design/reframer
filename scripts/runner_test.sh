@@ -61,6 +61,58 @@ mkdir -p "$ARTIFACT_DIR"
     xcodebuild -version
 } | tee "$LOG_PATH"
 
+if [ "$TEST_SCOPE" = "unit" ]; then
+    set +e
+    xcodebuild build-for-testing \
+        -project "$PROJECT_PATH" \
+        -scheme "$SCHEME" \
+        -destination "$DESTINATION" \
+        -derivedDataPath "$DERIVED_DATA_PATH" \
+        -parallel-testing-enabled NO \
+        "${SIGNING_ARGUMENTS[@]}" \
+        2>&1 | tee -a "$LOG_PATH"
+    BUILD_STATUS=${PIPESTATUS[0]}
+    set -e
+
+    if [ "$BUILD_STATUS" -ne 0 ]; then
+        echo "Reframer test build failed. Log: $LOG_PATH" >&2
+        exit "$BUILD_STATUS"
+    fi
+
+    APP_PATH="$DERIVED_DATA_PATH/Build/Products/Debug/Reframer.app"
+    TEST_BUNDLE="$APP_PATH/Contents/PlugIns/ReframerTests.xctest"
+    DEBUG_DYLIB="$APP_PATH/Contents/MacOS/Reframer.debug.dylib"
+    TEST_FRAMEWORKS="$TEST_BUNDLE/Contents/Frameworks"
+    PROFILE_DIR="$ARTIFACT_DIR/coverage"
+
+    if [ ! -x "$TEST_BUNDLE/Contents/MacOS/ReframerTests" ]; then
+        echo "error: built unit-test bundle is missing at $TEST_BUNDLE" >&2
+        exit 66
+    fi
+
+    mkdir -p "$TEST_FRAMEWORKS" "$PROFILE_DIR"
+    if [ -f "$DEBUG_DYLIB" ]; then
+        cp "$DEBUG_DYLIB" "$TEST_FRAMEWORKS/Reframer.debug.dylib"
+    fi
+
+    set +e
+    (
+        cd "$ARTIFACT_DIR"
+        LLVM_PROFILE_FILE="$PROFILE_DIR/%p.profraw" \
+            xcrun xctest "$TEST_BUNDLE"
+    ) 2>&1 | tee -a "$LOG_PATH"
+    TEST_STATUS=${PIPESTATUS[0]}
+    set -e
+
+    if [ "$TEST_STATUS" -ne 0 ]; then
+        echo "Reframer unit tests failed. Log: $LOG_PATH" >&2
+        exit "$TEST_STATUS"
+    fi
+
+    echo "Reframer unit tests passed. Log: $LOG_PATH"
+    exit 0
+fi
+
 set +e
 xcodebuild test \
     -project "$PROJECT_PATH" \
