@@ -102,8 +102,8 @@ if /usr/bin/grep -ERnI \
     exit 65
 fi
 
-CHECKOUT_ACTION="actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
-UPLOAD_ACTION="actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+CHECKOUT_ACTION="actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+UPLOAD_ACTION="actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
 while IFS= read -r action_reference; do
     if ! [[ "$action_reference" =~ @[0-9a-f]{40}$ ]]; then
         echo "error: workflow action is not pinned to a full commit SHA: $action_reference" >&2

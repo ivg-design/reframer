@@ -39,7 +39,7 @@ policy for this repository automatically.
 
 | Scope | Required configuration |
 |---|---|
-| Self-hosted runner | An isolated, unlocked macOS account with labels `self-hosted`, `macOS`, and `reframer-ui`; no personal data or release credentials |
+| Self-hosted runner | An isolated, unlocked macOS account with a current Actions Runner compatible with Node 24 actions, labels `self-hosted`, `macOS`, and `reframer-ui`, and no personal data or release credentials |
 | Repository variable | `REFRAMER_UI_RUNNER_AUTHORIZED=1` after the runner operator has approved Xcode UI automation |
 | Protected environment | `release`, with required reviewers and deployment branch/tag restrictions |
 | Environment secrets | `DEVELOPER_ID_CERTIFICATE_BASE64`, `DEVELOPER_ID_CERTIFICATE_PASSWORD`, `RELEASE_KEYCHAIN_PASSWORD`, `DEVELOPER_ID_APPLICATION`, `DEVELOPMENT_TEAM`, `NOTARY_API_KEY_BASE64`, `NOTARY_KEY_ID`, and `NOTARY_ISSUER_ID` |

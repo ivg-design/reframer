@@ -106,8 +106,9 @@ development snapshots, not production releases.
 - Removed scripts that wrote to privacy databases, restarted privacy services,
   stripped provenance, or re-signed test products
 - Pinned GitHub Actions to reviewed immutable commits, disabled persisted
-  checkout credentials, and limited write access to the release job while
-  declaring the externally protected release-environment gate
+  checkout credentials, moved checkout and artifact upload to their Node 24
+  releases, and limited write access to the release job while declaring the
+  externally protected release-environment gate
 - Restricted all release entry points to commits on `origin/main`, made tag
   changelog validation exact, protected temporary credentials, and expanded
   bundle validation to reject symlinks, unexpected signature contents, or
