@@ -294,6 +294,8 @@ struct VideoFrameTimeline {
 struct FrameSeekTarget: Equatable {
     let frame: Int
     let generation: UInt64
+    let requestedTime: CMTime
+    let resumePlayback: Bool
 }
 
 /// Maintains the requested sample as the authority while AVPlayer completes
@@ -319,11 +321,35 @@ struct FrameSeekCoordinator {
         let base = desiredTarget?.frame ?? displayedFrame
         let (sum, overflowed) = base.addingReportingOverflow(delta)
         let requested = overflowed ? (delta >= 0 ? Int.max : Int.min) : sum
-        return makeTarget(frame: timeline.clampedIndex(requested))
+        return makeTarget(
+            frame: timeline.clampedIndex(requested),
+            timeline: timeline,
+            resumePlayback: false
+        )
     }
 
-    mutating func begin(frame: Int, timeline: VideoFrameTimeline) -> FrameSeekTarget {
-        makeTarget(frame: timeline.clampedIndex(frame))
+    mutating func begin(
+        frame: Int,
+        timeline: VideoFrameTimeline,
+        resumePlayback: Bool = false
+    ) -> FrameSeekTarget {
+        makeTarget(
+            frame: timeline.clampedIndex(frame),
+            timeline: timeline,
+            resumePlayback: resumePlayback
+        )
+    }
+
+    /// Reissues the latest logical request against a newly authoritative
+    /// timeline. Mapping by presentation time avoids treating an estimated
+    /// constant-rate ordinal as an exact decoded-sample ordinal for VFR media.
+    mutating func promote(to timeline: VideoFrameTimeline) -> FrameSeekTarget? {
+        guard let desiredTarget, !timeline.isEmpty else { return nil }
+        return makeTarget(
+            frame: timeline.nearestFrameIndex(to: desiredTarget.requestedTime),
+            timeline: timeline,
+            resumePlayback: desiredTarget.resumePlayback
+        )
     }
 
     mutating func complete(_ target: FrameSeekTarget) {
@@ -332,9 +358,18 @@ struct FrameSeekCoordinator {
         }
     }
 
-    private mutating func makeTarget(frame: Int) -> FrameSeekTarget {
+    private mutating func makeTarget(
+        frame: Int,
+        timeline: VideoFrameTimeline,
+        resumePlayback: Bool
+    ) -> FrameSeekTarget {
         nextGeneration &+= 1
-        let target = FrameSeekTarget(frame: frame, generation: nextGeneration)
+        let target = FrameSeekTarget(
+            frame: frame,
+            generation: nextGeneration,
+            requestedTime: timeline.time(forFrame: frame),
+            resumePlayback: resumePlayback
+        )
         desiredTarget = target
         return target
     }

@@ -133,11 +133,7 @@ class VideoState: ObservableObject {
     }
 
     // Video loading
-    @Published var videoURL: URL? {
-        didSet {
-            updateSecurityScopedAccess(from: oldValue, to: videoURL)
-        }
-    }
+    @Published var videoURL: URL?
     @Published var isVideoLoaded: Bool = false
     @Published var isVideoLoading: Bool = false
     @Published var videoErrorMessage: String?
@@ -203,7 +199,6 @@ class VideoState: ObservableObject {
     private var isLoadingPreferences = false
     private var isAdjustingMute = false
     private var lastNonZeroVolume: Float = 0.5
-    private var securityScopedVideoURL: URL?
     private let defaults: UserDefaults
 
     // Computed properties
@@ -256,10 +251,6 @@ class VideoState: ObservableObject {
         isLoadingPreferences = true
         loadPreferences()
         isLoadingPreferences = false
-    }
-
-    deinit {
-        securityScopedVideoURL?.stopAccessingSecurityScopedResource()
     }
 
     private static func runtimeDefaults() -> UserDefaults {
@@ -362,20 +353,6 @@ class VideoState: ObservableObject {
     func reloadVideo() {
         guard videoURL != nil else { return }
         reloadRequests.send()
-    }
-
-    private func updateSecurityScopedAccess(from oldURL: URL?, to newURL: URL?) {
-        guard oldURL?.standardizedFileURL != newURL?.standardizedFileURL else {
-            return
-        }
-
-        securityScopedVideoURL?.stopAccessingSecurityScopedResource()
-        securityScopedVideoURL = nil
-
-        guard let newURL, newURL.startAccessingSecurityScopedResource() else {
-            return
-        }
-        securityScopedVideoURL = newURL
     }
 
     // MARK: - Quick Filter Methods (dropdown - single select)

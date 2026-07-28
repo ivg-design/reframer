@@ -63,6 +63,93 @@ final class VideoFrameTimelineTests: XCTestCase {
         XCTAssertNil(coordinator.desiredTarget)
     }
 
+    func testExactTimelinePromotionPreservesTimeResumeAndGeneration() throws {
+        let estimated = try XCTUnwrap(
+            VideoFrameTimeline.estimated(
+                duration: CMTime(seconds: 1, preferredTimescale: 600),
+                nominalFrameRate: 10
+            )
+        )
+        let exact = VideoFrameTimeline(
+            presentationTimes: [0, 0.08, 0.19, 0.31, 0.5].map {
+                CMTime(seconds: $0, preferredTimescale: 10_000)
+            },
+            nominalFrameRate: 0
+        )
+        var coordinator = FrameSeekCoordinator()
+        let estimatedTarget = coordinator.begin(
+            frame: 3,
+            timeline: estimated,
+            resumePlayback: true
+        )
+
+        let promoted = try XCTUnwrap(coordinator.promote(to: exact))
+
+        XCTAssertEqual(promoted.frame, 3)
+        XCTAssertEqual(
+            CMTimeGetSeconds(promoted.requestedTime),
+            0.31,
+            accuracy: 0.000_001
+        )
+        XCTAssertTrue(promoted.resumePlayback)
+        XCTAssertNotEqual(promoted.generation, estimatedTarget.generation)
+
+        coordinator.complete(estimatedTarget)
+        XCTAssertEqual(
+            coordinator.desiredTarget,
+            promoted,
+            "The superseded estimated completion must not clear exact intent"
+        )
+        coordinator.complete(promoted)
+        XCTAssertFalse(coordinator.hasPendingSeek)
+    }
+
+    func testPromotionUsesLatestRapidStepIntentAndKeepsRefreshDeferred() throws {
+        let estimated = try XCTUnwrap(
+            VideoFrameTimeline.estimated(
+                duration: CMTime(seconds: 1, preferredTimescale: 600),
+                nominalFrameRate: 10
+            )
+        )
+        let exact = VideoFrameTimeline(
+            presentationTimes: [0, 0.11, 0.21, 0.32, 0.39, 0.52].map {
+                CMTime(seconds: $0, preferredTimescale: 10_000)
+            },
+            nominalFrameRate: 0
+        )
+        var seekCoordinator = FrameSeekCoordinator()
+        let stale = seekCoordinator.target(
+            from: 0,
+            delta: 2,
+            timeline: estimated
+        )
+        _ = seekCoordinator.target(from: 0, delta: 2, timeline: estimated)
+        var refreshCoordinator = DeferredRefreshCoordinator()
+        refreshCoordinator.request()
+
+        let promoted = try XCTUnwrap(seekCoordinator.promote(to: exact))
+
+        XCTAssertEqual(promoted.frame, 4, "Latest estimated time was 0.4 seconds")
+        XCTAssertFalse(
+            refreshCoordinator.consumeIfReady(
+                isPlaying: false,
+                hasPendingSeek: seekCoordinator.hasPendingSeek
+            )
+        )
+        seekCoordinator.complete(stale)
+        XCTAssertEqual(seekCoordinator.desiredTarget, promoted)
+        XCTAssertTrue(refreshCoordinator.isPending)
+        seekCoordinator.complete(promoted)
+        XCTAssertTrue(
+            refreshCoordinator.consumeIfReady(
+                isPlaying: false,
+                hasPendingSeek: seekCoordinator.hasPendingSeek
+            )
+        )
+        XCTAssertFalse(refreshCoordinator.isPending)
+        XCTAssertNil(seekCoordinator.promote(to: exact))
+    }
+
     func testOneHundredRapidStepsAccumulateAndClamp() {
         let timeline = makeTimeline(count: 75)
         var coordinator = FrameSeekCoordinator()
@@ -340,6 +427,61 @@ final class VideoFrameTimelineTests: XCTestCase {
     }
 }
 
+final class SecurityScopedURLLeaseTests: XCTestCase {
+    func testSuccessfulStartStopsExactlyOnceAfterFinalReference() {
+        let events = LockedEventRecorder()
+        let url = URL(fileURLWithPath: "/tmp/reframer-lease-success.mov")
+        let access = SecurityScopedURLAccess(
+            start: {
+                events.append("start:\($0.lastPathComponent)")
+                return true
+            },
+            stop: {
+                events.append("stop:\($0.lastPathComponent)")
+            }
+        )
+
+        var owner: SecurityScopedURLLease? = SecurityScopedURLLease(
+            url: url,
+            access: access
+        )
+        weak var weakLease = owner
+        var asyncOwner = owner
+
+        owner = nil
+        XCTAssertNotNil(weakLease)
+        XCTAssertEqual(events.snapshot(), ["start:reframer-lease-success.mov"])
+
+        asyncOwner = nil
+        XCTAssertNil(weakLease)
+        XCTAssertEqual(
+            events.snapshot(),
+            [
+                "start:reframer-lease-success.mov",
+                "stop:reframer-lease-success.mov"
+            ]
+        )
+    }
+
+    func testFailedStartNeverCallsStop() {
+        let events = LockedEventRecorder()
+        var lease: SecurityScopedURLLease? = SecurityScopedURLLease(
+            url: URL(fileURLWithPath: "/tmp/reframer-lease-denied.mov"),
+            access: SecurityScopedURLAccess(
+                start: { _ in
+                    events.append("start")
+                    return false
+                },
+                stop: { _ in events.append("stop") }
+            )
+        )
+
+        lease = nil
+
+        XCTAssertEqual(events.snapshot(), ["start"])
+    }
+}
+
 @MainActor
 final class VideoViewLifecycleTests: XCTestCase {
     func testSecondLoadSupersedesFirstWithoutStaleMetadataWinning() async throws {
@@ -421,6 +563,216 @@ final class VideoViewLifecycleTests: XCTestCase {
         XCTAssertFalse(state.isScrubbing)
     }
 
+    func testSupersededBlockedLoadAcquiresReplacementBeforeOldLeaseReleases() async throws {
+        let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let bundle = Bundle(for: Self.self)
+        let firstURL = try XCTUnwrap(
+            bundle.url(forResource: "test-video", withExtension: "mp4")
+        )
+        let secondURL = try XCTUnwrap(
+            bundle.url(forResource: "test_4x3_1s", withExtension: "mp4")
+        )
+        let firstGate = AsyncTestGate()
+        let secondGate = AsyncTestGate()
+        let events = LockedEventRecorder()
+        let state = VideoState(defaults: defaults)
+        let videoView = VideoView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
+        videoView.loadEnvironment = VideoLoadEnvironment(
+            securityScopedAccess: SecurityScopedURLAccess(
+                start: {
+                    events.append("start:\($0.lastPathComponent)")
+                    return true
+                },
+                stop: {
+                    events.append("stop:\($0.lastPathComponent)")
+                }
+            ),
+            preflight: { url in
+                events.append("preflight:\(url.lastPathComponent)")
+                if url.standardizedFileURL == firstURL.standardizedFileURL {
+                    await firstGate.wait()
+                } else {
+                    await secondGate.wait()
+                }
+                return AVURLAsset(url: url)
+            },
+            loadTimeline: VideoLoadEnvironment.live.loadTimeline
+        )
+        videoView.videoState = state
+
+        state.videoURL = firstURL
+        let firstBlocked = await waitUntil {
+            events.snapshot().contains("preflight:\(firstURL.lastPathComponent)")
+        }
+        XCTAssertTrue(firstBlocked)
+
+        state.videoURL = secondURL
+        let secondBlocked = await waitUntil {
+            events.snapshot().contains("preflight:\(secondURL.lastPathComponent)")
+        }
+        XCTAssertTrue(secondBlocked)
+        var snapshot = events.snapshot()
+        XCTAssertFalse(snapshot.contains("stop:\(firstURL.lastPathComponent)"))
+        XCTAssertLessThan(
+            try XCTUnwrap(snapshot.firstIndex(of: "start:\(firstURL.lastPathComponent)")),
+            try XCTUnwrap(snapshot.firstIndex(of: "start:\(secondURL.lastPathComponent)"))
+        )
+
+        await firstGate.open()
+        let firstReleased = await waitUntil {
+            events.snapshot().contains("stop:\(firstURL.lastPathComponent)")
+        }
+        XCTAssertTrue(firstReleased)
+        snapshot = events.snapshot()
+        XCTAssertLessThan(
+            try XCTUnwrap(snapshot.firstIndex(of: "start:\(secondURL.lastPathComponent)")),
+            try XCTUnwrap(snapshot.firstIndex(of: "stop:\(firstURL.lastPathComponent)"))
+        )
+
+        state.videoURL = nil
+        let unloaded = await waitUntil { !state.isVideoLoading && !state.isVideoLoaded }
+        XCTAssertTrue(unloaded)
+        XCTAssertFalse(
+            events.snapshot().contains("stop:\(secondURL.lastPathComponent)"),
+            "Cancelling a task must not release its lease before it unwinds"
+        )
+
+        await secondGate.open()
+        let secondReleased = await waitUntil {
+            events.snapshot().contains("stop:\(secondURL.lastPathComponent)")
+        }
+        XCTAssertTrue(secondReleased)
+        snapshot = events.snapshot()
+        XCTAssertEqual(
+            snapshot.filter { $0 == "stop:\(firstURL.lastPathComponent)" }.count,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.filter { $0 == "stop:\(secondURL.lastPathComponent)" }.count,
+            1
+        )
+    }
+
+    func testSuccessfulUnloadTearsDownPlayerBeforeLeaseRelease() async throws {
+        let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let url = try XCTUnwrap(
+            Bundle(for: Self.self).url(
+                forResource: "test_4x3_1s",
+                withExtension: "mp4"
+            )
+        )
+        let events = LockedEventRecorder()
+        let state = VideoState(defaults: defaults)
+        let videoView = VideoView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
+        videoView.loadEnvironment = VideoLoadEnvironment(
+            securityScopedAccess: SecurityScopedURLAccess(
+                start: { _ in
+                    events.append("start")
+                    return true
+                },
+                stop: { [weak videoView] _ in
+                    events.append(
+                        videoView?.hasActivePlaybackResources == true
+                            ? "stop:player-active"
+                            : "stop:player-torn-down"
+                    )
+                }
+            ),
+            preflight: VideoLoadEnvironment.live.preflight,
+            loadTimeline: VideoLoadEnvironment.live.loadTimeline
+        )
+        videoView.videoState = state
+
+        state.videoURL = url
+        let loaded = await waitUntil(timeout: 5) {
+            state.isVideoLoaded && state.frameNavigationPrecision == .exact
+        }
+        XCTAssertTrue(loaded)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        state.videoURL = nil
+        let stopped = await waitUntil {
+            events.snapshot().contains("stop:player-torn-down")
+        }
+        XCTAssertTrue(stopped)
+        XCTAssertFalse(events.snapshot().contains("stop:player-active"))
+        XCTAssertEqual(events.snapshot().filter { $0.hasPrefix("stop:") }.count, 1)
+    }
+
+    func testDelayedExactIndexPromotionAndForcedFallbackAreDeterministic() async throws {
+        let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let url = try XCTUnwrap(
+            Bundle(for: Self.self).url(
+                forResource: "test_4x3_1s",
+                withExtension: "mp4"
+            )
+        )
+        let gate = AsyncTestGate()
+        let events = LockedEventRecorder()
+        let state = VideoState(defaults: defaults)
+        let videoView = VideoView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
+        videoView.loadEnvironment = VideoLoadEnvironment(
+            securityScopedAccess: SecurityScopedURLAccess(
+                start: { _ in false },
+                stop: { _ in XCTFail("A failed scope start must not be stopped") }
+            ),
+            preflight: VideoLoadEnvironment.live.preflight,
+            loadTimeline: { _, _, _ in
+                events.append("exact-index-started")
+                await gate.wait()
+                return VideoFrameTimeline(
+                    presentationTimes: [0, 0.2, 0.55, 0.9].map {
+                        CMTime(seconds: $0, preferredTimescale: 10_000)
+                    },
+                    nominalFrameRate: 0
+                )
+            }
+        )
+        videoView.videoState = state
+
+        state.videoURL = url
+        let indexing = await waitUntil(timeout: 5) {
+            state.isVideoLoaded
+                && state.frameNavigationPrecision == .indexing
+                && events.snapshot().contains("exact-index-started")
+        }
+        XCTAssertTrue(indexing)
+        await gate.open()
+        let promoted = await waitUntil {
+            state.frameNavigationPrecision == .exact && state.totalFrames == 4
+        }
+        XCTAssertTrue(promoted)
+
+        videoView.loadEnvironment = VideoLoadEnvironment(
+            securityScopedAccess: videoView.loadEnvironment.securityScopedAccess,
+            preflight: VideoLoadEnvironment.live.preflight,
+            loadTimeline: { _, _, _ in
+                throw VideoFrameTimelineError.sampleCursorUnavailable
+            }
+        )
+        videoView.loadVideo(url: url)
+        let fellBack = await waitUntil(timeout: 5) {
+            state.isVideoLoaded && state.frameNavigationPrecision == .estimated
+        }
+        XCTAssertTrue(fellBack)
+        XCTAssertGreaterThan(state.totalFrames, 0)
+        XCTAssertNil(state.videoErrorMessage)
+        XCTAssertTrue(state.frameNavigationPrecision.supportsFrameNavigation)
+        XCTAssertNotNil(state.frameNavigationMessage)
+        state.videoURL = nil
+    }
+
     private func waitUntil(
         timeout: TimeInterval = 3,
         condition: @escaping @MainActor () -> Bool
@@ -433,5 +785,41 @@ final class VideoViewLifecycleTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
         return true
+    }
+}
+
+private final class LockedEventRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var events: [String] = []
+
+    func append(_ event: String) {
+        lock.lock()
+        events.append(event)
+        lock.unlock()
+    }
+
+    func snapshot() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return events
+    }
+}
+
+private actor AsyncTestGate {
+    private var isOpen = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func open() {
+        guard !isOpen else { return }
+        isOpen = true
+        continuation?.resume()
+        continuation = nil
     }
 }

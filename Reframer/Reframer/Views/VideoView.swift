@@ -3,6 +3,62 @@ import AVFoundation
 import CoreImage
 import Combine
 
+struct SecurityScopedURLAccess: @unchecked Sendable {
+    let start: @Sendable (URL) -> Bool
+    let stop: @Sendable (URL) -> Void
+
+    static let live = SecurityScopedURLAccess(
+        start: { $0.startAccessingSecurityScopedResource() },
+        stop: { $0.stopAccessingSecurityScopedResource() }
+    )
+}
+
+/// One balanced security-scope acquisition shared by every asynchronous
+/// operation belonging to a single video load. ARC is the reference count:
+/// access ends only after the view and all in-flight callbacks release it.
+final class SecurityScopedURLLease: @unchecked Sendable {
+    let url: URL
+    private let stop: @Sendable (URL) -> Void
+    private let didStart: Bool
+
+    init(url: URL, access: SecurityScopedURLAccess = .live) {
+        self.url = url
+        stop = access.stop
+        didStart = access.start(url)
+    }
+
+    deinit {
+        if didStart {
+            stop(url)
+        }
+    }
+}
+
+struct VideoLoadEnvironment: @unchecked Sendable {
+    typealias Preflight = @Sendable (URL) async throws -> AVURLAsset
+    typealias TimelineLoader = @Sendable (
+        AVAsset,
+        AVAssetTrack,
+        Double
+    ) async throws -> VideoFrameTimeline
+
+    let securityScopedAccess: SecurityScopedURLAccess
+    let preflight: Preflight
+    let loadTimeline: TimelineLoader
+
+    static let live = VideoLoadEnvironment(
+        securityScopedAccess: .live,
+        preflight: { try await VideoFormats.preflight($0) },
+        loadTimeline: { asset, track, nominalFrameRate in
+            try await VideoFrameTimeline.load(
+                asset: asset,
+                track: track,
+                nominalFrameRate: nominalFrameRate
+            )
+        }
+    )
+}
+
 private struct FilterPipelineSnapshot: Sendable {
     let quickFilter: VideoFilter?
     let quickFilterValue: Double
@@ -62,6 +118,7 @@ class VideoView: NSView {
     private var timeObserver: Any?
     private var playerTimeControlObservation: NSKeyValueObservation?
     private var loadTask: Task<Void, Never>?
+    private var activeResourceLease: SecurityScopedURLLease?
     private var playerItemStatusObservation: NSKeyValueObservation?
     private var playerItemFailedObserver: NSObjectProtocol?
     private var playerItemEndedObserver: NSObjectProtocol?
@@ -82,6 +139,16 @@ class VideoView: NSView {
     private var filterRefreshWorkItem: DispatchWorkItem?
     private var filterRefreshCoordinator = DeferredRefreshCoordinator()
     private var scrubWasPlaying = false
+
+    /// Internal dependency seam used by deterministic lifecycle tests.
+    var loadEnvironment: VideoLoadEnvironment = .live
+
+    var hasActivePlaybackResources: Bool {
+        player != nil
+            || playerItem != nil
+            || currentAsset != nil
+            || playerLayer.player != nil
+    }
 
     // Core Image context for filter processing (reused for performance)
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -321,8 +388,16 @@ class VideoView: NSView {
 
     func loadVideo(url: URL) {
         guard let state = videoState else { return }
+        let environment = loadEnvironment
+        // Nested starts are supported. Acquiring first prevents a permission
+        // gap while the prior player graph is being dismantled.
+        let lease = SecurityScopedURLLease(
+            url: url,
+            access: environment.securityScopedAccess
+        )
         state.cancelScrubbing()
         cleanup()
+        activeResourceLease = lease
 
         let token = UUID()
         loadToken = token
@@ -347,16 +422,22 @@ class VideoView: NSView {
         frameSeekCoordinator.reset()
         previewSeekCoordinator.cancel()
 
-        loadTask = Task { [weak self, weak state] in
+        loadTask = Task { [weak self, weak state, lease, environment] in
+            defer { withExtendedLifetime(lease) {} }
             guard let self else { return }
             do {
-                let videoAsset = try await VideoFormats.preflight(url)
+                let videoAsset = try await environment.preflight(url)
                 try Task.checkCancellation()
                 await MainActor.run {
                     guard self.loadToken == token, let state else { return }
                     self.configurePlayer(asset: videoAsset, state: state, token: token)
                 }
-                try await self.loadMetadata(for: videoAsset, state: state, token: token)
+                try await self.loadMetadata(
+                    for: videoAsset,
+                    state: state,
+                    token: token,
+                    timelineLoader: environment.loadTimeline
+                )
                 try Task.checkCancellation()
             } catch {
                 guard !(error is CancellationError) else { return }
@@ -500,7 +581,12 @@ class VideoView: NSView {
         }
     }
 
-    private func loadMetadata(for asset: AVAsset, state: VideoState?, token: UUID) async throws {
+    private func loadMetadata(
+        for asset: AVAsset,
+        state: VideoState?,
+        token: UUID,
+        timelineLoader: VideoLoadEnvironment.TimelineLoader
+    ) async throws {
         let duration = try await asset.load(.duration)
         guard let track = try await asset.loadTracks(withMediaType: .video).first else {
             throw VideoPreflightError.noVideoTrack
@@ -550,24 +636,25 @@ class VideoView: NSView {
 
         try Task.checkCancellation()
         do {
-            let timeline = try await VideoFrameTimeline.load(
-                asset: asset,
-                track: track,
-                nominalFrameRate: nominalFrameRate
-            )
+            let timeline = try await timelineLoader(asset, track, nominalFrameRate)
             try Task.checkCancellation()
             await MainActor.run {
                 guard let state, self.loadToken == token else { return }
-                self.frameSeekCoordinator.reset()
+                let promotedTarget = self.frameSeekCoordinator.promote(to: timeline)
                 self.frameTimeline = timeline
                 state.totalFrames = timeline.count
                 if timeline.nominalFrameRate > 0 {
                     state.frameRate = timeline.nominalFrameRate
                 }
-                let currentTime = self.player?.currentTime() ?? .zero
-                state.currentFrame = timeline.frameIndex(containing: currentTime)
                 state.frameNavigationPrecision = .exact
                 state.frameNavigationMessage = nil
+                if let promotedTarget {
+                    self.performExactSeek(to: promotedTarget, timeline: timeline)
+                } else {
+                    let currentTime = self.player?.currentTime() ?? .zero
+                    state.currentFrame = timeline.frameIndex(containing: currentTime)
+                    self.retryPausedFilterRefreshIfNeeded()
+                }
             }
         } catch is CancellationError {
             throw CancellationError()
@@ -599,7 +686,7 @@ class VideoView: NSView {
         if accurate, let timeline = frameTimeline, !timeline.isEmpty {
             let frame = timeline.nearestFrameIndex(to: requestedTime)
             let target = frameSeekCoordinator.begin(frame: frame, timeline: timeline)
-            performExactSeek(to: target, timeline: timeline, resumePlayback: false)
+            performExactSeek(to: target, timeline: timeline)
         } else {
             performTimeSeek(
                 to: clampedTime,
@@ -612,7 +699,7 @@ class VideoView: NSView {
     func seekToFrame(_ frame: Int) {
         guard let timeline = frameTimeline, !timeline.isEmpty else { return }
         let target = frameSeekCoordinator.begin(frame: frame, timeline: timeline)
-        performExactSeek(to: target, timeline: timeline, resumePlayback: false)
+        performExactSeek(to: target, timeline: timeline)
     }
 
     private func beginScrubbing() {
@@ -661,8 +748,12 @@ class VideoView: NSView {
             let frame = timeline.nearestFrameIndex(
                 to: CMTime(seconds: clampedTime, preferredTimescale: 60_000)
             )
-            let target = frameSeekCoordinator.begin(frame: frame, timeline: timeline)
-            performExactSeek(to: target, timeline: timeline, resumePlayback: shouldResume)
+            let target = frameSeekCoordinator.begin(
+                frame: frame,
+                timeline: timeline,
+                resumePlayback: shouldResume
+            )
+            performExactSeek(to: target, timeline: timeline)
         } else {
             performTimeSeek(to: clampedTime, accurate: true, resumePlayback: shouldResume)
         }
@@ -680,7 +771,8 @@ class VideoView: NSView {
     private func performPreviewSeek(_ target: PreviewSeekTarget) {
         guard let state = videoState,
               state.isVideoLoaded,
-              let item = playerItem else {
+              let item = playerItem,
+              let resourceLease = activeResourceLease else {
             previewSeekCoordinator.cancel()
             return
         }
@@ -695,8 +787,9 @@ class VideoView: NSView {
             to: requestedTime,
             toleranceBefore: tolerance,
             toleranceAfter: tolerance
-        ) { [weak self, weak state, weak item] finished in
+        ) { [weak self, weak state, weak item, resourceLease] finished in
             DispatchQueue.main.async {
+                defer { withExtendedLifetime(resourceLease) {} }
                 guard let self,
                       self.loadToken == generation,
                       let state,
@@ -738,26 +831,28 @@ class VideoView: NSView {
             delta: forward ? magnitude : -magnitude,
             timeline: timeline
         )
-        performExactSeek(to: target, timeline: timeline, resumePlayback: false)
+        performExactSeek(to: target, timeline: timeline)
     }
 
     private func performExactSeek(
         to seekTarget: FrameSeekTarget,
-        timeline: VideoFrameTimeline,
-        resumePlayback: Bool
+        timeline: VideoFrameTimeline
     ) {
         guard let state = videoState,
-              let item = playerItem else { return }
+              let item = playerItem,
+              let player,
+              let resourceLease = activeResourceLease else { return }
         previewSeekCoordinator.cancel()
         timeSeekToken = UUID()
         timeSeekInFlightToken = nil
         state.isAtEnd = false
         let target = timeline.clampedIndex(seekTarget.frame)
-        let time = timeline.time(forFrame: target)
+        let time = seekTarget.requestedTime
         let generation = loadToken
-        player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) {
-            [weak self, weak state, weak item] finished in
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) {
+            [weak self, weak state, weak item, resourceLease] finished in
             DispatchQueue.main.async {
+                defer { withExtendedLifetime(resourceLease) {} }
                 guard let self,
                       self.loadToken == generation,
                       let state,
@@ -769,8 +864,9 @@ class VideoView: NSView {
                     state.currentFrame = target
                     state.currentTime = max(0, CMTimeGetSeconds(time))
                     state.isAtEnd = false
-                    if resumePlayback {
-                        self.player?.play()
+                    if seekTarget.resumePlayback {
+                        state.isPlaying = true
+                        player.play()
                     }
                 } else {
                     let actualTime = self.player?.currentTime() ?? .zero
@@ -778,7 +874,9 @@ class VideoView: NSView {
                     state.currentFrame = timeline.frameIndex(containing: actualTime)
                     state.currentTime = actualSeconds.isFinite ? max(0, actualSeconds) : 0
                 }
-                self.retryPausedFilterRefreshIfNeeded()
+                if !finished || !seekTarget.resumePlayback {
+                    self.retryPausedFilterRefreshIfNeeded()
+                }
             }
         }
         state.currentFrame = target
@@ -793,7 +891,8 @@ class VideoView: NSView {
         guard let state = videoState,
               state.isVideoLoaded,
               seconds.isFinite,
-              let item = playerItem else { return }
+              let item = playerItem,
+              let resourceLease = activeResourceLease else { return }
 
         previewSeekCoordinator.cancel()
         frameSeekCoordinator.reset()
@@ -812,8 +911,9 @@ class VideoView: NSView {
             to: requestedTime,
             toleranceBefore: tolerance,
             toleranceAfter: tolerance
-        ) { [weak self, weak state, weak item] finished in
+        ) { [weak self, weak state, weak item, resourceLease] finished in
             DispatchQueue.main.async {
+                defer { withExtendedLifetime(resourceLease) {} }
                 guard let self,
                       self.loadToken == generation,
                       self.timeSeekToken == token,
@@ -854,8 +954,12 @@ class VideoView: NSView {
         }
         if state.isAtEnd {
             if let timeline = frameTimeline, !timeline.isEmpty {
-                let target = frameSeekCoordinator.begin(frame: 0, timeline: timeline)
-                performExactSeek(to: target, timeline: timeline, resumePlayback: true)
+                let target = frameSeekCoordinator.begin(
+                    frame: 0,
+                    timeline: timeline,
+                    resumePlayback: true
+                )
+                performExactSeek(to: target, timeline: timeline)
             } else {
                 performTimeSeek(to: 0, accurate: true, resumePlayback: true)
             }
@@ -939,11 +1043,15 @@ class VideoView: NSView {
             NotificationCenter.default.removeObserver(observer)
             playerItemEndedObserver = nil
         }
+        playerLayer.player = nil
         player?.pause()
-        player = nil
+        player?.replaceCurrentItem(with: nil)
         playerItem = nil
         currentAsset = nil
-        playerLayer.player = nil
+        player = nil
+        // This is intentionally last. A cancelled load task or callback may
+        // retain the same lease until its cooperative teardown actually ends.
+        activeResourceLease = nil
     }
 
     deinit {
@@ -985,7 +1093,8 @@ class VideoView: NSView {
             return
         }
 
-        guard !filterBuildInProgress else { return }
+        guard !filterBuildInProgress,
+              let resourceLease = activeResourceLease else { return }
         filterBuildInProgress = true
         let token = UUID()
         filterToken = token
@@ -995,7 +1104,8 @@ class VideoView: NSView {
 
         AVVideoComposition.videoComposition(
             with: asset,
-            applyingCIFiltersWithHandler: { request in
+            applyingCIFiltersWithHandler: { [resourceLease] request in
+                defer { withExtendedLifetime(resourceLease) {} }
                 let currentSnapshot = pipelineState.current()
                 guard !currentSnapshot.isEmpty else {
                     request.finish(with: request.sourceImage, context: context)
@@ -1028,8 +1138,10 @@ class VideoView: NSView {
                     .cropped(to: sourceExtent)
                 request.finish(with: output, context: context)
             },
-            completionHandler: { [weak self, weak playerItem] composition, error in
+            completionHandler: {
+                [weak self, weak playerItem, resourceLease] composition, error in
                 DispatchQueue.main.async {
+                    defer { withExtendedLifetime(resourceLease) {} }
                     guard let self,
                           self.loadToken == generation,
                           self.filterToken == token,
