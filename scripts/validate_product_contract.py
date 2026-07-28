@@ -17,6 +17,7 @@ PROJECT_PATH = ROOT / "Reframer" / "Reframer.xcodeproj" / "project.pbxproj"
 INFO_PATH = ROOT / "Reframer" / "Reframer" / "Resources" / "Info.plist"
 
 PUBLIC_DOCUMENTS = (
+    ROOT / "CHANGELOG.md",
     ROOT / "README.md",
     ROOT / "Reframer" / "README.md",
     ROOT / "docs" / "FEATURES.md",
@@ -93,6 +94,25 @@ def main() -> None:
 
     if f"PRODUCT_BUNDLE_IDENTIFIER = {bundle_identifier};" not in project:
         fail(f"app bundle identifier is not {bundle_identifier}")
+
+    expected_content_types = {
+        document_type["contentType"]
+        for document_type in contract["playback"]["documentTypes"]
+    }
+    declared_document_types = info.get("CFBundleDocumentTypes")
+    if not isinstance(declared_document_types, list) or len(declared_document_types) != 1:
+        fail("Info.plist must declare exactly one video document type")
+    actual_content_types = set(
+        declared_document_types[0].get("LSItemContentTypes", [])
+    )
+    if actual_content_types != expected_content_types:
+        fail(
+            "Info.plist document types "
+            f"{sorted(actual_content_types)} do not equal the product contract "
+            f"{sorted(expected_content_types)}"
+        )
+    if info.get("UTImportedTypeDeclarations"):
+        fail("Info.plist must not import unsupported custom media types")
 
     public_texts = read_public_texts()
     for path, text in public_texts:

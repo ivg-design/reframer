@@ -49,44 +49,10 @@
 			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>public.movie</string>
 				<string>public.mpeg-4</string>
+				<string>com.apple.m4v-video</string>
 				<string>com.apple.quicktime-movie</string>
-				<string>public.avi</string>
-				<string>com.apple.prores</string>
-				<string>com.apple.prores.4444</string>
-				<string>com.apple.prores.422</string>
-				<string>public.hevc</string>
-				<string>public.h264</string>
-				<string>public.av1</string>
-				<string>org.aomedia.av1</string>
-				<string>public.mpeg</string>
-				<string>public.mpeg-2-video</string>
 			</array>
-		</dict>
-	</array>
-	<key>UTImportedTypeDeclarations</key>
-	<array>
-		<dict>
-			<key>UTTypeConformsTo</key>
-			<array>
-				<string>public.movie</string>
-			</array>
-			<key>UTTypeDescription</key>
-			<string>AV1 Video</string>
-			<key>UTTypeIdentifier</key>
-			<string>org.aomedia.av1</string>
-			<key>UTTypeTagSpecification</key>
-			<dict>
-				<key>public.filename-extension</key>
-				<array>
-					<string>av1</string>
-				</array>
-				<key>public.mime-type</key>
-				<array>
-					<string>video/av1</string>
-				</array>
-			</dict>
 		</dict>
 	</array>
 	<key>CFBundleHelpBookFolder</key>

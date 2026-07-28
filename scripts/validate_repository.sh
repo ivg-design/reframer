@@ -80,5 +80,25 @@ if rg -n \
     exit 65
 fi
 
+RELEASE_WORKFLOW=".github/workflows/release.yml"
+for required_release_gate in \
+    "needs: [quality, ui]" \
+    "name: Unit tests" \
+    "name: Static analysis" \
+    "name: Build documentation" \
+    "name: Run UI tests serially" \
+    "name: Package release"; do
+    if ! grep -Fq "$required_release_gate" "$RELEASE_WORKFLOW"; then
+        echo "error: release workflow is missing gate: $required_release_gate" >&2
+        exit 65
+    fi
+done
+
+if [ -e default.profraw ] &&
+   git ls-files --error-unmatch default.profraw >/dev/null 2>&1; then
+    echo "error: code-coverage output must not be tracked" >&2
+    exit 65
+fi
+
 git diff --check
 echo "Repository validation passed."

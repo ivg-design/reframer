@@ -2,6 +2,7 @@
 build/
 DerivedData/
 *.xcuserstate
+*.profraw
 *.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/

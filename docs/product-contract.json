@@ -13,6 +13,23 @@
       "M4V",
       "MOV"
     ],
+    "documentTypes": [
+      {
+        "container": "MP4",
+        "extension": "mp4",
+        "contentType": "public.mpeg-4"
+      },
+      {
+        "container": "M4V",
+        "extension": "m4v",
+        "contentType": "com.apple.m4v-video"
+      },
+      {
+        "container": "MOV",
+        "extension": "mov",
+        "contentType": "com.apple.quicktime-movie"
+      }
+    ],
     "decoder": "AVFoundation",
     "frameStep": {
       "forward": "Page Down",
