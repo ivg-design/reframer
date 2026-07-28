@@ -2,6 +2,113 @@ import Foundation
 import AVFoundation
 import Combine
 
+enum FrameNavigationPrecision: Equatable {
+    case unavailable
+    case indexing
+    case exact
+    case estimated
+
+    var isExact: Bool { self == .exact }
+
+    var supportsFrameNavigation: Bool {
+        switch self {
+        case .unavailable:
+            return false
+        case .indexing, .exact, .estimated:
+            return true
+        }
+    }
+
+    static func whileBuildingExactIndex(hasEstimatedTimeline: Bool) -> Self {
+        hasEstimatedTimeline ? .indexing : .unavailable
+    }
+
+    static func afterExactIndexFailure(hasEstimatedTimeline: Bool) -> Self {
+        hasEstimatedTimeline ? .estimated : .unavailable
+    }
+}
+
+enum NumericTextResult: Equatable {
+    case accepted(value: Double, canonical: String)
+    case rejected(canonical: String, message: String)
+}
+
+/// Locale-independent validation for the compact numeric fields in the
+/// control bar. Non-finite input is rejected before it can reach AVFoundation,
+/// Core Animation, or Core Image.
+struct NumericTextInput {
+    static func integer(
+        _ text: String,
+        current: Int,
+        range: ClosedRange<Int>,
+        fieldName: String
+    ) -> NumericTextResult {
+        let canonicalCurrent = String(max(range.lowerBound, min(range.upperBound, current)))
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let parsed = Double(trimmed),
+              parsed.isFinite,
+              parsed.rounded(.towardZero) == parsed,
+              parsed >= Double(Int.min),
+              parsed <= Double(Int.max) else {
+            return .rejected(
+                canonical: canonicalCurrent,
+                message: "\(fieldName) must be a whole number from \(range.lowerBound) to \(range.upperBound)."
+            )
+        }
+
+        let value = max(range.lowerBound, min(range.upperBound, Int(parsed)))
+        return .accepted(value: Double(value), canonical: String(value))
+    }
+
+    static func decimal(
+        _ text: String,
+        current: Double,
+        range: ClosedRange<Double>,
+        fractionDigits: Int,
+        fieldName: String
+    ) -> NumericTextResult {
+        let fallback = current.isFinite
+            ? max(range.lowerBound, min(range.upperBound, current))
+            : range.lowerBound
+        let canonicalCurrent = canonical(fallback, fractionDigits: fractionDigits)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let parsed = Double(trimmed),
+              parsed.isFinite else {
+            return .rejected(
+                canonical: canonicalCurrent,
+                message: "\(fieldName) must be a finite number from \(canonical(range.lowerBound, fractionDigits: fractionDigits)) to \(canonical(range.upperBound, fractionDigits: fractionDigits))."
+            )
+        }
+
+        let value = max(range.lowerBound, min(range.upperBound, parsed))
+        return .accepted(
+            value: value,
+            canonical: canonical(value, fractionDigits: fractionDigits)
+        )
+    }
+
+    static func canonical(_ value: Double, fractionDigits: Int) -> String {
+        let normalized = value == 0 ? 0 : value
+        var result = String(
+            format: "%.*f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            max(0, fractionDigits),
+            normalized
+        )
+        if result.contains(".") {
+            while result.last == "0" {
+                result.removeLast()
+            }
+            if result.last == "." {
+                result.removeLast()
+            }
+        }
+        return result
+    }
+}
+
 class VideoState: ObservableObject {
     enum SeekRequest: Equatable {
         case time(Double, accurate: Bool)
@@ -22,6 +129,7 @@ class VideoState: ObservableObject {
         case began
         case preview(Double)
         case ended(Double)
+        case cancelled
     }
 
     // Video loading
@@ -40,6 +148,8 @@ class VideoState: ObservableObject {
     @Published var currentFrame: Int = 0
     @Published var totalFrames: Int = 0
     @Published var frameRate: Double = 30.0
+    @Published var frameNavigationPrecision: FrameNavigationPrecision = .unavailable
+    @Published var frameNavigationMessage: String?
     @Published var videoNaturalSize: CGSize = .zero
 
     // Volume
@@ -147,13 +257,19 @@ class VideoState: ObservableObject {
     }
 
     func setZoomPercentage(_ percentage: Double) {
+        guard percentage.isFinite else { return }
         let clamped = max(10.0, min(1000.0, percentage))
         zoomScale = CGFloat(clamped / 100.0)
     }
 
     func setOpacityPercentage(_ percentage: Int) {
+        setOpacityPercentage(Double(percentage))
+    }
+
+    func setOpacityPercentage(_ percentage: Double) {
+        guard percentage.isFinite else { return }
         let clamped = max(2, min(100, percentage))
-        opacity = Double(clamped) / 100.0
+        opacity = clamped / 100
     }
 
     func adjustZoom(byPercent percent: Double) {
@@ -166,6 +282,7 @@ class VideoState: ObservableObject {
     }
 
     func requestSeek(time: Double, accurate: Bool) {
+        guard time.isFinite else { return }
         let request: SeekRequest = .time(time, accurate: accurate)
         lastSeekRequest = request
         seekRequests.send(request)
@@ -191,16 +308,22 @@ class VideoState: ObservableObject {
     }
 
     func previewScrub(time: Double) {
-        guard isVideoLoaded, isScrubbing else { return }
+        guard isVideoLoaded, isScrubbing, time.isFinite else { return }
         lastScrubRequest = .preview(time)
         scrubRequests.send(.preview(time))
     }
 
     func endScrubbing(time: Double) {
-        guard isVideoLoaded else { return }
         isScrubbing = false
+        guard isVideoLoaded, time.isFinite else { return }
         lastScrubRequest = .ended(time)
         scrubRequests.send(.ended(time))
+    }
+
+    func cancelScrubbing() {
+        isScrubbing = false
+        lastScrubRequest = .cancelled
+        scrubRequests.send(.cancelled)
     }
 
     func reloadVideo() {
@@ -252,13 +375,19 @@ class VideoState: ObservableObject {
         VideoFilter.allCases.filter { advancedFilters.contains($0) }
     }
 
+    /// Advanced filters that remain after the single quick-filter slot has
+    /// taken ownership of the same effect.
+    var effectiveAdvancedFilters: [VideoFilter] {
+        orderedAdvancedFilters.filter { $0 != quickFilter }
+    }
+
     /// Get all active filters (quick + advanced) in order
     var allActiveFilters: [VideoFilter] {
         var filters: [VideoFilter] = []
         if let quick = quickFilter {
             filters.append(quick)
         }
-        filters.append(contentsOf: orderedAdvancedFilters)
+        filters.append(contentsOf: effectiveAdvancedFilters)
         return filters
     }
 

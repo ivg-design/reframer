@@ -560,10 +560,17 @@ class ControlBar: NSView {
 
         state.$totalFrames
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] total in
-                self?.frameTotalLabel?.stringValue = "/ \(total)"
-                self?.frameField?.setAccessibilityHelp("Current decoded frame. Video contains \(total) frames.")
-            }
+            .sink { [weak self] _ in self?.updateFrameNavigationPresentation() }
+            .store(in: &cancellables)
+
+        state.$frameNavigationPrecision
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateFrameNavigationPresentation() }
+            .store(in: &cancellables)
+
+        state.$frameNavigationMessage
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateFrameNavigationPresentation() }
             .store(in: &cancellables)
 
         // Update zoom field
@@ -677,14 +684,12 @@ class ControlBar: NSView {
         state.$isVideoLoaded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] loaded in
-                self?.stepBackButton?.isEnabled = loaded
                 self?.playButton?.isEnabled = loaded
-                self?.stepForwardButton?.isEnabled = loaded
                 self?.timelineSlider?.isEnabled = loaded
-                self?.frameField?.isEnabled = loaded
                 self?.zoomField?.isEnabled = loaded && !(self?.videoState?.isLocked ?? false)
                 self?.opacityField?.isEnabled = loaded
                 self?.opacitySlider?.isEnabled = loaded
+                self?.updateFrameNavigationPresentation()
                 self?.updateOpacity()
                 if let filter = self?.videoState?.quickFilter {
                     self?.updateSliderForQuickFilter(filter)
@@ -693,6 +698,40 @@ class ControlBar: NSView {
                 }
             }
             .store(in: &cancellables)
+    }
+
+    private func updateFrameNavigationPresentation() {
+        guard let state = videoState else { return }
+        let supportsFrames = state.isVideoLoaded
+            && state.totalFrames > 0
+            && state.frameNavigationPrecision.supportsFrameNavigation
+        stepBackButton?.isEnabled = supportsFrames
+        stepForwardButton?.isEnabled = supportsFrames
+        frameField?.isEnabled = supportsFrames
+
+        let suffix: String
+        let help: String
+        switch state.frameNavigationPrecision {
+        case .exact:
+            suffix = "/ \(state.totalFrames)"
+            help = "Current decoded frame. Video contains \(state.totalFrames) exact presentation frames."
+        case .indexing:
+            suffix = state.totalFrames > 0 ? "/ ~\(state.totalFrames) · indexing" : "/ indexing"
+            help = state.frameNavigationMessage
+                ?? "Exact frame boundaries are being indexed. The current frame count is estimated."
+        case .estimated:
+            suffix = state.totalFrames > 0 ? "/ ~\(state.totalFrames)" : "/ —"
+            help = state.frameNavigationMessage
+                ?? "Exact frame boundaries are unavailable. Frame numbers are estimated."
+        case .unavailable:
+            suffix = "/ —"
+            help = state.frameNavigationMessage
+                ?? "Frame navigation is unavailable for this video. Time-based playback remains available."
+        }
+        frameTotalLabel?.stringValue = suffix
+        frameField?.setAccessibilityHelp(help)
+        frameField?.toolTip = help
+        frameTotalLabel?.toolTip = help
     }
 
     // MARK: - Quick Filter Slider
@@ -715,6 +754,9 @@ class ControlBar: NSView {
                 opacityField?.isSelectable = state.isVideoLoaded
                 opacitySlider?.doubleValue = state.quickFilterValue
                 opacityField?.stringValue = formatFilterValue(filter: filter, normalizedValue: state.quickFilterValue)
+                if let opacityField {
+                    restoreAccessibilityHelp(for: opacityField)
+                }
             } else {
                 opacitySlider?.isEnabled = false
                 opacityField?.isEnabled = state.isVideoLoaded
@@ -736,6 +778,9 @@ class ControlBar: NSView {
             opacityField?.isEnabled = state.isVideoLoaded
             opacityField?.isEditable = state.isVideoLoaded
             opacityField?.isSelectable = state.isVideoLoaded
+            if let opacityField {
+                restoreAccessibilityHelp(for: opacityField)
+            }
         }
     }
 
@@ -743,22 +788,10 @@ class ControlBar: NSView {
     private func formatFilterValue(filter: VideoFilter, normalizedValue: Double) -> String {
         let range = filter.parameterRange
         let actualValue = range.min + (normalizedValue * (range.max - range.min))
-
-        // Format based on the range
-        if range.min < 0 {
-            // Signed value (e.g., -1 to +1, -3 to +3)
-            if actualValue >= 0 {
-                return String(format: "+%.1f", actualValue)
-            } else {
-                return String(format: "%.1f", actualValue)
-            }
-        } else if range.max <= 2 {
-            // Small range, show one decimal
-            return String(format: "%.1f", actualValue)
-        } else {
-            // Larger range, show integer
-            return "\(Int(actualValue.rounded()))"
-        }
+        return NumericTextInput.canonical(
+            actualValue,
+            fractionDigits: filterInputFractionDigits(filter)
+        )
     }
 
     // MARK: - Hover
@@ -815,6 +848,9 @@ class ControlBar: NSView {
 extension ControlBar: NSTextFieldDelegate {
 
     func controlTextDidBeginEditing(_ obj: Notification) {
+        if let textField = obj.object as? NSTextField {
+            restoreAccessibilityHelp(for: textField)
+        }
         updateOpacity()
     }
 
@@ -827,16 +863,28 @@ extension ControlBar: NSTextFieldDelegate {
         guard let textField = obj.object as? NSTextField else { return }
 
         if textField === frameField {
-            if let value = Int(textField.stringValue) {
-                let lastFrame = max(0, (videoState?.totalFrames ?? 1) - 1)
-                let clamped = max(0, min(lastFrame, value))
-                textField.stringValue = "\(clamped)"
-                videoState?.requestSeek(frame: clamped)
-            } else {
-                textField.stringValue = "\(videoState?.currentFrame ?? 0)"
+            let lastFrame = max(0, (videoState?.totalFrames ?? 1) - 1)
+            let result = NumericTextInput.integer(
+                textField.stringValue,
+                current: videoState?.currentFrame ?? 0,
+                range: 0...lastFrame,
+                fieldName: "Frame"
+            )
+            if case .accepted(let value, _) = apply(
+                result,
+                to: textField
+            ) {
+                videoState?.requestSeek(frame: Int(value))
             }
         } else if textField === zoomField {
-            if let value = Double(textField.stringValue) {
+            let result = NumericTextInput.decimal(
+                textField.stringValue,
+                current: videoState?.zoomPercentageValue ?? 100,
+                range: 10...1_000,
+                fractionDigits: 1,
+                fieldName: "Zoom"
+            )
+            if case .accepted(let value, _) = apply(result, to: textField) {
                 videoState?.setZoomPercentage(value)
             }
         } else if textField === opacityField {
@@ -844,18 +892,77 @@ extension ControlBar: NSTextFieldDelegate {
             // Otherwise parse as opacity percentage
             if let filter = videoState?.quickFilter {
                 guard filter.isQuickFilterAdjustable else { return }
-                if let actualValue = Double(textField.stringValue) {
-                    let range = filter.parameterRange
+                let range = filter.parameterRange
+                let current = range.min
+                    + ((videoState?.quickFilterValue ?? filter.defaultNormalizedValue)
+                       * (range.max - range.min))
+                let result = NumericTextInput.decimal(
+                    textField.stringValue,
+                    current: current,
+                    range: range.min...range.max,
+                    fractionDigits: filterInputFractionDigits(filter),
+                    fieldName: "\(filter.rawValue) value"
+                )
+                if case .accepted(let actualValue, _) = apply(result, to: textField) {
                     // Convert actual value to normalized 0-1
                     let normalized = (actualValue - range.min) / (range.max - range.min)
                     videoState?.quickFilterValue = max(0, min(1, normalized))
                 }
             } else {
-                if let value = Int(textField.stringValue) {
+                let result = NumericTextInput.decimal(
+                    textField.stringValue,
+                    current: videoState?.opacityPercentageValue ?? 100,
+                    range: 2...100,
+                    fractionDigits: 1,
+                    fieldName: "Opacity"
+                )
+                if case .accepted(let value, _) = apply(result, to: textField) {
                     videoState?.setOpacityPercentage(value)
                 }
             }
         }
+    }
+
+    @discardableResult
+    private func apply(
+        _ result: NumericTextResult,
+        to textField: NSTextField
+    ) -> NumericTextResult {
+        switch result {
+        case .accepted(_, let canonical):
+            textField.stringValue = canonical
+            textField.setAccessibilityValue(canonical)
+            restoreAccessibilityHelp(for: textField)
+        case .rejected(let canonical, let message):
+            textField.stringValue = canonical
+            textField.setAccessibilityValue(canonical)
+            textField.setAccessibilityHelp(message)
+            textField.toolTip = message
+            NSAccessibility.post(element: textField, notification: .valueChanged)
+            NSSound.beep()
+        }
+        return result
+    }
+
+    private func restoreAccessibilityHelp(for textField: NSTextField) {
+        if textField === frameField {
+            updateFrameNavigationPresentation()
+        } else if textField === zoomField {
+            textField.setAccessibilityHelp("Enter a finite zoom from 10 to 1000 percent")
+            textField.toolTip = textField.accessibilityHelp()
+        } else if textField === opacityField, let filter = videoState?.quickFilter {
+            textField.setAccessibilityHelp(
+                "Enter a finite \(filter.rawValue.lowercased()) value from \(NumericTextInput.canonical(filter.parameterRange.min, fractionDigits: filterInputFractionDigits(filter))) to \(NumericTextInput.canonical(filter.parameterRange.max, fractionDigits: filterInputFractionDigits(filter)))"
+            )
+            textField.toolTip = textField.accessibilityHelp()
+        } else if textField === opacityField {
+            textField.setAccessibilityHelp("Enter a finite opacity from 2 to 100 percent")
+            textField.toolTip = textField.accessibilityHelp()
+        }
+    }
+
+    private func filterInputFractionDigits(_ filter: VideoFilter) -> Int {
+        2
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -872,12 +979,14 @@ extension ControlBar: NSTextFieldDelegate {
 
             if textField === frameField {
                 let step = coarse ? 10 : 1
-                if let current = Int(textField.stringValue) {
-                    let maxFrame = videoState?.totalFrames ?? 1
-                    let newValue = max(0, min(maxFrame - 1, current + step * Int(direction)))
-                    textField.stringValue = "\(newValue)"
-                    videoState?.requestSeek(frame: newValue)
-                }
+                let maxFrame = max(0, (videoState?.totalFrames ?? 1) - 1)
+                let parsed = Int(textField.stringValue)
+                let current = parsed ?? videoState?.currentFrame ?? 0
+                let (sum, overflowed) = current.addingReportingOverflow(step * Int(direction))
+                let requested = overflowed ? (direction > 0 ? Int.max : Int.min) : sum
+                let newValue = max(0, min(maxFrame, requested))
+                textField.stringValue = "\(newValue)"
+                videoState?.requestSeek(frame: newValue)
                 return true
             } else if textField === zoomField {
                 let step: Double
@@ -888,18 +997,13 @@ extension ControlBar: NSTextFieldDelegate {
                 } else {
                     step = 1
                 }
-                if let current = Double(textField.stringValue) {
-                    let newValue = max(10, min(1000, current + step * direction))
-                    // Show decimals when using fine control (cmd), otherwise integer
-                    if cmd {
-                        textField.stringValue = String(format: "%.1f", newValue)
-                    } else if newValue.truncatingRemainder(dividingBy: 1) == 0 {
-                        textField.stringValue = "\(Int(newValue))"
-                    } else {
-                        textField.stringValue = String(format: "%.1f", newValue)
-                    }
-                    videoState?.setZoomPercentage(newValue)
-                }
+                let parsed = Double(textField.stringValue)
+                let current = parsed?.isFinite == true
+                    ? parsed!
+                    : videoState?.zoomPercentageValue ?? 100
+                let newValue = max(10, min(1000, current + step * direction))
+                textField.stringValue = NumericTextInput.canonical(newValue, fractionDigits: 1)
+                videoState?.setZoomPercentage(newValue)
                 return true
             } else if textField === opacityField {
                 if let filter = videoState?.quickFilter {

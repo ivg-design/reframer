@@ -112,4 +112,41 @@ final class VideoFormatsTests: XCTestCase {
             XCTFail("Unexpected error: \(error)")
         }
     }
+
+    func testPreflightRejectsCorruptDataWithSupportedExtension() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("reframer-corrupt-\(UUID().uuidString)")
+            .appendingPathExtension("mov")
+        try Data("not a QuickTime movie".utf8).write(to: url, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        do {
+            _ = try await VideoFormats.preflight(url)
+            XCTFail("Preflight should reject corrupt data even when the extension is supported")
+        } catch let error as VideoPreflightError {
+            guard case .notPlayable = error else {
+                return XCTFail("Unexpected preflight error: \(error)")
+            }
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
+    func testPreflightRejectsValidAudioOnlyMP4() async throws {
+        let bundle = Bundle(for: Self.self)
+        let url = try XCTUnwrap(
+            bundle.url(forResource: "test_audio_only", withExtension: "mp4")
+        )
+
+        do {
+            _ = try await VideoFormats.preflight(url)
+            XCTFail("Preflight should reject a valid MP4 container without a video track")
+        } catch let error as VideoPreflightError {
+            guard case .noVideoTrack = error else {
+                return XCTFail("Unexpected preflight error: \(error)")
+            }
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
 }

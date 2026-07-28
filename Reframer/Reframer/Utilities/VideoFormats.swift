@@ -80,14 +80,38 @@ struct VideoFormats {
         }
 
         let asset = AVURLAsset(url: url)
-        let isPlayable = try await asset.load(.isPlayable)
+        let isPlayable: Bool
+        do {
+            isPlayable = try await asset.load(.isPlayable)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw VideoPreflightError.notPlayable
+        }
         guard isPlayable else {
             throw VideoPreflightError.notPlayable
         }
-        guard try await !asset.load(.hasProtectedContent) else {
+
+        let hasProtectedContent: Bool
+        do {
+            hasProtectedContent = try await asset.load(.hasProtectedContent)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw VideoPreflightError.notPlayable
+        }
+        guard !hasProtectedContent else {
             throw VideoPreflightError.protectedContent
         }
-        let tracks = try await asset.loadTracks(withMediaType: .video)
+
+        let tracks: [AVAssetTrack]
+        do {
+            tracks = try await asset.loadTracks(withMediaType: .video)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw VideoPreflightError.notPlayable
+        }
         guard !tracks.isEmpty else {
             throw VideoPreflightError.noVideoTrack
         }

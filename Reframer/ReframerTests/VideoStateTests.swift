@@ -205,6 +205,15 @@ final class VideoStateTests: XCTestCase {
         XCTAssertEqual(videoState.quickFilterValue, 0.5, accuracy: 0.000_001)
     }
 
+    func testQuickFilterDeduplicatesTheSameAdvancedFilterInRenderOrder() {
+        videoState.advancedFilters = [.contrast, .edges]
+        videoState.setQuickFilter(.contrast)
+
+        XCTAssertEqual(videoState.orderedAdvancedFilters, [.contrast, .edges])
+        XCTAssertEqual(videoState.effectiveAdvancedFilters, [.edges])
+        XCTAssertEqual(videoState.allActiveFilters, [.contrast, .edges])
+    }
+
     func testCorruptAndOutOfRangePreferencesFailSafe() throws {
         defaults.set(Double.infinity, forKey: "VideoOverlay.opacity")
         defaults.set(-25.0, forKey: "VideoOverlay.quickFilterValue")
@@ -248,6 +257,47 @@ final class VideoStateTests: XCTestCase {
         XCTAssertFalse(videoState.isScrubbing)
         XCTAssertEqual(videoState.lastScrubRequest, .ended(2.75))
     }
+
+    func testCancelScrubbingIsUnconditionalAndObservable() {
+        videoState.isVideoLoaded = true
+        videoState.beginScrubbing()
+        XCTAssertTrue(videoState.isScrubbing)
+
+        videoState.isVideoLoaded = false
+        videoState.cancelScrubbing()
+
+        XCTAssertFalse(videoState.isScrubbing)
+        XCTAssertEqual(videoState.lastScrubRequest, .cancelled)
+
+        videoState.cancelScrubbing()
+        XCTAssertFalse(videoState.isScrubbing)
+        XCTAssertEqual(videoState.lastScrubRequest, .cancelled)
+    }
+
+    func testEndScrubbingClearsStateEvenAfterVideoBecomesUnavailable() {
+        videoState.isVideoLoaded = true
+        videoState.beginScrubbing()
+        videoState.isVideoLoaded = false
+
+        videoState.endScrubbing(time: 2)
+
+        XCTAssertFalse(videoState.isScrubbing)
+        XCTAssertEqual(videoState.lastScrubRequest, .began)
+    }
+
+    func testNonFiniteSeekAndScrubRequestsAreIgnoredSafely() {
+        videoState.requestSeek(time: .nan, accurate: true)
+        XCTAssertNil(videoState.lastSeekRequest)
+
+        videoState.isVideoLoaded = true
+        videoState.beginScrubbing()
+        videoState.previewScrub(time: .infinity)
+        XCTAssertEqual(videoState.lastScrubRequest, .began)
+        videoState.endScrubbing(time: .nan)
+        XCTAssertFalse(videoState.isScrubbing)
+        XCTAssertEqual(videoState.lastScrubRequest, .began)
+    }
+
 
     func testPresentationStatePrioritizesFailureAndLoading() {
         XCTAssertEqual(
@@ -317,6 +367,24 @@ final class VideoStateTests: XCTestCase {
     func testFrameRateCanBeSet() {
         videoState.frameRate = 60.0
         XCTAssertEqual(videoState.frameRate, 60.0, "Frame rate should be settable")
+    }
+
+    func testFrameNavigationCapabilityTruthfullyTransitionsToFallback() {
+        XCTAssertEqual(
+            FrameNavigationPrecision.whileBuildingExactIndex(hasEstimatedTimeline: true),
+            .indexing
+        )
+        XCTAssertEqual(
+            FrameNavigationPrecision.afterExactIndexFailure(hasEstimatedTimeline: true),
+            .estimated
+        )
+        XCTAssertTrue(FrameNavigationPrecision.estimated.supportsFrameNavigation)
+        XCTAssertFalse(FrameNavigationPrecision.estimated.isExact)
+        XCTAssertEqual(
+            FrameNavigationPrecision.afterExactIndexFailure(hasEstimatedTimeline: false),
+            .unavailable
+        )
+        XCTAssertFalse(FrameNavigationPrecision.unavailable.supportsFrameNavigation)
     }
 
     func testCurrentTimeDefaults() {
@@ -403,6 +471,92 @@ final class VideoStateTests: XCTestCase {
     func testSetZoomPercentageDoubleClampsMax() {
         videoState.setZoomPercentage(1500.0)
         XCTAssertEqual(videoState.zoomScale, 10.0, "Should clamp to 1000%")
+    }
+
+    func testNonFiniteZoomAndOpacitySettersPreserveCurrentValues() {
+        videoState.setZoomPercentage(250)
+        videoState.setOpacityPercentage(45)
+
+        videoState.setZoomPercentage(.nan)
+        videoState.setZoomPercentage(.infinity)
+        videoState.setOpacityPercentage(.nan)
+        videoState.setOpacityPercentage(-.infinity)
+
+        XCTAssertEqual(videoState.zoomPercentageValue, 250, accuracy: 0.000_001)
+        XCTAssertEqual(videoState.opacityPercentageValue, 45, accuracy: 0.000_001)
+    }
+
+    func testNumericTextInputRejectsNonFiniteAndInvalidValues() {
+        XCTAssertEqual(
+            NumericTextInput.decimal(
+                "nan",
+                current: 125,
+                range: 10...1_000,
+                fractionDigits: 1,
+                fieldName: "Zoom"
+            ),
+            .rejected(
+                canonical: "125",
+                message: "Zoom must be a finite number from 10 to 1000."
+            )
+        )
+        XCTAssertEqual(
+            NumericTextInput.decimal(
+                "inf",
+                current: 50,
+                range: 2...100,
+                fractionDigits: 1,
+                fieldName: "Opacity"
+            ),
+            .rejected(
+                canonical: "50",
+                message: "Opacity must be a finite number from 2 to 100."
+            )
+        )
+        XCTAssertEqual(
+            NumericTextInput.integer(
+                "1.5",
+                current: 4,
+                range: 0...10,
+                fieldName: "Frame"
+            ),
+            .rejected(
+                canonical: "4",
+                message: "Frame must be a whole number from 0 to 10."
+            )
+        )
+    }
+
+    func testNumericTextInputClampsAndCanonicalizesFiniteValues() {
+        XCTAssertEqual(
+            NumericTextInput.integer(
+                "999",
+                current: 4,
+                range: 0...10,
+                fieldName: "Frame"
+            ),
+            .accepted(value: 10, canonical: "10")
+        )
+        XCTAssertEqual(
+            NumericTextInput.decimal(
+                " 33.500 ",
+                current: 100,
+                range: 2...100,
+                fractionDigits: 1,
+                fieldName: "Opacity"
+            ),
+            .accepted(value: 33.5, canonical: "33.5")
+        )
+        XCTAssertEqual(
+            NumericTextInput.decimal(
+                "-99",
+                current: 0,
+                range: -3...3,
+                fractionDigits: 1,
+                fieldName: "Exposure value"
+            ),
+            .accepted(value: -3, canonical: "-3")
+        )
     }
 
     // MARK: - F-OP-001: Opacity Slider Precision
