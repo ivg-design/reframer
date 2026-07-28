@@ -34,4 +34,6 @@ overlay.
 Open shortcut settings with H. A shortcut can be changed, cleared, disabled,
 or reset. Reframer rejects duplicate, reserved, modifier-collapsing, and unsafe
 global chords. A replacement survives relaunch and the old chord no longer
-fires.
+fires. Global shortcuts can be disabled independently; the same panel reports
+Accessibility permission and links back to System Settings when access is
+missing.

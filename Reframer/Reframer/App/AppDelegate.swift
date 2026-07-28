@@ -14,8 +14,16 @@ class TransparentWindow: NSWindow {
     }
 }
 
+private final class ReframerCommandBox: NSObject {
+    let command: ReframerCommand
+
+    init(_ command: ReframerCommand) {
+        self.command = command
+    }
+}
+
 @main
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private final class FocusSnapshot {
         weak var window: NSWindow?
@@ -67,6 +75,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var mainViewController: MainViewController!
     private var controlBar: ControlBar!
+    private var shortcutMenuItems: [
+        (item: NSMenuItem, action: ShortcutSettings.Action, factor: Int)
+    ] = []
 
     // MARK: - App Lifecycle
 
@@ -129,14 +140,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Menu Setup
 
     private func setupMainMenu() {
+        shortcutMenuItems.removeAll()
         let mainMenu = NSMenu()
 
-        // App menu
         let appMenuItem = NSMenuItem()
         mainMenu.addItem(appMenuItem)
         let appMenu = NSMenu()
         appMenuItem.submenu = appMenu
-        appMenu.addItem(withTitle: "About Reframer", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(
+            withTitle: "About Reframer",
+            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: ""
+        )
         appMenu.addItem(.separator())
 
         let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")
@@ -144,24 +159,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         servicesItem.submenu = servicesMenu
         NSApp.servicesMenu = servicesMenu
         appMenu.addItem(servicesItem)
-
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide Reframer", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        let hideOthersItem = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        appMenu.addItem(
+            withTitle: "Hide Reframer",
+            action: #selector(NSApplication.hide(_:)),
+            keyEquivalent: "h"
+        )
+        let hideOthersItem = NSMenuItem(
+            title: "Hide Others",
+            action: #selector(NSApplication.hideOtherApplications(_:)),
+            keyEquivalent: "h"
+        )
         hideOthersItem.keyEquivalentModifierMask = [.command, .option]
         appMenu.addItem(hideOthersItem)
-        appMenu.addItem(withTitle: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        appMenu.addItem(
+            withTitle: "Show All",
+            action: #selector(NSApplication.unhideAllApplications(_:)),
+            keyEquivalent: ""
+        )
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit Reframer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(
+            withTitle: "Quit Reframer",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
 
-        // File menu
         let fileMenuItem = NSMenuItem()
         mainMenu.addItem(fileMenuItem)
         let fileMenu = NSMenu(title: "File")
         fileMenuItem.submenu = fileMenu
-        fileMenu.addItem(withTitle: "Open Video", action: #selector(openVideo(_:)), keyEquivalent: "o")
+        fileMenu.addItem(makeCommandMenuItem(
+            title: "Open Video…",
+            command: .openVideo,
+            keyEquivalent: "o",
+            modifiers: [.command]
+        ))
 
-        // Edit menu (required for Cmd+V paste in text fields)
+        // A standard Edit menu keeps native text editing commands intact.
         let editMenuItem = NSMenuItem()
         mainMenu.addItem(editMenuItem)
         let editMenu = NSMenu(title: "Edit")
@@ -176,75 +210,202 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(.separator())
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
 
-        // View menu
         let viewMenuItem = NSMenuItem()
         mainMenu.addItem(viewMenuItem)
         let viewMenu = NSMenu(title: "View")
         viewMenuItem.submenu = viewMenu
-        viewMenu.addItem(withTitle: "Reset Zoom", action: #selector(resetZoom(_:)), keyEquivalent: "0")
-        viewMenu.addItem(withTitle: "Reset Position", action: #selector(resetPosition(_:)), keyEquivalent: "r")
+        viewMenu.addItem(makeShortcutMenuItem(
+            title: "Reset Zoom",
+            command: .resetZoom,
+            action: .resetZoom
+        ))
+        viewMenu.addItem(makeShortcutMenuItem(
+            title: "Reset View",
+            command: .resetView,
+            action: .resetView
+        ))
+
+        let panItem = NSMenuItem(title: "Pan", action: nil, keyEquivalent: "")
+        let panMenu = NSMenu(title: "Pan")
+        panItem.submenu = panMenu
+        let panActions: [(ShortcutSettings.Action, String, Double, Double)] = [
+            (.panLeft, "Left", -1, 0),
+            (.panRight, "Right", 1, 0),
+            (.panUp, "Up", 0, 1),
+            (.panDown, "Down", 0, -1)
+        ]
+        for (index, action) in panActions.enumerated() {
+            if index > 0 { panMenu.addItem(.separator()) }
+            for factor in [1, 10, 100] {
+                panMenu.addItem(makeShortcutMenuItem(
+                    title: "\(action.1) \(factor) pt",
+                    command: .pan(
+                        x: action.2 * Double(factor),
+                        y: action.3 * Double(factor)
+                    ),
+                    action: action.0,
+                    factor: factor
+                ))
+            }
+        }
+        viewMenu.addItem(panItem)
         viewMenu.addItem(.separator())
-        let lockItem = NSMenuItem(title: "Toggle Lock", action: #selector(toggleLock(_:)), keyEquivalent: "L")
-        lockItem.keyEquivalentModifierMask = [.command, .shift]
-        viewMenu.addItem(lockItem)
-        let alwaysOnTopItem = NSMenuItem(
-            title: "Always on Top",
-            action: #selector(toggleAlwaysOnTop(_:)),
-            keyEquivalent: ""
+
+        let lockItem = makeShortcutMenuItem(
+            title: "Lock Overlay",
+            command: .toggleLock,
+            action: .toggleLock
         )
-        alwaysOnTopItem.target = self
-        alwaysOnTopItem.state = videoState.isAlwaysOnTop ? .on : .off
+        viewMenu.addItem(lockItem)
+        viewMenu.addItem(makeShortcutMenuItem(
+            title: "Toggle Lock (Global Shortcut)",
+            command: .toggleLock,
+            action: .globalToggleLock
+        ))
+        let alwaysOnTopItem = makeCommandMenuItem(
+            title: "Always on Top",
+            command: .toggleAlwaysOnTop
+        )
         viewMenu.addItem(alwaysOnTopItem)
         alwaysOnTopMenuItem = alwaysOnTopItem
 
-        // Filter menu (single selection like toolbar, simple filters only)
         let filterMenuItem = NSMenuItem()
         mainMenu.addItem(filterMenuItem)
         let filterMenu = NSMenu(title: "Filter")
         filterMenuItem.submenu = filterMenu
         filterMenu.delegate = self
-
-        // Filter items will be populated dynamically via menu delegate
         filterMenu.addItem(withTitle: "Placeholder", action: nil, keyEquivalent: "")
         filterMenu.addItem(.separator())
-        filterMenu.addItem(withTitle: "Advanced Filters...", action: #selector(showFilterSettings(_:)), keyEquivalent: "")
+        filterMenu.addItem(makeShortcutMenuItem(
+            title: "Advanced Filters…",
+            command: .toggleFilterPanel,
+            action: .toggleFilterPanel
+        ))
         filterMenu.addItem(.separator())
-        filterMenu.addItem(withTitle: "Reset Filter Parameters", action: #selector(resetFilterSettings(_:)), keyEquivalent: "")
+        filterMenu.addItem(
+            withTitle: "Reset Filter Parameters",
+            action: #selector(resetFilterSettings(_:)),
+            keyEquivalent: ""
+        )
 
-        // Playback menu
         let playbackMenuItem = NSMenuItem()
         mainMenu.addItem(playbackMenuItem)
         let playbackMenu = NSMenu(title: "Playback")
         playbackMenuItem.submenu = playbackMenu
-        let playPauseItem = NSMenuItem(title: "Play/Pause", action: #selector(togglePlayPause(_:)), keyEquivalent: " ")
-        playPauseItem.keyEquivalentModifierMask = [.command, .shift]
-        playbackMenu.addItem(playPauseItem)
+        playbackMenu.addItem(makeShortcutMenuItem(
+            title: "Play / Pause",
+            command: .togglePlayPause,
+            action: .playPause
+        ))
         playbackMenu.addItem(.separator())
-        let stepForwardItem = NSMenuItem(title: "Step Forward", action: #selector(stepForward(_:)), keyEquivalent: "")
-        stepForwardItem.keyEquivalentModifierMask = [.command]
-        playbackMenu.addItem(stepForwardItem)
-        let stepBackwardItem = NSMenuItem(title: "Step Backward", action: #selector(stepBackward(_:)), keyEquivalent: "")
-        stepBackwardItem.keyEquivalentModifierMask = [.command]
-        playbackMenu.addItem(stepBackwardItem)
+        playbackMenu.addItem(makeShortcutMenuItem(
+            title: "Step Forward 1 Frame",
+            command: .step(.forward, amount: 1),
+            action: .frameStepForward
+        ))
+        playbackMenu.addItem(makeShortcutMenuItem(
+            title: "Step Forward 10 Frames",
+            command: .step(.forward, amount: 10),
+            action: .frameStepForward,
+            factor: 10
+        ))
+        playbackMenu.addItem(makeShortcutMenuItem(
+            title: "Step Backward 1 Frame",
+            command: .step(.backward, amount: 1),
+            action: .frameStepBackward
+        ))
+        playbackMenu.addItem(makeShortcutMenuItem(
+            title: "Step Backward 10 Frames",
+            command: .step(.backward, amount: 10),
+            action: .frameStepBackward,
+            factor: 10
+        ))
 
-        // Window menu
         let windowMenuItem = NSMenuItem()
         mainMenu.addItem(windowMenuItem)
         let windowMenu = NSMenu(title: "Window")
         windowMenuItem.submenu = windowMenu
-        windowMenu.addItem(withTitle: "Minimize", action: #selector(toggleMinimize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(makeCommandMenuItem(
+            title: "Minimize",
+            command: .toggleMinimize,
+            keyEquivalent: "m",
+            modifiers: [.command]
+        ))
         windowMenu.addItem(.separator())
-        windowMenu.addItem(withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+        windowMenu.addItem(
+            withTitle: "Bring All to Front",
+            action: #selector(NSApplication.arrangeInFront(_:)),
+            keyEquivalent: ""
+        )
         NSApp.windowsMenu = windowMenu
 
-        // Help menu - put documentation first since macOS may intercept first item
         let helpMenuItem = NSMenuItem()
         mainMenu.addItem(helpMenuItem)
         let helpMenu = NSMenu(title: "Help")
         helpMenuItem.submenu = helpMenu
-        helpMenu.addItem(withTitle: "Reframer Documentation", action: #selector(openReframerHelp(_:)), keyEquivalent: "?")
+        helpMenu.addItem(makeCommandMenuItem(
+            title: "Reframer Documentation",
+            command: .openDocumentation,
+            keyEquivalent: "?",
+            modifiers: [.command]
+        ))
+        helpMenu.addItem(makeShortcutMenuItem(
+            title: "Shortcut Settings…",
+            command: .toggleShortcutSettings,
+            action: .showHelp
+        ))
+        helpMenu.addItem(makeShortcutMenuItem(
+            title: "Close Current Panel",
+            command: .closeContext,
+            action: .closeModal
+        ))
 
         NSApp.mainMenu = mainMenu
+        syncShortcutMenuItems()
+    }
+
+    private func makeCommandMenuItem(
+        title: String,
+        command: ReframerCommand,
+        keyEquivalent: String = "",
+        modifiers: NSEvent.ModifierFlags = []
+    ) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: title,
+            action: #selector(performCommandMenuItem(_:)),
+            keyEquivalent: keyEquivalent
+        )
+        item.target = self
+        item.representedObject = ReframerCommandBox(command)
+        item.keyEquivalentModifierMask = modifiers
+        return item
+    }
+
+    private func makeShortcutMenuItem(
+        title: String,
+        command: ReframerCommand,
+        action: ShortcutSettings.Action,
+        factor: Int = 1
+    ) -> NSMenuItem {
+        let item = makeCommandMenuItem(title: title, command: command)
+        shortcutMenuItems.append((item, action, factor))
+        return item
+    }
+
+    private func syncShortcutMenuItems() {
+        let settings = videoState.shortcutSettings
+        for entry in shortcutMenuItems {
+            let binding = settings.binding(for: entry.action)
+            guard binding.isEnabled,
+                  let shortcut = binding.shortcut,
+                  let equivalent = shortcut.menuKeyEquivalent else {
+                entry.item.keyEquivalent = ""
+                entry.item.keyEquivalentModifierMask = []
+                continue
+            }
+            entry.item.keyEquivalent = equivalent
+            entry.item.keyEquivalentModifierMask = shortcut.menuModifierMask(factor: entry.factor)
+        }
     }
 
     // MARK: - Window Creation
@@ -426,7 +587,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.publisher(for: .openVideo)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.openVideoFile()
+                _ = self?.dispatch(.openVideo, origin: .menu)
+            }
+            .store(in: &cancellables)
+
+        videoState.shortcutSettings.$bindings
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.syncShortcutMenuItems()
+            }
+            .store(in: &cancellables)
+
+        videoState.shortcutSettings.$recordingAction
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] action in
+                self?.videoState.isRecordingShortcut = action != nil
+            }
+            .store(in: &cancellables)
+
+        videoState.shortcutSettings.$globalShortcutsEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.installGlobalShortcutMonitor()
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .reconfigureGlobalShortcutMonitor)
+            .merge(with: NotificationCenter.default.publisher(
+                for: NSApplication.didBecomeActiveNotification
+            ))
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.installGlobalShortcutMonitor()
             }
             .store(in: &cancellables)
     }
@@ -435,19 +627,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupGlobalShortcuts() {
         requestAccessibilityPermissionIfNeeded()
+        installGlobalShortcutMonitor()
 
-        globalShortcutMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleGlobalKey(event)
-        }
-
-        localShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if self?.handleGlobalKey(event) == true {
-                return nil
-            }
-            if self?.handleLocalKey(event) == true {
+        localShortcutMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .flagsChanged]
+        ) { [weak self] event in
+            if self?.handleLocalEvent(event) == true {
                 return nil
             }
             return event
+        }
+    }
+
+    private func installGlobalShortcutMonitor() {
+        if let monitor = globalShortcutMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalShortcutMonitor = nil
+        }
+        guard videoState.shortcutSettings.globalShortcutsEnabled else { return }
+        globalShortcutMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) {
+            [weak self] event in
+            self?.handleGlobalKey(event)
         }
     }
 
@@ -476,190 +676,56 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @discardableResult
     private func handleGlobalKey(_ event: NSEvent) -> Bool {
-        let shortcuts = videoState.shortcutSettings
-
-        // Toggle lock (global)
-        if shortcuts.matches(event: event, action: .globalToggleLock) {
-            videoState.isLocked.toggle()
-            return true
+        let settings = videoState.shortcutSettings
+        guard let match = settings.resolve(
+            stroke: ShortcutKeystroke(event: event),
+            scope: .global
+        ) else {
+            return false
         }
-
-        // Step frame forward (global)
-        if shortcuts.matches(event: event, action: .frameStepForward) {
-            videoState.requestFrameStep(direction: .forward, amount: 1)
-            return true
-        }
-        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepForward) {
-            videoState.requestFrameStep(direction: .forward, amount: 10)
-            return true
-        }
-
-        // Step frame backward (global)
-        if shortcuts.matches(event: event, action: .frameStepBackward) {
-            videoState.requestFrameStep(direction: .backward, amount: 1)
-            return true
-        }
-        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepBackward) {
-            videoState.requestFrameStep(direction: .backward, amount: 10)
-            return true
-        }
-
-        return false
+        return dispatch(settings.command(for: match), origin: .globalShortcut)
     }
 
-    /// Handle app-local keyboard shortcuts that should work from any window
+    /// Handles recording first, protects field-editor input second, and then
+    /// resolves and dispatches an app shortcut exactly once.
     @discardableResult
-    private func handleLocalKey(_ event: NSEvent) -> Bool {
-        let shortcuts = videoState.shortcutSettings
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let commandOnly = flags == [.command]
+    private func handleLocalEvent(_ event: NSEvent) -> Bool {
+        let settings = videoState.shortcutSettings
 
-        // Cmd+A in text fields - select all
-        if commandOnly && event.keyCode == KeyCode.a,
-           let textView = activeFieldEditor() {
-            textView.selectAll(nil)
-            return true
-        }
-
-        // Enter/Esc in text fields - defocus and return focus to previous app
-        if event.keyCode == KeyCode.returnKey || event.keyCode == KeyCode.escape,
-           let textView = activeFieldEditor() {
-            textView.window?.makeFirstResponder(nil)
-            NSApp.hide(nil)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                NSApp.unhide(nil)
-            }
-            return true
-        }
-
-        // Don't handle other shortcuts if a text field is first responder
-        for window in NSApp.windows {
-            if let firstResponder = window.firstResponder, firstResponder is NSTextView {
-                return false
-            }
-        }
-        if let keyWindow = NSApp.keyWindow,
-           let firstResponder = keyWindow.firstResponder,
-           firstResponder is NSTextField {
-            return false
-        }
-
-        // Frame step (also works locally)
-        if shortcuts.matches(event: event, action: .frameStepForward) {
-            videoState.requestFrameStep(direction: .forward, amount: 1)
-            return true
-        }
-        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepForward) {
-            videoState.requestFrameStep(direction: .forward, amount: 10)
-            return true
-        }
-        if shortcuts.matches(event: event, action: .frameStepBackward) {
-            videoState.requestFrameStep(direction: .backward, amount: 1)
-            return true
-        }
-        if shortcuts.matchesWithMultiplier(event: event, action: .frameStepBackward) {
-            videoState.requestFrameStep(direction: .backward, amount: 10)
-            return true
-        }
-
-        // Play/Pause
-        if shortcuts.matches(event: event, action: .playPause) && videoState.isVideoLoaded {
-            videoState.isPlaying.toggle()
-            return true
-        }
-
-        // Toggle lock (local)
-        if shortcuts.matches(event: event, action: .toggleLock) {
-            videoState.isLocked.toggle()
-            return true
-        }
-
-        // Toggle lock (global) - also works locally
-        if shortcuts.matches(event: event, action: .globalToggleLock) {
-            videoState.isLocked.toggle()
-            return true
-        }
-
-        // Show help
-        if shortcuts.matches(event: event, action: .showHelp) {
-            videoState.showHelp.toggle()
-            return true
-        }
-
-        // Close modal (Esc) - but not while recording a shortcut
-        if shortcuts.matches(event: event, action: .closeModal) && !videoState.isRecordingShortcut {
-            if videoState.showHelp {
-                videoState.showHelp = false
+        if settings.recordingAction != nil {
+            if event.type == .flagsChanged {
                 return true
             }
-            if videoState.showFilterPanel {
-                videoState.showFilterPanel = false
+            return settings.record(stroke: ShortcutKeystroke(event: event)) != .notRecording
+        }
+
+        guard event.type == .keyDown else { return false }
+        let stroke = ShortcutKeystroke(event: event)
+
+        // A customized chord must never replace native text entry. Sending
+        // matching events directly to the field editor also prevents an
+        // unmodified NSMenuItem key equivalent from stealing typed letters.
+        if let fieldEditor = activeFieldEditor() {
+            if settings.resolve(stroke: stroke, scope: .local) != nil ||
+                NSEvent.ModifierFlags(rawValue: stroke.modifiers)
+                    .intersection([.command, .control, .option]).isEmpty {
+                fieldEditor.keyDown(with: event)
                 return true
             }
             return false
         }
 
-        // Reset zoom
-        if shortcuts.matches(event: event, action: .resetZoom) && videoState.isVideoLoaded && !videoState.isLocked {
-            videoState.zoomScale = 1.0
+        if let control = NSApp.keyWindow?.firstResponder as? NSControl,
+           NSEvent.ModifierFlags(rawValue: stroke.modifiers)
+               .intersection([.command, .control, .option]).isEmpty {
+            control.keyDown(with: event)
             return true
         }
 
-        // Reset view
-        if shortcuts.matches(event: event, action: .resetView) && !videoState.isLocked {
-            videoState.resetView()
-            return true
+        guard let match = settings.resolve(stroke: stroke, scope: .local) else {
+            return false
         }
-
-        // Toggle filter panel
-        if shortcuts.matches(event: event, action: .toggleFilterPanel) && videoState.isVideoLoaded {
-            videoState.showFilterPanel.toggle()
-            return true
-        }
-
-        // Pan shortcuts (with multiplier for 10px)
-        if videoState.isVideoLoaded && !videoState.isLocked {
-            if shortcuts.matches(event: event, action: .panLeft) {
-                videoState.panOffset.width -= 1.0
-                return true
-            }
-            if shortcuts.matchesWithMultiplier(event: event, action: .panLeft) {
-                videoState.panOffset.width -= 10.0
-                return true
-            }
-            if shortcuts.matches(event: event, action: .panRight) {
-                videoState.panOffset.width += 1.0
-                return true
-            }
-            if shortcuts.matchesWithMultiplier(event: event, action: .panRight) {
-                videoState.panOffset.width += 10.0
-                return true
-            }
-            if shortcuts.matches(event: event, action: .panUp) {
-                videoState.panOffset.height += 1.0
-                return true
-            }
-            if shortcuts.matchesWithMultiplier(event: event, action: .panUp) {
-                videoState.panOffset.height += 10.0
-                return true
-            }
-            if shortcuts.matches(event: event, action: .panDown) {
-                videoState.panOffset.height -= 1.0
-                return true
-            }
-            if shortcuts.matchesWithMultiplier(event: event, action: .panDown) {
-                videoState.panOffset.height -= 10.0
-                return true
-            }
-        }
-
-        // ? (Shift+/) - Toggle help (legacy, keep for convenience)
-        if event.keyCode == KeyCode.questionMark && flags.contains(.shift) {
-            videoState.showHelp.toggle()
-            return true
-        }
-
-        return false
+        return dispatch(settings.command(for: match), origin: .localShortcut)
     }
 
     private func activeFieldEditor() -> NSTextView? {
@@ -673,6 +739,109 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         return nil
+    }
+
+    // MARK: - Unified Command Dispatch
+
+    @discardableResult
+    private func dispatch(
+        _ command: ReframerCommand,
+        origin: ReframerCommandOrigin
+    ) -> Bool {
+        guard isCommandAvailable(command, origin: origin) else { return false }
+
+        switch command {
+        case .openVideo:
+            openVideoFile()
+        case .togglePlayPause:
+            videoState.isPlaying.toggle()
+        case .step(let direction, let amount):
+            videoState.requestFrameStep(direction: direction, amount: amount)
+        case .pan(let x, let y):
+            videoState.panOffset.width += CGFloat(x)
+            videoState.panOffset.height += CGFloat(y)
+        case .resetZoom:
+            videoState.zoomScale = 1.0
+        case .resetView:
+            videoState.resetView()
+        case .toggleLock:
+            videoState.isLocked.toggle()
+        case .toggleAlwaysOnTop:
+            videoState.isAlwaysOnTop.toggle()
+        case .toggleShortcutSettings:
+            videoState.showHelp.toggle()
+        case .toggleFilterPanel:
+            videoState.showFilterPanel.toggle()
+        case .closeContext:
+            if videoState.showHelp {
+                videoState.showHelp = false
+            } else if videoState.showFilterPanel {
+                videoState.showFilterPanel = false
+            } else if documentationWindow?.isVisible == true {
+                documentationWindow?.orderOut(nil)
+            } else {
+                return false
+            }
+        case .openDocumentation:
+            openDocumentationWindow()
+        case .toggleMinimize:
+            if mainWindow.isMiniaturized {
+                mainWindow.deminiaturize(nil)
+            } else {
+                mainWindow.miniaturize(nil)
+            }
+        }
+        return true
+    }
+
+    private func isCommandAvailable(
+        _ command: ReframerCommand,
+        origin: ReframerCommandOrigin
+    ) -> Bool {
+        switch command {
+        case .togglePlayPause:
+            return videoState.isVideoLoaded
+        case .step:
+            return videoState.isVideoLoaded
+                && (origin != .globalShortcut || videoState.isLocked)
+        case .pan, .resetZoom, .resetView:
+            return videoState.isVideoLoaded && !videoState.isLocked
+        case .toggleFilterPanel:
+            return videoState.isVideoLoaded
+        case .closeContext:
+            return videoState.showHelp
+                || videoState.showFilterPanel
+                || documentationWindow?.isVisible == true
+        case .openVideo, .toggleLock, .toggleAlwaysOnTop,
+             .toggleShortcutSettings, .openDocumentation, .toggleMinimize:
+            return true
+        }
+    }
+
+    @objc private func performCommandMenuItem(_ sender: NSMenuItem) {
+        guard let command = (sender.representedObject as? ReframerCommandBox)?.command else {
+            return
+        }
+        _ = dispatch(command, origin: .menu)
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        guard let command = (menuItem.representedObject as? ReframerCommandBox)?.command else {
+            return true
+        }
+        switch command {
+        case .toggleLock:
+            menuItem.state = videoState.isLocked ? .on : .off
+        case .toggleAlwaysOnTop:
+            menuItem.state = videoState.isAlwaysOnTop ? .on : .off
+        case .toggleShortcutSettings:
+            menuItem.state = videoState.showHelp ? .on : .off
+        case .toggleFilterPanel:
+            menuItem.state = videoState.showFilterPanel ? .on : .off
+        default:
+            break
+        }
+        return isCommandAvailable(command, origin: .menu)
     }
 
     // MARK: - Window Frame Updates
@@ -845,7 +1014,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if shortcutsWindow == nil {
-            let size = NSSize(width: 360, height: 500)
+            let size = NSSize(width: 520, height: 640)
             let frame = centeredAuxiliaryFrame(size: size)
 
             let panel = TransparentWindow(
@@ -891,6 +1060,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func hideHelpWindow() {
         let shouldRestoreFocus = shortcutsWindow?.isKeyWindow == true
+        videoState.shortcutSettings.cancelRecording()
         shortcutsWindow?.orderOut(nil)
         let snapshot = helpFocusSnapshot
         helpFocusSnapshot = nil
@@ -1034,42 +1204,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Menu Actions (IBActions for storyboard)
 
     @IBAction func openVideo(_ sender: Any?) {
-        openVideoFile()
+        _ = dispatch(.openVideo, origin: .menu)
     }
 
     @IBAction func resetZoom(_ sender: Any?) {
-        videoState.zoomScale = 1.0
+        _ = dispatch(.resetZoom, origin: .menu)
     }
 
     @IBAction func resetPosition(_ sender: Any?) {
-        videoState.resetView()
+        _ = dispatch(.resetView, origin: .menu)
     }
 
     @IBAction func toggleLock(_ sender: Any?) {
-        videoState.isLocked.toggle()
+        _ = dispatch(.toggleLock, origin: .menu)
     }
 
     @IBAction func toggleAlwaysOnTop(_ sender: Any?) {
-        videoState.isAlwaysOnTop.toggle()
+        _ = dispatch(.toggleAlwaysOnTop, origin: .menu)
     }
 
     @IBAction func togglePlayPause(_ sender: Any?) {
-        videoState.isPlaying.toggle()
+        _ = dispatch(.togglePlayPause, origin: .menu)
     }
 
     @IBAction func stepForward(_ sender: Any?) {
-        videoState.requestFrameStep(direction: .forward, amount: 1)
+        _ = dispatch(.step(.forward, amount: 1), origin: .menu)
     }
 
     @IBAction func stepBackward(_ sender: Any?) {
-        videoState.requestFrameStep(direction: .backward, amount: 1)
+        _ = dispatch(.step(.backward, amount: 1), origin: .menu)
     }
 
     @IBAction func showKeyboardShortcuts(_ sender: Any?) {
-        videoState.showHelp = true
+        _ = dispatch(.toggleShortcutSettings, origin: .menu)
     }
 
     @IBAction func openReframerHelp(_ sender: Any?) {
+        _ = dispatch(.openDocumentation, origin: .menu)
+    }
+
+    private func openDocumentationWindow() {
         // Show documentation in a floating window above Reframer
         guard let resourceURL = Bundle.main.resourceURL else { return }
         let helpURL = resourceURL
@@ -1130,16 +1304,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @IBAction func toggleMinimize(_ sender: Any?) {
-        // Toggle minimize - restore if minimized, minimize if not
-        if mainWindow.isMiniaturized {
-            mainWindow.deminiaturize(sender)
-        } else {
-            mainWindow.miniaturize(sender)
-        }
+        _ = dispatch(.toggleMinimize, origin: .menu)
     }
 
     @IBAction func showFilterSettings(_ sender: Any?) {
-        videoState.showFilterPanel = true
+        _ = dispatch(.toggleFilterPanel, origin: .menu)
     }
 
     @IBAction func resetFilterSettings(_ sender: Any?) {

@@ -38,6 +38,7 @@
 		KC001002 /* KeyCodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = KC001001 /* KeyCodes.swift */; };
 		SS001002 /* ScrollStepAccumulator.swift in Sources */ = {isa = PBXBuildFile; fileRef = SS001001 /* ScrollStepAccumulator.swift */; };
 		SST001002 /* ScrollStepAccumulatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SST001001 /* ScrollStepAccumulatorTests.swift */; };
+		SHC001002 /* ShortcutSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHC001001 /* ShortcutSettingsTests.swift */; };
 		UIT001002 /* UITestConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = UIT001001 /* UITestConfig.swift */; };
 		VF001002 /* VideoFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF001001 /* VideoFilter.swift */; };
 		E10000000000000000000002 /* WindowPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* WindowPlacement.swift */; };
@@ -103,6 +104,7 @@
 		KC001001 /* KeyCodes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeyCodes.swift; sourceTree = "<group>"; };
 		SS001001 /* ScrollStepAccumulator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScrollStepAccumulator.swift; sourceTree = "<group>"; };
 		SST001001 /* ScrollStepAccumulatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollStepAccumulatorTests.swift; sourceTree = "<group>"; };
+		SHC001001 /* ShortcutSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettingsTests.swift; sourceTree = "<group>"; };
 		UIT001001 /* UITestConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestConfig.swift; sourceTree = "<group>"; };
 		VF001001 /* VideoFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilter.swift; sourceTree = "<group>"; };
 		E10000000000000000000001 /* WindowPlacement.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WindowPlacement.swift; sourceTree = "<group>"; };
@@ -238,6 +240,7 @@
 				DZ001001 /* DropZoneViewTests.swift */,
 				CBT001001 /* ControlBarStepTests.swift */,
 				SST001001 /* ScrollStepAccumulatorTests.swift */,
+				SHC001001 /* ShortcutSettingsTests.swift */,
 				E10000000000000000000003 /* WindowPlacementTests.swift */,
 				E20000000000000000000003 /* VideoFrameTimelineTests.swift */,
 				DDD40001 /* TestFixtures */,
@@ -469,6 +472,7 @@
 				DZ001002 /* DropZoneViewTests.swift in Sources */,
 				CBT001002 /* ControlBarStepTests.swift in Sources */,
 				SST001002 /* ScrollStepAccumulatorTests.swift in Sources */,
+				SHC001002 /* ShortcutSettingsTests.swift in Sources */,
 				E10000000000000000000004 /* WindowPlacementTests.swift in Sources */,
 				E20000000000000000000004 /* VideoFrameTimelineTests.swift in Sources */,
 			);

@@ -20,4 +20,6 @@ enum KeyCode {
     static let questionMark: UInt16 = 44
     static let escape: UInt16 = 53
     static let returnKey: UInt16 = 36
+    static let delete: UInt16 = 51
+    static let forwardDelete: UInt16 = 117
 }
