@@ -19,3 +19,9 @@
 - Normalized the child control window and XIB to a single 48-point layout, removed every Interface Builder clipping notice, and added control labels, help, state values, tooltips, focus visibility, and frame-entry clamping.
 - Verified the integration branch builds and passes repository, XIB, and built-bundle validation.
 - Xcode's local test launcher currently stalls before materializing a macOS test worker; this is recorded as an environment issue while implementation continues.
+- Replaced nominal-frame-rate arithmetic with exact presentation-order sample indexing, including edit-list source-to-player timeline mapping and stale-seek generation guards.
+- Added explicit scrub begin/preview/end semantics, EOF replay, AVPlayer truth observation, finite metadata validation, and a single generation-scoped loading/failure recovery surface.
+- Replaced deprecated CFR-forcing filter composition with a source-timing-preserving, snapshot-driven filter pipeline and paused-frame refresh.
+- Persisted and sanitized opacity, quick/advanced filters, and every filter parameter using isolated preference tests.
+- Narrowed runtime media preflight to readable, playable, unprotected MP4/M4V/MOV assets with a real video track.
+- Verified the app target and complete unit/UI test targets compile with `build-for-testing`; direct local test execution remains blocked by the previously recorded Xcode worker-launch issue.

@@ -18,12 +18,23 @@ class VideoState: ObservableObject {
         let amount: Int
     }
 
+    enum ScrubRequest: Equatable {
+        case began
+        case preview(Double)
+        case ended(Double)
+    }
+
     // Video loading
     @Published var videoURL: URL?
     @Published var isVideoLoaded: Bool = false
+    @Published var isVideoLoading: Bool = false
+    @Published var videoErrorMessage: String?
+    @Published var filterErrorMessage: String?
 
     // Playback
     @Published var isPlaying: Bool = false
+    @Published var isAtEnd: Bool = false
+    @Published private(set) var isScrubbing: Bool = false
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var currentFrame: Int = 0
@@ -39,16 +50,15 @@ class VideoState: ObservableObject {
     @Published var zoomScale: CGFloat = 1.0
     @Published var panOffset: CGSize = .zero
 
-    // Opacity - always starts at 100%, not persisted
-    @Published var opacity: Double = 1.0
+    @Published var opacity: Double = 1.0 { didSet { handleOpacityChange() } }
 
     // Quick Filter (single filter from dropdown, controls toolbar slider)
-    @Published var quickFilter: VideoFilter? = nil
-    @Published var quickFilterValue: Double = 0.5  // 0-1 normalized value for toolbar slider
+    @Published var quickFilter: VideoFilter? = nil { didSet { persistQuickFilter() } }
+    @Published var quickFilterValue: Double = 0.5 { didSet { handleQuickFilterValueChange() } }
 
     // Advanced Filters (multiple filters from panel, stackable)
-    @Published var advancedFilters: Set<VideoFilter> = []
-    @Published var filterSettings: FilterSettings = .defaults
+    @Published var advancedFilters: Set<VideoFilter> = [] { didSet { persistAdvancedFilters() } }
+    @Published var filterSettings: FilterSettings = .defaults { didSet { handleFilterSettingsChange() } }
     @Published var showFilterPanel: Bool = false
 
     // Lock mode - disables pan/zoom gestures on video, controls remain active
@@ -69,13 +79,17 @@ class VideoState: ObservableObject {
     // Requests
     let seekRequests = PassthroughSubject<SeekRequest, Never>()
     let frameStepRequests = PassthroughSubject<FrameStepRequest, Never>()
+    let scrubRequests = PassthroughSubject<ScrubRequest, Never>()
+    let reloadRequests = PassthroughSubject<Void, Never>()
 
     @Published private(set) var lastSeekRequest: SeekRequest?
     @Published private(set) var lastFrameStepRequest: FrameStepRequest?
+    @Published private(set) var lastScrubRequest: ScrubRequest?
 
     private var isLoadingPreferences = false
     private var isAdjustingMute = false
     private var lastNonZeroVolume: Float = 0.5
+    private let defaults: UserDefaults
 
     // Computed properties
     var zoomPercentage: Int {
@@ -108,9 +122,14 @@ class VideoState: ObservableObject {
         static let muted = "VideoOverlay.muted"
         static let opacity = "VideoOverlay.opacity"
         static let alwaysOnTop = "VideoOverlay.alwaysOnTop"
+        static let quickFilter = "VideoOverlay.quickFilter"
+        static let quickFilterValue = "VideoOverlay.quickFilterValue"
+        static let advancedFilters = "VideoOverlay.advancedFilters"
+        static let filterSettings = "VideoOverlay.filterSettings"
     }
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         isLoadingPreferences = true
         loadPreferences()
         isLoadingPreferences = false
@@ -164,14 +183,39 @@ class VideoState: ObservableObject {
         frameStepRequests.send(request)
     }
 
+    func beginScrubbing() {
+        guard isVideoLoaded, !isScrubbing else { return }
+        isScrubbing = true
+        lastScrubRequest = .began
+        scrubRequests.send(.began)
+    }
+
+    func previewScrub(time: Double) {
+        guard isVideoLoaded, isScrubbing else { return }
+        lastScrubRequest = .preview(time)
+        scrubRequests.send(.preview(time))
+    }
+
+    func endScrubbing(time: Double) {
+        guard isVideoLoaded else { return }
+        isScrubbing = false
+        lastScrubRequest = .ended(time)
+        scrubRequests.send(.ended(time))
+    }
+
+    func reloadVideo() {
+        guard videoURL != nil else { return }
+        reloadRequests.send()
+    }
+
     // MARK: - Quick Filter Methods (dropdown - single select)
 
     /// Set the quick filter (replaces any existing)
     func setQuickFilter(_ filter: VideoFilter?) {
+        guard filter != quickFilter else { return }
         quickFilter = filter
-        // Reset slider to middle when changing filters
-        if filter != nil {
-            quickFilterValue = 0.5
+        if let filter {
+            quickFilterValue = filter.defaultNormalizedValue
         }
     }
 
@@ -237,16 +281,20 @@ class VideoState: ObservableObject {
     }
 
     private func loadPreferences() {
-        let defaults = UserDefaults.standard
-
         if defaults.object(forKey: DefaultsKeys.alwaysOnTop) != nil {
             isAlwaysOnTop = defaults.bool(forKey: DefaultsKeys.alwaysOnTop)
         }
 
-        // Opacity always starts at 100% - don't restore from defaults
+        if let storedOpacity = defaults.object(forKey: DefaultsKeys.opacity) as? NSNumber {
+            opacity = Self.sanitized(storedOpacity.doubleValue, range: 0.02...1, fallback: 1)
+        }
 
         if defaults.object(forKey: DefaultsKeys.lastVolume) != nil {
-            lastNonZeroVolume = defaults.float(forKey: DefaultsKeys.lastVolume)
+            lastNonZeroVolume = Self.sanitized(
+                defaults.float(forKey: DefaultsKeys.lastVolume),
+                range: 0...1,
+                fallback: 0.5
+            )
         } else {
             lastNonZeroVolume = 0.5
         }
@@ -255,16 +303,40 @@ class VideoState: ObservableObject {
         }
 
         let hasVolume = defaults.object(forKey: DefaultsKeys.volume) != nil
-        let savedVolume = hasVolume ? defaults.float(forKey: DefaultsKeys.volume) : lastNonZeroVolume
+        let savedVolume = hasVolume
+            ? Self.sanitized(defaults.float(forKey: DefaultsKeys.volume), range: 0...1, fallback: lastNonZeroVolume)
+            : lastNonZeroVolume
         let hasMuted = defaults.object(forKey: DefaultsKeys.muted) != nil
         let savedMuted = hasMuted ? defaults.bool(forKey: DefaultsKeys.muted) : true
 
         isMuted = savedMuted
         volume = savedMuted ? 0.0 : savedVolume
+
+        if let rawFilter = defaults.string(forKey: DefaultsKeys.quickFilter) {
+            quickFilter = VideoFilter(rawValue: rawFilter)
+        }
+        if let storedValue = defaults.object(forKey: DefaultsKeys.quickFilterValue) as? NSNumber {
+            quickFilterValue = Self.sanitized(storedValue.doubleValue, range: 0...1, fallback: quickFilter?.defaultNormalizedValue ?? 0.5)
+        } else if let quickFilter {
+            quickFilterValue = quickFilter.defaultNormalizedValue
+        }
+
+        if let rawFilters = defaults.array(forKey: DefaultsKeys.advancedFilters) as? [String] {
+            advancedFilters = Set(rawFilters.compactMap(VideoFilter.init(rawValue:)))
+        }
+        if let data = defaults.data(forKey: DefaultsKeys.filterSettings),
+           let decoded = try? JSONDecoder().decode(FilterSettings.self, from: data) {
+            filterSettings = decoded.sanitized
+        }
     }
 
     private func handleVolumeChange(oldValue: Float) {
         guard !isLoadingPreferences else { return }
+        let sanitized = Self.sanitized(volume, range: 0...1, fallback: oldValue)
+        if sanitized != volume {
+            volume = sanitized
+            return
+        }
         if volume > 0 {
             lastNonZeroVolume = volume
             persistFloat(lastNonZeroVolume, key: DefaultsKeys.lastVolume)
@@ -309,16 +381,74 @@ class VideoState: ObservableObject {
 
     private func persistBool(_ value: Bool, key: String) {
         guard !isLoadingPreferences else { return }
-        UserDefaults.standard.set(value, forKey: key)
+        defaults.set(value, forKey: key)
     }
 
     private func persistFloat(_ value: Float, key: String) {
         guard !isLoadingPreferences else { return }
-        UserDefaults.standard.set(value, forKey: key)
+        defaults.set(value, forKey: key)
     }
 
     private func persistDouble(_ value: Double, key: String) {
         guard !isLoadingPreferences else { return }
-        UserDefaults.standard.set(value, forKey: key)
+        defaults.set(value, forKey: key)
+    }
+
+    private func handleOpacityChange() {
+        guard !isLoadingPreferences else { return }
+        let sanitized = Self.sanitized(opacity, range: 0.02...1, fallback: 1)
+        if sanitized != opacity {
+            opacity = sanitized
+            return
+        }
+        persistDouble(opacity, key: DefaultsKeys.opacity)
+    }
+
+    private func handleQuickFilterValueChange() {
+        guard !isLoadingPreferences else { return }
+        let sanitized = Self.sanitized(quickFilterValue, range: 0...1, fallback: quickFilter?.defaultNormalizedValue ?? 0.5)
+        if sanitized != quickFilterValue {
+            quickFilterValue = sanitized
+            return
+        }
+        persistDouble(quickFilterValue, key: DefaultsKeys.quickFilterValue)
+    }
+
+    private func persistQuickFilter() {
+        guard !isLoadingPreferences else { return }
+        if let quickFilter {
+            defaults.set(quickFilter.rawValue, forKey: DefaultsKeys.quickFilter)
+        } else {
+            defaults.removeObject(forKey: DefaultsKeys.quickFilter)
+        }
+    }
+
+    private func persistAdvancedFilters() {
+        guard !isLoadingPreferences else { return }
+        defaults.set(
+            orderedAdvancedFilters.map(\.rawValue),
+            forKey: DefaultsKeys.advancedFilters
+        )
+    }
+
+    private func handleFilterSettingsChange() {
+        guard !isLoadingPreferences else { return }
+        let sanitized = filterSettings.sanitized
+        if sanitized != filterSettings {
+            filterSettings = sanitized
+            return
+        }
+        if let data = try? JSONEncoder().encode(filterSettings) {
+            defaults.set(data, forKey: DefaultsKeys.filterSettings)
+        }
+    }
+
+    private static func sanitized<T: BinaryFloatingPoint>(
+        _ value: T,
+        range: ClosedRange<T>,
+        fallback: T
+    ) -> T {
+        guard value.isFinite else { return fallback }
+        return max(range.lowerBound, min(range.upperBound, value))
     }
 }

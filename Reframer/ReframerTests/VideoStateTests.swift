@@ -5,31 +5,23 @@ import XCTest
 final class VideoStateTests: XCTestCase {
 
     var videoState: VideoState!
-    private let preferenceKeys = [
-        "VideoOverlay.volume",
-        "VideoOverlay.lastVolume",
-        "VideoOverlay.muted",
-        "VideoOverlay.opacity",
-        "VideoOverlay.alwaysOnTop"
-    ]
+    private var defaults: UserDefaults!
+    private var suiteName: String!
 
     override func setUp() {
         super.setUp()
-        resetPreferences()
-        videoState = VideoState()
+        suiteName = "Reframer.VideoStateTests.\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suiteName)
+        defaults.removePersistentDomain(forName: suiteName)
+        videoState = VideoState(defaults: defaults)
     }
 
     override func tearDown() {
         videoState = nil
-        resetPreferences()
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults = nil
+        suiteName = nil
         super.tearDown()
-    }
-
-    private func resetPreferences() {
-        let defaults = UserDefaults.standard
-        for key in preferenceKeys {
-            defaults.removeObject(forKey: key)
-        }
     }
 
     // MARK: - F-OP-002: Opacity Minimum (via setOpacityPercentage)
@@ -181,11 +173,52 @@ final class VideoStateTests: XCTestCase {
         videoState.opacity = 0.73
         videoState.isAlwaysOnTop = false
 
-        let reloaded = VideoState()
+        let reloaded = VideoState(defaults: defaults)
         XCTAssertEqual(reloaded.volume, 0.42, accuracy: 0.001, "Volume should persist")
         XCTAssertFalse(reloaded.isMuted, "Mute state should persist")
         XCTAssertEqual(reloaded.opacity, 0.73, accuracy: 0.001, "Opacity should persist")
         XCTAssertFalse(reloaded.isAlwaysOnTop, "Always-on-top should persist")
+    }
+
+    func testFilterPreferencesRoundTrip() {
+        var settings = FilterSettings.defaults
+        settings.exposure = 1.25
+        settings.lineArtContrast = 125
+        videoState.setQuickFilter(.contrast)
+        videoState.quickFilterValue = 0.75
+        videoState.advancedFilters = [.edges, .lineArt]
+        videoState.filterSettings = settings
+
+        let reloaded = VideoState(defaults: defaults)
+
+        XCTAssertEqual(reloaded.quickFilter, .contrast)
+        XCTAssertEqual(reloaded.quickFilterValue, 0.75, accuracy: 0.000_001)
+        XCTAssertEqual(reloaded.advancedFilters, [.edges, .lineArt])
+        XCTAssertEqual(reloaded.filterSettings, settings)
+    }
+
+    func testQuickFilterUsesItsNeutralDefault() {
+        videoState.setQuickFilter(.contrast)
+        XCTAssertEqual(videoState.quickFilterValue, 0.2, accuracy: 0.000_001)
+
+        videoState.setQuickFilter(.brightness)
+        XCTAssertEqual(videoState.quickFilterValue, 0.5, accuracy: 0.000_001)
+    }
+
+    func testCorruptAndOutOfRangePreferencesFailSafe() throws {
+        defaults.set(Double.infinity, forKey: "VideoOverlay.opacity")
+        defaults.set(-25.0, forKey: "VideoOverlay.quickFilterValue")
+        defaults.set("Contrast", forKey: "VideoOverlay.quickFilter")
+        defaults.set(["Edges", "Unknown Filter"], forKey: "VideoOverlay.advancedFilters")
+        defaults.set(Data("not-json".utf8), forKey: "VideoOverlay.filterSettings")
+
+        let reloaded = VideoState(defaults: defaults)
+
+        XCTAssertEqual(reloaded.opacity, 1)
+        XCTAssertEqual(reloaded.quickFilter, .contrast)
+        XCTAssertEqual(reloaded.quickFilterValue, 0)
+        XCTAssertEqual(reloaded.advancedFilters, [.edges])
+        XCTAssertEqual(reloaded.filterSettings, .defaults)
     }
 
     func testSeekRequestsRecordLastValue() {
@@ -199,6 +232,56 @@ final class VideoStateTests: XCTestCase {
     func testFrameStepRequestsRecordLastValue() {
         videoState.requestFrameStep(direction: .forward, amount: 3)
         XCTAssertEqual(videoState.lastFrameStepRequest, VideoState.FrameStepRequest(direction: .forward, amount: 3))
+    }
+
+    func testScrubLifecycleIsExplicit() {
+        videoState.isVideoLoaded = true
+
+        videoState.beginScrubbing()
+        XCTAssertTrue(videoState.isScrubbing)
+        XCTAssertEqual(videoState.lastScrubRequest, .began)
+
+        videoState.previewScrub(time: 2.5)
+        XCTAssertEqual(videoState.lastScrubRequest, .preview(2.5))
+
+        videoState.endScrubbing(time: 2.75)
+        XCTAssertFalse(videoState.isScrubbing)
+        XCTAssertEqual(videoState.lastScrubRequest, .ended(2.75))
+    }
+
+    func testPresentationStatePrioritizesFailureAndLoading() {
+        XCTAssertEqual(
+            MainPresentationState.resolve(
+                isLoaded: false,
+                isLoading: false,
+                errorMessage: nil
+            ),
+            .empty
+        )
+        XCTAssertEqual(
+            MainPresentationState.resolve(
+                isLoaded: false,
+                isLoading: true,
+                errorMessage: nil
+            ),
+            .loading
+        )
+        XCTAssertEqual(
+            MainPresentationState.resolve(
+                isLoaded: true,
+                isLoading: false,
+                errorMessage: nil
+            ),
+            .ready
+        )
+        XCTAssertEqual(
+            MainPresentationState.resolve(
+                isLoaded: true,
+                isLoading: true,
+                errorMessage: "Decoder failed"
+            ),
+            .failed("Decoder failed")
+        )
     }
 
     // MARK: - Computed Properties

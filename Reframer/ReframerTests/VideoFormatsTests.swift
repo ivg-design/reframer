@@ -21,19 +21,19 @@ final class VideoFormatsTests: XCTestCase {
                       "M4V should be a supported format")
     }
 
-    func testAVISupported() {
-        XCTAssertTrue(VideoFormats.supportedExtensions.contains("avi"),
-                      "AVI should be a supported format")
+    func testAVIIsNotAdvertisedOrAccepted() {
+        XCTAssertFalse(VideoFormats.supportedExtensions.contains("avi"))
+        XCTAssertFalse(VideoFormats.isSupported(URL(fileURLWithPath: "/test/video.avi")))
     }
 
     func testSupportedTypesNotEmpty() {
         XCTAssertFalse(VideoFormats.supportedTypes.isEmpty, "There should be supported types")
-        XCTAssertGreaterThan(VideoFormats.supportedTypes.count, 5, "Should support multiple types")
+        XCTAssertGreaterThanOrEqual(VideoFormats.supportedTypes.count, 2)
     }
 
     func testSupportedExtensionsNotEmpty() {
         XCTAssertFalse(VideoFormats.supportedExtensions.isEmpty, "Should have supported extensions")
-        XCTAssertGreaterThan(VideoFormats.supportedExtensions.count, 5, "Should support several extensions")
+        XCTAssertEqual(VideoFormats.supportedExtensions, ["mp4", "m4v", "mov"])
     }
 
     // MARK: - isSupported URL method
@@ -60,7 +60,7 @@ final class VideoFormatsTests: XCTestCase {
 
     func testIsSupportedWithContentType() {
         XCTAssertTrue(VideoFormats.isSupported(contentType: .mpeg4Movie), "MPEG4 content type should be supported")
-        XCTAssertTrue(VideoFormats.isSupported(contentType: .movie), "Generic movie content type should be supported")
+        XCTAssertFalse(VideoFormats.isSupported(contentType: .movie), "A generic movie claim would exceed the product contract")
     }
 
     // MARK: - UTType support
@@ -75,9 +75,8 @@ final class VideoFormatsTests: XCTestCase {
                       "QuickTime movie type should be supported")
     }
 
-    func testAVITypeSupported() {
-        XCTAssertTrue(VideoFormats.supportedTypes.contains(.avi),
-                      "AVI type should be supported")
+    func testAVITypeIsNotSupported() {
+        XCTAssertFalse(VideoFormats.isSupported(contentType: .avi))
     }
 
     // MARK: - Display String
@@ -85,5 +84,32 @@ final class VideoFormatsTests: XCTestCase {
     func testDisplayStringNotEmpty() {
         XCTAssertFalse(VideoFormats.displayString.isEmpty, "Display string should not be empty")
         XCTAssertTrue(VideoFormats.displayString.contains("MP4"), "Display string should mention MP4")
+        XCTAssertTrue(VideoFormats.displayString.contains("M4V"))
+        XCTAssertTrue(VideoFormats.displayString.contains("MOV"))
+    }
+
+    func testPreflightAcceptsKnownFixture() async throws {
+        let bundle = Bundle(for: Self.self)
+        let url = try XCTUnwrap(bundle.url(forResource: "test_30fps_2s", withExtension: "mp4"))
+
+        let asset = try await VideoFormats.preflight(url)
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+
+        XCTAssertFalse(tracks.isEmpty)
+    }
+
+    func testPreflightRejectsMissingSupportedFile() async {
+        do {
+            _ = try await VideoFormats.preflight(
+                URL(fileURLWithPath: "/tmp/reframer-missing-fixture.mp4")
+            )
+            XCTFail("Preflight should reject a missing file")
+        } catch let error as VideoPreflightError {
+            guard case .missingFile = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
     }
 }

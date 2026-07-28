@@ -45,7 +45,7 @@ UI automation must run on a host where Xcode automation mode and required Input 
 
 ## Integration queue
 
-- [ ] Playback worker commit reviewed and integrated
+- [x] Playback correctness implementation reviewed and integrated
 - [ ] Shortcut worker commit reviewed and integrated
 - [x] UX/accessibility implementation reviewed and integrated
 - [ ] Cross-cutting window and permission UX integrated

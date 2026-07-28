@@ -1,102 +1,96 @@
-import UniformTypeIdentifiers
 import AVFoundation
+import UniformTypeIdentifiers
+
+enum VideoPreflightError: LocalizedError {
+    case unsupportedExtension(String)
+    case missingFile
+    case unreadableFile
+    case notPlayable
+    case protectedContent
+    case noVideoTrack
+    case invalidDuration
+    case invalidVideoDimensions
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedExtension(let ext):
+            return ext.isEmpty
+                ? "Choose an MP4, M4V, or MOV video."
+                : ".\(ext.uppercased()) is not supported. Choose an MP4, M4V, or MOV video."
+        case .missingFile:
+            return "The selected video no longer exists."
+        case .unreadableFile:
+            return "Reframer cannot read the selected video. Check its file permissions."
+        case .notPlayable:
+            return "AVFoundation cannot play this file's video codec or media data."
+        case .protectedContent:
+            return "Protected video cannot be used as a reference overlay."
+        case .noVideoTrack:
+            return "The selected file does not contain a playable video track."
+        case .invalidDuration:
+            return "The selected video does not have a valid duration."
+        case .invalidVideoDimensions:
+            return "The selected video does not have valid display dimensions."
+        }
+    }
+}
 
 struct VideoFormats {
-    /// All supported video types for file open dialog and drag-drop
-    static let supportedTypes: [UTType] = buildSupportedTypes()
+    static let supportedExtensions = ["mp4", "m4v", "mov"]
 
-    private static func buildSupportedTypes() -> [UTType] {
-        var types: [UTType] = []
-
-        // Standard formats
-        types.append(.mpeg4Movie)
-        types.append(.quickTimeMovie)
-        types.append(.avi)
-        types.append(.movie)
-
-        // M4V
-        addType(&types, "com.apple.m4v-video")
-
-        // Apple ProRes variants
-        addType(&types, "com.apple.prores")
-        addType(&types, "com.apple.prores.4444")
-        addType(&types, "com.apple.prores.422")
-        addType(&types, "com.apple.prores.422.hq")
-        addType(&types, "com.apple.prores.422.lt")
-        addType(&types, "com.apple.prores.422.proxy")
-
-        // H.264/AVC
-        addType(&types, "public.h264")
-        addType(&types, "public.avc")
-
-        // H.265/HEVC
-        addType(&types, "public.hevc")
-
-        // AV1 (macOS 13+ with Apple Silicon hardware support)
-        addType(&types, "public.av1")
-        addType(&types, "org.aomedia.av1")
-
-        // MPEG formats
-        addType(&types, "public.mpeg")
-        addType(&types, "public.mpeg-2-video")
-        addType(&types, "public.mpeg-4")
-
-        // Other common formats
-        addType(&types, "com.microsoft.windows-media-wmv")
-        addType(&types, "public.3gpp")
-        addType(&types, "public.3gpp2")
-
+    static let supportedTypes: [UTType] = {
+        var types: [UTType] = [.mpeg4Movie, .quickTimeMovie]
+        if let m4v = UTType("com.apple.m4v-video") {
+            types.append(m4v)
+        }
         return types
-    }
+    }()
 
-    private static func addType(_ types: inout [UTType], _ identifier: String) {
-        if let type = UTType(identifier) {
-            types.append(type)
-        }
-    }
+    static let displayString = "MP4 • M4V • MOV"
 
-    /// File extensions for display and validation
-    static let supportedExtensions: [String] = [
-        "mp4", "m4v", "mov", "avi",
-        "mpeg", "mpg", "mts", "m2ts", "ts", "m2v",
-        "wmv", "flv", "f4v",
-        "3gp", "3g2", "divx", "vob", "asf"
-    ]
-
-    /// Check if a URL is a supported video format
     static func isSupported(_ url: URL) -> Bool {
-        if let contentType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType {
-            if isSupported(contentType: contentType) {
-                return true
-            }
-        }
-
         let ext = url.pathExtension.lowercased()
-        if supportedExtensions.contains(ext) {
+        guard supportedExtensions.contains(ext) else { return false }
+
+        // A non-existent URL (for example, before a save/open operation or in
+        // a unit test) is validated by extension. Existing files also have
+        // their declared type checked so renamed non-video files are rejected.
+        guard FileManager.default.fileExists(atPath: url.path) else { return true }
+        guard let contentType = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType else {
             return true
         }
-
-        if let type = UTType(filenameExtension: ext) {
-            return isSupported(contentType: type)
-        }
-
-        return false
+        return isSupported(contentType: contentType)
     }
 
     static func isSupported(contentType: UTType) -> Bool {
-        for type in supportedTypes {
-            if contentType.conforms(to: type) {
-                return true
-            }
-        }
-
-        if contentType.conforms(to: .movie) || contentType.conforms(to: .video) || contentType.conforms(to: .audiovisualContent) {
-            return true
-        }
-
-        return false
+        supportedTypes.contains { contentType.conforms(to: $0) }
     }
 
-    /// Get display string for supported formats
-    static let displayString = "MP4 • MOV • ProRes • H.264 • H.265 • AVI"
+    /// Validates the actual local asset before the UI declares it loaded.
+    static func preflight(_ url: URL) async throws -> AVURLAsset {
+        let ext = url.pathExtension.lowercased()
+        guard supportedExtensions.contains(ext) else {
+            throw VideoPreflightError.unsupportedExtension(ext)
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw VideoPreflightError.missingFile
+        }
+        guard FileManager.default.isReadableFile(atPath: url.path) else {
+            throw VideoPreflightError.unreadableFile
+        }
+
+        let asset = AVURLAsset(url: url)
+        let isPlayable = try await asset.load(.isPlayable)
+        guard isPlayable else {
+            throw VideoPreflightError.notPlayable
+        }
+        guard try await !asset.load(.hasProtectedContent) else {
+            throw VideoPreflightError.protectedContent
+        }
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        guard !tracks.isEmpty else {
+            throw VideoPreflightError.noVideoTrack
+        }
+        return asset
+    }
 }

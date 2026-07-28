@@ -1,7 +1,7 @@
 import Foundation
 
 /// Settings for all video filters
-struct FilterSettings: Codable, Equatable {
+struct FilterSettings: Codable, Equatable, Sendable {
     // MARK: - Basic Adjustments
     var brightnessLevel: Double = 0.0  // -1.0 to 1.0 (0 = no change)
     var contrastLevel: Double = 1.0    // 0.25 to 4.0 (1 = no change)
@@ -57,5 +57,34 @@ struct FilterSettings: Codable, Equatable {
         settings.lineArtEdge = 75.0
         settings.lineArtContrast = 100.0
         return settings
+    }
+
+    var sanitized: FilterSettings {
+        var value = self
+        value.brightnessLevel = Self.clamp(value.brightnessLevel, -1...1, fallback: 0)
+        value.contrastLevel = Self.clamp(value.contrastLevel, 0.25...4, fallback: 1)
+        value.saturationLevel = Self.clamp(value.saturationLevel, 0...2, fallback: 1)
+        value.exposure = Self.clamp(value.exposure, -3...3, fallback: 0)
+        value.edgeIntensity = Self.clamp(value.edgeIntensity, 0...10, fallback: 1)
+        value.sharpness = Self.clamp(value.sharpness, 0...2, fallback: 0.4)
+        value.unsharpRadius = Self.clamp(value.unsharpRadius, 0...10, fallback: 2.5)
+        value.unsharpIntensity = Self.clamp(value.unsharpIntensity, 0...2, fallback: 0.5)
+        value.monochromeR = Self.clamp(value.monochromeR, 0...1, fallback: 0.6)
+        value.monochromeG = Self.clamp(value.monochromeG, 0...1, fallback: 0.45)
+        value.monochromeB = Self.clamp(value.monochromeB, 0...1, fallback: 0.3)
+        value.monochromeIntensity = Self.clamp(value.monochromeIntensity, 0...1, fallback: 1)
+        value.lineArtEdge = Self.clamp(value.lineArtEdge, 0.1...200, fallback: 50)
+        value.lineArtThreshold = Self.clamp(value.lineArtThreshold, 0...1, fallback: 0.1)
+        value.lineArtContrast = Self.clamp(value.lineArtContrast, 1...200, fallback: 50)
+        return value
+    }
+
+    private static func clamp(
+        _ value: Double,
+        _ range: ClosedRange<Double>,
+        fallback: Double
+    ) -> Double {
+        guard value.isFinite else { return fallback }
+        return max(range.lowerBound, min(range.upperBound, value))
     }
 }

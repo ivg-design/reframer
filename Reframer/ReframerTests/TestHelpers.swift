@@ -20,7 +20,7 @@ class VideoTestHelper {
             throw TestError.fixtureNotFound(name)
         }
 
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         let duration = try await asset.load(.duration).seconds
 
         guard let track = try await asset.loadTracks(withMediaType: .video).first else {

@@ -2,7 +2,7 @@ import Foundation
 import CoreImage
 
 /// Available video filters for reference overlay work
-enum VideoFilter: String, CaseIterable, Identifiable {
+enum VideoFilter: String, CaseIterable, Identifiable, Sendable {
     case brightness = "Brightness"
     case contrast = "Contrast"
     case saturation = "Saturation"
@@ -56,6 +56,12 @@ enum VideoFilter: String, CaseIterable, Identifiable {
         case .monochrome: return (0.0, 1.0, 1.0)    // Uses intensity as primary
         case .lineArt: return (0.1, 200.0, 50.0)    // Uses edge as primary
         }
+    }
+
+    var defaultNormalizedValue: Double {
+        let range = parameterRange
+        guard range.max > range.min else { return 0 }
+        return max(0, min(1, (range.defaultValue - range.min) / (range.max - range.min)))
     }
 
     /// Create filter using quick filter value (normalized 0-1)

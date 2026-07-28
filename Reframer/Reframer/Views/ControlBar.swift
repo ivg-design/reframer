@@ -1,6 +1,22 @@
 import Cocoa
 import Combine
 
+/// Reports a complete mouse-tracking lifecycle while leaving keyboard and
+/// accessibility actions as discrete exact seeks.
+final class TimelineSlider: NSSlider {
+    var onBeginTracking: (() -> Void)?
+    var onEndTracking: ((Double) -> Void)?
+    private(set) var isTrackingTimeline = false
+
+    override func mouseDown(with event: NSEvent) {
+        isTrackingTimeline = true
+        onBeginTracking?()
+        super.mouseDown(with: event)
+        isTrackingTimeline = false
+        onEndTracking?(doubleValue)
+    }
+}
+
 /// Pure AppKit control bar loaded from XIB
 class ControlBar: NSView {
 
@@ -23,7 +39,7 @@ class ControlBar: NSView {
     private var opacityIcon: NSImageView?
 
     // Sliders
-    private var timelineSlider: NSSlider?
+    private var timelineSlider: TimelineSlider?
     private var opacitySlider: NSSlider?
     private var volumeSlider: NSSlider?
 
@@ -42,7 +58,6 @@ class ControlBar: NSView {
 
     private var cancellables = Set<AnyCancellable>()
     private var isHovering = false
-    private var isScrubbing = false
     private var focusObservers: [NSObjectProtocol] = []
     enum StepCommand {
         case up
@@ -284,6 +299,12 @@ class ControlBar: NSView {
 
         timelineSlider?.target = self
         timelineSlider?.action = #selector(timelineChanged)
+        timelineSlider?.onBeginTracking = { [weak self] in
+            self?.videoState?.beginScrubbing()
+        }
+        timelineSlider?.onEndTracking = { [weak self] value in
+            self?.videoState?.endScrubbing(time: value)
+        }
 
         opacitySlider?.target = self
         opacitySlider?.action = #selector(opacitySliderChanged)
@@ -370,8 +391,12 @@ class ControlBar: NSView {
     }
 
     @objc private func timelineChanged(_ sender: Any?) {
-        guard let slider = timelineSlider else { return }
-        handleTimelineChange(value: slider.doubleValue, isHighlighted: slider.isHighlighted)
+        guard let slider = timelineSlider, let state = videoState else { return }
+        if slider.isTrackingTimeline {
+            state.previewScrub(time: slider.doubleValue)
+        } else {
+            state.requestSeek(time: slider.doubleValue, accurate: true)
+        }
     }
 
     @objc private func opacitySliderChanged(_ sender: Any?) {
@@ -391,22 +416,6 @@ class ControlBar: NSView {
     @objc private func volumeSliderChanged(_ sender: Any?) {
         guard let slider = volumeSlider else { return }
         videoState?.volume = Float(slider.doubleValue)
-    }
-
-    private func handleTimelineChange(value: Double, isHighlighted: Bool) {
-        guard let state = videoState else { return }
-
-        let wasScrubbing = isScrubbing
-        isScrubbing = isHighlighted
-        if isScrubbing {
-            state.requestSeek(time: value, accurate: false)
-            return
-        }
-
-        // On release (or click), do an accurate seek
-        if wasScrubbing || !isHighlighted {
-            state.requestSeek(time: value, accurate: true)
-        }
     }
 
     // MARK: - State Binding
@@ -510,7 +519,7 @@ class ControlBar: NSView {
         state.$currentTime
             .receive(on: DispatchQueue.main)
             .sink { [weak self] currentTime in
-                guard let self = self, !self.isScrubbing else { return }
+                guard let self = self, self.videoState?.isScrubbing != true else { return }
                 self.timelineSlider?.doubleValue = currentTime
                 self.timelineSlider?.setAccessibilityValue(currentTime)
             }
