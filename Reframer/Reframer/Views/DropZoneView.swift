@@ -29,12 +29,21 @@ class DropZoneView: NSView {
         setup()
     }
 
+    override var acceptsFirstResponder: Bool { true }
+
     // MARK: - Setup
 
     private func setup() {
         wantsLayer = true
         layer?.cornerRadius = 12
         layer?.masksToBounds = true
+        focusRingType = .exterior
+
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Open video")
+        setAccessibilityHelp("Open or drop an MP4, M4V, or MOV video")
+        setAccessibilityIdentifier("open-video-drop-zone")
 
         // Register for drag and drop - must register for fileURL to accept file drops
         registerForDraggedTypes([.fileURL])
@@ -51,6 +60,7 @@ class DropZoneView: NSView {
         // Icon
         let icon = NSImage(systemSymbolName: "play.rectangle.on.rectangle", accessibilityDescription: "Video")
         iconImageView.image = icon
+        iconImageView.setAccessibilityElement(false)
         iconImageView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 48, weight: .light)
         iconImageView.contentTintColor = .secondaryLabelColor
         iconImageView.translatesAutoresizingMaskIntoConstraints = false
@@ -107,7 +117,7 @@ class DropZoneView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        if isTargeted {
+        if isTargeted || window?.firstResponder === self {
             let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 12, yRadius: 12)
             NSColor.controlAccentColor.setStroke()
             path.lineWidth = 2
@@ -115,10 +125,38 @@ class DropZoneView: NSView {
         }
     }
 
+    override func becomeFirstResponder() -> Bool {
+        needsDisplay = true
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        needsDisplay = true
+        return true
+    }
+
     // MARK: - Click Handling
 
     @objc private func handleClick() {
+        activateOpen()
+    }
+
+    private func activateOpen() {
         NotificationCenter.default.post(name: .openVideo, object: nil)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 36, 49, 76: // Return, Space, keypad Enter
+            activateOpen()
+        default:
+            super.keyDown(with: event)
+        }
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        activateOpen()
+        return true
     }
 
     // MARK: - Drag and Drop

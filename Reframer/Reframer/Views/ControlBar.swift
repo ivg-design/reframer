@@ -43,7 +43,7 @@ class ControlBar: NSView {
     private var cancellables = Set<AnyCancellable>()
     private var isHovering = false
     private var isScrubbing = false
-    private var firstResponderObserver: Any?
+    private var focusObservers: [NSObjectProtocol] = []
     enum StepCommand {
         case up
         case down
@@ -160,6 +160,42 @@ class ControlBar: NSView {
         zoomField?.setAccessibilityIdentifier("input-zoom")
         opacityField?.setAccessibilityIdentifier("input-opacity")
 
+        configureAccessibility()
+    }
+
+    private func configureAccessibility() {
+        configure(button: openButton, label: "Open video", help: "Choose an MP4, M4V, or MOV video")
+        configure(button: stepBackButton, label: "Previous frame", help: "Step backward one decoded video frame")
+        configure(button: playButton, label: "Play", help: "Start or pause video playback")
+        configure(button: stepForwardButton, label: "Next frame", help: "Step forward one decoded video frame")
+        configure(button: resetButton, label: "Reset view", help: "Reset zoom and position")
+        configure(button: muteButton, label: "Mute", help: "Mute or unmute video audio")
+        configure(button: lockButton, label: "Lock overlay", help: "Lock or unlock global frame stepping")
+
+        configure(control: timelineSlider, label: "Timeline", help: "Scrub through the video")
+        configure(control: opacitySlider, label: "Opacity", help: "Adjust video opacity")
+        configure(control: volumeSlider, label: "Volume", help: "Adjust playback volume")
+        configure(control: frameField, label: "Current frame", help: "Enter a decoded frame number")
+        configure(control: zoomField, label: "Zoom percentage", help: "Enter a zoom from 10 to 1000 percent")
+        configure(control: opacityField, label: "Opacity percentage", help: "Enter opacity from 2 to 100 percent")
+
+        frameTotalLabel?.setAccessibilityElement(false)
+        zoomPercentLabel?.setAccessibilityElement(false)
+    }
+
+    private func configure(button: NSButton?, label: String, help: String) {
+        button?.setAccessibilityElement(true)
+        button?.setAccessibilityRole(.button)
+        button?.setAccessibilityLabel(label)
+        button?.setAccessibilityHelp(help)
+        button?.toolTip = help
+    }
+
+    private func configure(control: NSControl?, label: String, help: String) {
+        control?.setAccessibilityElement(true)
+        control?.setAccessibilityLabel(label)
+        control?.setAccessibilityHelp(help)
+        control?.toolTip = help
     }
 
     private func findView(withIdentifier identifier: String, in view: NSView) -> NSView? {
@@ -206,11 +242,11 @@ class ControlBar: NSView {
               let index = stackView.arrangedSubviews.firstIndex(of: icon) else { return }
 
         // Create the filter menu button
-        let button = FilterMenuButton(frame: NSRect(x: 0, y: 0, width: 24, height: 24))
+        let button = FilterMenuButton(frame: NSRect(x: 0, y: 0, width: 32, height: 32))
         button.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            button.widthAnchor.constraint(equalToConstant: 24),
-            button.heightAnchor.constraint(equalToConstant: 24)
+            button.widthAnchor.constraint(equalToConstant: 32),
+            button.heightAnchor.constraint(equalToConstant: 32)
         ])
 
         // Replace the opacity icon with the filter button in the stack view
@@ -266,17 +302,21 @@ class ControlBar: NSView {
         updateTrackingAreas()
 
         // Observe first responder changes to update opacity when fields gain/lose focus
-        firstResponderObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didBecomeKeyNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.updateOpacity()
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didUpdateNotification] {
+            let observer = NotificationCenter.default.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard notification.object as? NSWindow === self?.window else { return }
+                self?.updateOpacity()
+            }
+            focusObservers.append(observer)
         }
     }
 
     deinit {
-        if let observer = firstResponderObserver {
+        for observer in focusObservers {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -383,6 +423,9 @@ class ControlBar: NSView {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isPlaying in
                 self?.playButton?.state = isPlaying ? .on : .off
+                self?.playButton?.setAccessibilityLabel(isPlaying ? "Pause" : "Play")
+                self?.playButton?.setAccessibilityValue(isPlaying ? "Playing" : "Paused")
+                self?.playButton?.toolTip = isPlaying ? "Pause video playback" : "Play video"
             }
             .store(in: &cancellables)
 
@@ -391,6 +434,7 @@ class ControlBar: NSView {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] frame in
                 self?.frameField?.stringValue = "\(frame)"
+                self?.frameField?.setAccessibilityValue(frame)
             }
             .store(in: &cancellables)
 
@@ -398,6 +442,7 @@ class ControlBar: NSView {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] total in
                 self?.frameTotalLabel?.stringValue = "/ \(total)"
+                self?.frameField?.setAccessibilityHelp("Current decoded frame. Video contains \(total) frames.")
             }
             .store(in: &cancellables)
 
@@ -412,6 +457,7 @@ class ControlBar: NSView {
                 } else {
                     self?.zoomField?.stringValue = String(format: "%.1f", percentage)
                 }
+                self?.zoomField?.setAccessibilityValue(percentage)
             }
             .store(in: &cancellables)
 
@@ -434,6 +480,8 @@ class ControlBar: NSView {
                 guard filter.isQuickFilterAdjustable else { return }
                 self.opacitySlider?.doubleValue = value
                 self.opacityField?.stringValue = self.formatFilterValue(filter: filter, normalizedValue: value)
+                self.opacitySlider?.setAccessibilityValue(value)
+                self.opacityField?.setAccessibilityValue(self.opacityField?.stringValue)
             }
             .store(in: &cancellables)
 
@@ -443,6 +491,8 @@ class ControlBar: NSView {
                 guard let self = self, self.videoState?.quickFilter == nil else { return }
                 self.opacityField?.stringValue = "\(Int(opacity * 100))"
                 self.opacitySlider?.doubleValue = opacity
+                self.opacityField?.setAccessibilityValue(Int(opacity * 100))
+                self.opacitySlider?.setAccessibilityValue(opacity)
             }
             .store(in: &cancellables)
 
@@ -452,6 +502,7 @@ class ControlBar: NSView {
             .sink { [weak self] duration in
                 guard let self = self else { return }
                 self.timelineSlider?.maxValue = max(0.1, duration)
+                self.timelineSlider?.setAccessibilityMaxValue(duration)
             }
             .store(in: &cancellables)
 
@@ -461,6 +512,7 @@ class ControlBar: NSView {
             .sink { [weak self] currentTime in
                 guard let self = self, !self.isScrubbing else { return }
                 self.timelineSlider?.doubleValue = currentTime
+                self.timelineSlider?.setAccessibilityValue(currentTime)
             }
             .store(in: &cancellables)
 
@@ -470,6 +522,9 @@ class ControlBar: NSView {
             .sink { [weak self] isMuted in
                 self?.muteButton?.state = isMuted ? .on : .off
                 self?.volumeSlider?.isHidden = isMuted
+                self?.muteButton?.setAccessibilityLabel(isMuted ? "Unmute" : "Mute")
+                self?.muteButton?.setAccessibilityValue(isMuted ? "Muted" : "Audible")
+                self?.muteButton?.toolTip = isMuted ? "Unmute video audio" : "Mute video audio"
             }
             .store(in: &cancellables)
 
@@ -478,6 +533,7 @@ class ControlBar: NSView {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] volume in
                 self?.volumeSlider?.doubleValue = Double(volume)
+                self?.volumeSlider?.setAccessibilityValue(volume)
             }
             .store(in: &cancellables)
 
@@ -487,6 +543,9 @@ class ControlBar: NSView {
             .sink { [weak self] isLocked in
                 self?.lockButton?.state = isLocked ? .on : .off
                 self?.lockButton?.contentTintColor = isLocked ? .systemRed : nil
+                self?.lockButton?.setAccessibilityLabel(isLocked ? "Unlock overlay" : "Lock overlay")
+                self?.lockButton?.setAccessibilityValue(isLocked ? "Locked" : "Unlocked")
+                self?.lockButton?.toolTip = isLocked ? "Unlock global frame stepping" : "Lock and enable global frame stepping"
                 self?.zoomField?.isEnabled = !isLocked
                 self?.resetButton?.isEnabled = !isLocked
                 self?.updateOpacity()
@@ -521,6 +580,9 @@ class ControlBar: NSView {
         guard let state = videoState else { return }
 
         if let filter = filter {
+            opacitySlider?.setAccessibilityLabel("\(filter.rawValue) strength")
+            opacitySlider?.setAccessibilityHelp("Adjust the \(filter.rawValue.lowercased()) quick filter")
+            opacityField?.setAccessibilityLabel("\(filter.rawValue) value")
             // Quick filter active: slider controls filter value (0-1 normalized)
             // But display shows actual parameter value
             opacitySlider?.minValue = 0.0
@@ -541,6 +603,9 @@ class ControlBar: NSView {
                 opacityField?.stringValue = "On"
             }
         } else {
+            opacitySlider?.setAccessibilityLabel("Opacity")
+            opacitySlider?.setAccessibilityHelp("Adjust video opacity")
+            opacityField?.setAccessibilityLabel("Opacity percentage")
             // No quick filter: slider controls opacity (0-100%)
             opacitySlider?.minValue = 0.02  // Minimum 2%
             opacitySlider?.maxValue = 1.0
@@ -588,34 +653,36 @@ class ControlBar: NSView {
     }
 
     private func updateOpacity() {
-        // Check if any of our text fields currently has focus
-        let fieldHasFocus = isTextFieldActive()
+        let accessibilityIsActive = NSWorkspace.shared.isVoiceOverEnabled
+        let shouldShow = isHovering ||
+            isControlBarFocused() ||
+            accessibilityIsActive ||
+            !(videoState?.isVideoLoaded ?? false)
+        let targetAlpha: CGFloat = shouldShow ? 1.0 : 0.4
 
-        // Show full opacity when: hovering, field focused, or no video loaded
-        // Lock mode should NOT affect toolbar visibility
-        let shouldShow = isHovering || fieldHasFocus || !(videoState?.isVideoLoaded ?? false)
+        guard abs(alphaValue - targetAlpha) > 0.001 else { return }
 
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            self.animator().alphaValue = shouldShow ? 1.0 : 0.4
+            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.2
+            self.animator().alphaValue = targetAlpha
         }
     }
 
-    /// Check if any of our text fields is currently the first responder (being edited)
-    private func isTextFieldActive() -> Bool {
+    /// Keep controls legible whenever keyboard focus is anywhere in the bar.
+    private func isControlBarFocused() -> Bool {
         guard let window = self.window else { return false }
         guard let firstResponder = window.firstResponder else { return false }
 
-        // When editing a text field, the first responder is the field editor (NSTextView)
-        // We need to check if this field editor belongs to one of our fields
         if let textView = firstResponder as? NSTextView,
            let delegate = textView.delegate as? NSTextField {
-            return delegate === frameField || delegate === zoomField || delegate === opacityField
+            return delegate === frameField ||
+                delegate === zoomField ||
+                delegate === opacityField ||
+                delegate.isDescendant(of: self)
         }
 
-        // Also check if the field itself is first responder (before editing starts)
-        if let textField = firstResponder as? NSTextField {
-            return textField === frameField || textField === zoomField || textField === opacityField
+        if let view = firstResponder as? NSView {
+            return view === self || view.isDescendant(of: self)
         }
 
         return false
@@ -640,7 +707,12 @@ extension ControlBar: NSTextFieldDelegate {
 
         if textField === frameField {
             if let value = Int(textField.stringValue) {
-                videoState?.requestSeek(frame: value)
+                let lastFrame = max(0, (videoState?.totalFrames ?? 1) - 1)
+                let clamped = max(0, min(lastFrame, value))
+                textField.stringValue = "\(clamped)"
+                videoState?.requestSeek(frame: clamped)
+            } else {
+                textField.stringValue = "\(videoState?.currentFrame ?? 0)"
             }
         } else if textField === zoomField {
             if let value = Double(textField.stringValue) {

@@ -12,10 +12,6 @@ class FilterMenuButton: NSView {
 
     private var cancellables = Set<AnyCancellable>()
     private let imageView = NSImageView()
-    private var holdTimer: Timer?
-    private var didShowMenu = false
-
-    private let holdDuration: TimeInterval = 0.3  // 300ms hold to show menu
 
     // MARK: - Initialization
 
@@ -29,13 +25,21 @@ class FilterMenuButton: NSView {
         setup()
     }
 
+    override var acceptsFirstResponder: Bool { true }
+
     private func setup() {
         wantsLayer = true
         setAccessibilityElement(true)
+        setAccessibilityRole(.popUpButton)
+        setAccessibilityLabel("Quick filter")
+        setAccessibilityHelp("Choose a quick video filter or open advanced filters")
+        setAccessibilityIdentifier("quick-filter-menu")
+        focusRingType = .exterior
 
         imageView.translatesAutoresizingMaskIntoConstraints = false
         imageView.imageScaling = .scaleProportionallyDown
         imageView.contentTintColor = .secondaryLabelColor
+        imageView.setAccessibilityElement(false)
         addSubview(imageView)
 
         NSLayoutConstraint.activate([
@@ -72,67 +76,22 @@ class FilterMenuButton: NSView {
             // Quick filter active - show that filter's icon
             imageView.image = NSImage(systemSymbolName: filter.iconName, accessibilityDescription: filter.rawValue)
             imageView.contentTintColor = .controlAccentColor
-            toolTip = filter.rawValue
+            toolTip = "Quick filter: \(filter.rawValue)"
+            setAccessibilityValue(filter.rawValue)
         } else {
             // No quick filter - show opacity icon (checkerboard)
             imageView.image = NSImage(systemSymbolName: "checkerboard.rectangle", accessibilityDescription: "Opacity")
             imageView.contentTintColor = .secondaryLabelColor
-            toolTip = "Opacity"
+            toolTip = "Quick filter: None"
+            setAccessibilityValue("None")
         }
     }
 
     // MARK: - Mouse Handling
 
     override func mouseDown(with event: NSEvent) {
-        didShowMenu = false
-
-        // Cmd+click: reset to default
-        if event.modifierFlags.contains(.command) {
-            resetFilterToDefault()
-            return
-        }
-
-        // Start hold timer for menu
-        holdTimer = Timer.scheduledTimer(withTimeInterval: holdDuration, repeats: false) { [weak self] _ in
-            self?.showFilterMenu(with: event)
-        }
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        holdTimer?.invalidate()
-        holdTimer = nil
-
-        // Single click (no modifiers): cycle to next filter
-        if !didShowMenu && !event.modifierFlags.contains(.command) {
-            cycleToNextFilter()
-        }
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        // If dragging while menu is shown, let menu handle it
-    }
-
-    // MARK: - Filter Cycling
-
-    private func cycleToNextFilter() {
-        guard let state = videoState else { return }
-
-        let simpleFilters = VideoFilter.simpleFilters
-        guard !simpleFilters.isEmpty else { return }
-
-        if let currentFilter = state.quickFilter,
-           let currentIndex = simpleFilters.firstIndex(of: currentFilter) {
-            // Move to next filter, or back to nil (opacity mode)
-            let nextIndex = currentIndex + 1
-            if nextIndex < simpleFilters.count {
-                state.setQuickFilter(simpleFilters[nextIndex])
-            } else {
-                state.setQuickFilter(nil)  // Back to opacity
-            }
-        } else {
-            // No filter active, start with first filter
-            state.setQuickFilter(simpleFilters[0])
-        }
+        window?.makeFirstResponder(self)
+        showFilterMenu()
     }
 
     private func resetFilterToDefault() {
@@ -154,11 +113,7 @@ class FilterMenuButton: NSView {
         return NSUserInterfaceItemIdentifier("quick-filter-\(slug)")
     }
 
-    private func showFilterMenu(with event: NSEvent) {
-        didShowMenu = true
-        holdTimer?.invalidate()
-        holdTimer = nil
-
+    func makeFilterMenu() -> NSMenu {
         let menu = NSMenu()
 
         // "None" option to clear quick filter
@@ -192,7 +147,13 @@ class FilterMenuButton: NSView {
         menu.addItem(item)
     }
 
-        menu.addItem(.separator())
+        let resetItem = NSMenuItem(
+            title: videoState?.quickFilter == nil ? "Reset Opacity" : "Reset Filter Strength",
+            action: #selector(resetCurrentValue(_:)),
+            keyEquivalent: ""
+        )
+        resetItem.target = self
+        menu.addItem(resetItem)
 
         // Advanced Filters option
         let advancedItem = NSMenuItem()
@@ -202,9 +163,17 @@ class FilterMenuButton: NSView {
         advancedItem.action = #selector(showAdvancedFilters(_:))
         menu.addItem(advancedItem)
 
-        // Show menu at button location
+        return menu
+    }
+
+    private func showFilterMenu() {
+        let menu = makeFilterMenu()
         let location = NSPoint(x: 0, y: bounds.height)
         menu.popUp(positioning: nil, at: location, in: self)
+    }
+
+    @objc private func resetCurrentValue(_ sender: Any?) {
+        resetFilterToDefault()
     }
 
     @objc func filterSelected(_ sender: NSMenuItem) {
@@ -223,19 +192,23 @@ class FilterMenuButton: NSView {
     // MARK: - Right Click
 
     override func rightMouseDown(with event: NSEvent) {
-        showFilterMenu(with: event)
+        window?.makeFirstResponder(self)
+        showFilterMenu()
     }
 
     // MARK: - Accessibility
 
-    override func accessibilityLabel() -> String? {
-        if let filter = videoState?.quickFilter {
-            return "Filter: \(filter.rawValue)"
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 36, 49, 76: // Return, Space, keypad Enter
+            showFilterMenu()
+        default:
+            super.keyDown(with: event)
         }
-        return "No filter active"
     }
 
-    override func accessibilityRole() -> NSAccessibility.Role? {
-        return .button
+    override func accessibilityPerformPress() -> Bool {
+        showFilterMenu()
+        return true
     }
 }

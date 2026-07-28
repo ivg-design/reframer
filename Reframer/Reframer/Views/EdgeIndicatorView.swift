@@ -42,6 +42,12 @@ class EdgeIndicatorView: NSView {
         setup()
     }
 
+    /// The indicator is a visual affordance only. Returning `nil` lets the
+    /// drop zone, player, and resize surface below it receive pointer input.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
     private func setup() {
         wantsLayer = true
         layer?.backgroundColor = .clear
@@ -210,7 +216,7 @@ class EdgeIndicatorView: NSView {
 
     private func showBaseGlows() {
         CATransaction.begin()
-        CATransaction.setAnimationDuration(0.4)
+        CATransaction.setAnimationDuration(animationDuration(0.4))
         topGlow.opacity = baseOpacity
         leftGlow.opacity = baseOpacity
         rightGlow.opacity = baseOpacity
@@ -219,7 +225,7 @@ class EdgeIndicatorView: NSView {
 
     private func hideAllGlows() {
         CATransaction.begin()
-        CATransaction.setAnimationDuration(0.3)
+        CATransaction.setAnimationDuration(animationDuration(0.3))
         topGlow.opacity = 0
         leftGlow.opacity = 0
         rightGlow.opacity = 0
@@ -228,7 +234,7 @@ class EdgeIndicatorView: NSView {
 
     private func highlightEdge(_ edge: Edge) {
         CATransaction.begin()
-        CATransaction.setAnimationDuration(0.2)
+        CATransaction.setAnimationDuration(animationDuration(0.2))
 
         // Reset all to base
         topGlow.opacity = baseOpacity
@@ -246,5 +252,9 @@ class EdgeIndicatorView: NSView {
         }
 
         CATransaction.commit()
+    }
+
+    private func animationDuration(_ preferredDuration: CFTimeInterval) -> CFTimeInterval {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : preferredDuration
     }
 }

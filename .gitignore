@@ -37,6 +37,7 @@ Carthage/Checkouts/
 
 # Archives
 *.xcarchive
+.artifacts/
 
 # App bundles
 *.app

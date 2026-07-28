@@ -11,68 +11,68 @@
         <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
         <customObject id="-3" userLabel="Application" customClass="NSObject"/>
         <customView id="c22-O7-iKe" userLabel="Control Bar View">
-            <rect key="frame" x="0.0" y="0.0" width="861" height="40"/>
+            <rect key="frame" x="0.0" y="0.0" width="861" height="48"/>
             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
             <subviews>
                 <visualEffectView identifier="glass-bg" blendingMode="behindWindow" material="contentBackground" state="active" translatesAutoresizingMaskIntoConstraints="NO" id="glass-bg">
-                    <rect key="frame" x="0.0" y="0.0" width="861" height="40"/>
+                    <rect key="frame" x="0.0" y="0.0" width="861" height="48"/>
                 </visualEffectView>
                 <stackView identifier="main-stack" distribution="fill" orientation="horizontal" alignment="centerY" spacing="5" horizontalStackHuggingPriority="250" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="main-stack">
-                    <rect key="frame" x="0.0" y="0.0" width="861" height="40"/>
+                    <rect key="frame" x="0.0" y="0.0" width="861" height="48"/>
                     <subviews>
                         <button identifier="btn-open" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-open">
-                            <rect key="frame" x="5" y="8" width="24" height="24"/>
-                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" borderStyle="border" imageScaling="proportionallyDown" id="btn-open-cell">
+                            <rect key="frame" x="5" y="4" width="40" height="40"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" imageScaling="proportionallyDown" id="btn-open-cell">
                                 <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                 <font key="font" metaFont="system"/>
                                 <imageReference key="image" image="folder.fill" catalog="system" symbolScale="large"/>
                             </buttonCell>
                             <color key="bezelColor" name="AccentColor"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="24" id="open-h"/>
-                                <constraint firstAttribute="width" constant="24" id="open-w"/>
+                                <constraint firstAttribute="height" constant="40" id="open-h"/>
+                                <constraint firstAttribute="width" constant="40" id="open-w"/>
                             </constraints>
                         </button>
                         <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="div-1">
                             <rect key="frame" x="32" y="0.0" width="5" height="40"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="40" id="FcZ-n5-nSr"/>
+                                <constraint firstAttribute="height" constant="48" id="FcZ-n5-nSr"/>
                             </constraints>
                         </box>
                         <button identifier="btn-step-back" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-step-back">
-                            <rect key="frame" x="40" y="8" width="24" height="24"/>
-                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" borderStyle="border" imageScaling="proportionallyDown" id="btn-step-back-cell">
+                            <rect key="frame" x="40" y="4" width="40" height="40"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" imageScaling="proportionallyDown" id="btn-step-back-cell">
                                 <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                 <font key="font" metaFont="system"/>
                                 <imageReference key="image" image="backward.frame.fill" catalog="system" symbolScale="large" variableValue="1"/>
                             </buttonCell>
                             <constraints>
-                                <constraint firstAttribute="height" constant="24" id="stepback-h"/>
-                                <constraint firstAttribute="width" constant="24" id="stepback-w"/>
+                                <constraint firstAttribute="height" constant="40" id="stepback-h"/>
+                                <constraint firstAttribute="width" constant="40" id="stepback-w"/>
                             </constraints>
                         </button>
                         <button identifier="btn-play" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-play">
-                            <rect key="frame" x="69" y="8" width="24" height="24"/>
-                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" alternateImage="pause.fill" catalog="system" borderStyle="border" imageScaling="proportionallyDown" id="btn-play-cell">
+                            <rect key="frame" x="69" y="4" width="40" height="40"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" alternateImage="pause.fill" catalog="system" imageScaling="proportionallyDown" id="btn-play-cell">
                                 <behavior key="behavior" pushIn="YES" changeContents="YES" lightByContents="YES"/>
                                 <font key="font" metaFont="system"/>
                                 <imageReference key="image" image="play.fill" catalog="system" symbolScale="large"/>
                             </buttonCell>
                             <constraints>
-                                <constraint firstAttribute="height" constant="24" id="play-h"/>
-                                <constraint firstAttribute="width" constant="24" id="play-w"/>
+                                <constraint firstAttribute="height" constant="40" id="play-h"/>
+                                <constraint firstAttribute="width" constant="40" id="play-w"/>
                             </constraints>
                         </button>
                         <button identifier="btn-step-forward" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-step-forward">
-                            <rect key="frame" x="98" y="8" width="24" height="24"/>
-                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" borderStyle="border" imageScaling="proportionallyDown" id="btn-step-forward-cell">
+                            <rect key="frame" x="98" y="4" width="40" height="40"/>
+                            <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" imageScaling="proportionallyDown" id="btn-step-forward-cell">
                                 <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                 <font key="font" metaFont="system"/>
                                 <imageReference key="image" image="forward.frame.fill" catalog="system" symbolScale="large"/>
                             </buttonCell>
                             <constraints>
-                                <constraint firstAttribute="height" constant="24" id="stepfwd-h"/>
-                                <constraint firstAttribute="width" constant="24" id="stepfwd-w"/>
+                                <constraint firstAttribute="height" constant="40" id="stepfwd-h"/>
+                                <constraint firstAttribute="width" constant="40" id="stepfwd-w"/>
                             </constraints>
                         </button>
                         <slider identifier="slider-timeline" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="slider-timeline">
@@ -85,7 +85,7 @@
                         <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="div-2">
                             <rect key="frame" x="330" y="0.0" width="5" height="40"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="40" id="CYt-bQ-ncr"/>
+                                <constraint firstAttribute="height" constant="48" id="CYt-bQ-ncr"/>
                             </constraints>
                         </box>
                         <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="jEj-nH-TYI">
@@ -124,7 +124,7 @@
                         <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="div-3">
                             <rect key="frame" x="475" y="0.0" width="5" height="40"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="40" id="jlf-0o-mEl"/>
+                                <constraint firstAttribute="height" constant="48" id="jlf-0o-mEl"/>
                             </constraints>
                         </box>
                         <imageView translatesAutoresizingMaskIntoConstraints="NO" id="FN8-If-vwn">
@@ -162,8 +162,8 @@
                         <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="KPZ-yf-Z39">
                             <rect key="frame" x="583" y="0.0" width="5" height="40"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="40" id="RMW-Mx-dEC"/>
-                                <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="40" id="kca-rl-ysp"/>
+                                <constraint firstAttribute="height" constant="48" id="RMW-Mx-dEC"/>
+                                <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="48" id="kca-rl-ysp"/>
                             </constraints>
                         </box>
                         <imageView identifier="icon-opacity" translatesAutoresizingMaskIntoConstraints="NO" id="NIn-fL-tqi">
@@ -184,7 +184,7 @@
                             <sliderCell key="cell" controlSize="mini" continuous="YES" alignment="left" minValue="0.02" maxValue="1" doubleValue="1" tickMarkPosition="below" sliderType="linear" id="slider-opacity-cell"/>
                         </slider>
                         <textField identifier="field-opacity" focusRingType="none" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="field-opacity">
-                            <rect key="frame" x="725" y="8" width="32" height="24"/>
+                            <rect key="frame" x="725" y="12" width="50" height="24"/>
                             <constraints>
                                 <constraint firstAttribute="height" constant="24" id="5YC-vi-w7L"/>
                                 <constraint firstAttribute="width" constant="50" id="opacity-w"/>
@@ -198,11 +198,11 @@
                         <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="div-5">
                             <rect key="frame" x="760" y="0.0" width="5" height="40"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="40" id="7Wq-yy-PXq"/>
+                                <constraint firstAttribute="height" constant="48" id="7Wq-yy-PXq"/>
                             </constraints>
                         </box>
                         <button identifier="btn-mute" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-mute">
-                            <rect key="frame" x="768" y="2" width="24.5" height="35"/>
+                            <rect key="frame" x="768" y="8" width="32" height="32"/>
                             <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" imageScaling="proportionallyDown" id="btn-mute-cell">
                                 <behavior key="behavior" pushIn="YES" changeContents="YES" lightByContents="YES"/>
                                 <font key="font" metaFont="system"/>
@@ -210,8 +210,8 @@
                                 <imageReference key="alternateImage" image="speaker.slash.fill" catalog="system" symbolScale="large"/>
                             </buttonCell>
                             <constraints>
-                                <constraint firstAttribute="height" constant="24" id="mute-h"/>
-                                <constraint firstAttribute="width" constant="24" id="mute-w"/>
+                                <constraint firstAttribute="height" constant="32" id="mute-h"/>
+                                <constraint firstAttribute="width" constant="32" id="mute-w"/>
                             </constraints>
                         </button>
                         <slider identifier="slider-volume" hidden="YES" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="slider-volume">
@@ -224,11 +224,11 @@
                         <box horizontalHuggingPriority="750" boxType="separator" translatesAutoresizingMaskIntoConstraints="NO" id="div-6">
                             <rect key="frame" x="795" y="0.0" width="5" height="40"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="40" id="wcn-VM-M31"/>
+                                <constraint firstAttribute="height" constant="48" id="wcn-VM-M31"/>
                             </constraints>
                         </box>
                         <button identifier="btn-lock" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-lock">
-                            <rect key="frame" x="803" y="3.5" width="24" height="34"/>
+                            <rect key="frame" x="803" y="8" width="32" height="32"/>
                             <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" imageScaling="proportionallyDown" id="btn-lock-cell">
                                 <behavior key="behavior" pushIn="YES" changeContents="YES" lightByContents="YES"/>
                                 <font key="font" metaFont="system"/>
@@ -236,26 +236,26 @@
                                 <imageReference key="alternateImage" image="lock.fill" catalog="system" symbolScale="large"/>
                             </buttonCell>
                             <constraints>
-                                <constraint firstAttribute="height" constant="24" id="lock-h"/>
-                                <constraint firstAttribute="width" constant="24" id="lock-w"/>
+                                <constraint firstAttribute="height" constant="32" id="lock-h"/>
+                                <constraint firstAttribute="width" constant="32" id="lock-w"/>
                             </constraints>
                         </button>
                         <button identifier="btn-reset" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="btn-reset">
-                            <rect key="frame" x="832" y="3.5" width="24" height="33"/>
+                            <rect key="frame" x="832" y="8" width="32" height="32"/>
                             <buttonCell key="cell" type="bevel" bezelStyle="regularSquare" imagePosition="only" alignment="center" imageScaling="proportionallyDown" id="btn-reset-cell">
                                 <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                 <font key="font" metaFont="system"/>
                                 <imageReference key="image" image="arrow.uturn.left.square" catalog="system" symbolScale="large"/>
                             </buttonCell>
                             <constraints>
-                                <constraint firstAttribute="width" constant="24" id="fQh-MF-Rey"/>
-                                <constraint firstAttribute="height" constant="24" id="reset-h"/>
+                                <constraint firstAttribute="width" constant="32" id="fQh-MF-Rey"/>
+                                <constraint firstAttribute="height" constant="32" id="reset-h"/>
                             </constraints>
                         </button>
                     </subviews>
                     <edgeInsets key="edgeInsets" left="5" right="5" top="5" bottom="0.0"/>
                     <constraints>
-                        <constraint firstAttribute="height" constant="40" id="i18-Xw-Gak"/>
+                        <constraint firstAttribute="height" constant="48" id="i18-Xw-Gak"/>
                     </constraints>
                     <visibilityPriorities>
                         <integer value="1000"/>

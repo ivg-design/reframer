@@ -14,4 +14,8 @@
 - Added a separate serial UI-test workflow for an interactive, normally authorized macOS runner.
 - Removed runner code that edited privacy databases, restarted privacy services, removed provenance, or re-signed build products.
 - Added Hardened Runtime release packaging, Developer ID verification, notarization, stapling, Gatekeeper assessment, license, and security policy.
-- Verified the integration branch still builds and passes the built-bundle contract; toolbar clipping remains an intentionally enforced pending gate.
+- Integrated multi-display geometry with seven focused unit tests.
+- Repaired the click-through edge indicator, keyboard/VoiceOver drop zone, conventional quick-filter menu, and Reduce Motion behavior.
+- Normalized the child control window and XIB to a single 48-point layout, removed every Interface Builder clipping notice, and added control labels, help, state values, tooltips, focus visibility, and frame-entry clamping.
+- Verified the integration branch builds and passes repository, XIB, and built-bundle validation.
+- Xcode's local test launcher currently stalls before materializing a macOS test worker; this is recorded as an environment issue while implementation continues.

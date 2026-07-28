@@ -41,7 +41,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     let videoState = VideoState()
     private var cancellables = Set<AnyCancellable>()
-    private let controlWindowHeight: CGFloat = 80
+    /// Kept in sync with ControlBar.xib so the child window and its content
+    /// have one layout height and never create conflicting constraints.
+    private let controlWindowHeight: CGFloat = 48
     private let windowFrameDefaultsKey = "VideoOverlay.mainWindowFrame"
 
     private var mainViewController: MainViewController!
