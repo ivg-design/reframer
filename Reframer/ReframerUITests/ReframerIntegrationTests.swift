@@ -1,8 +1,8 @@
 import XCTest
 
 /// Comprehensive integration tests with video loaded.
-/// Each test launches with its own sandbox-staged fixture and restores a known
-/// UI state, so execution order cannot change the result.
+/// Each test launches with isolated preferences, opens its fixture through
+/// Launch Services, and restores a known UI state.
 final class ReframerIntegrationTests: XCTestCase {
 
     private var app: XCUIApplication!
@@ -15,21 +15,12 @@ final class ReframerIntegrationTests: XCTestCase {
             relativeTo: #filePath
         )
         app = XCUIApplication()
-        app.launchEnvironment["UITEST_MODE"] = "1"
-        app.launchArguments += [
-            "-ApplePersistenceIgnoreState", "YES",
-            "-VideoOverlay.quickFilter", "__UITEST_NONE__",
-            "-VideoOverlay.opacity", "1.0",
-            "-VideoOverlay.muted", "YES",
-            "-VideoOverlay.volume", "0.5",
-            "-VideoOverlay.lastVolume", "0.5"
-        ]
+        UITestConfig.configure(app)
         app.launch()
         XCTAssertTrue(
-            UITestVideoLoader.open(fixtureURL, in: app),
+            UITestVideoLoader.openAndWaitForReady(fixtureURL, in: app),
             "Fixture should open through Launch Services"
         )
-        waitForVideoReady()
     }
 
     override func tearDownWithError() throws {
@@ -108,16 +99,6 @@ final class ReframerIntegrationTests: XCTestCase {
         return slider.exists && slider.isEnabled
     }
 
-    private func waitForVideoReady(timeout: TimeInterval = 8) {
-        let slider = app.sliders["slider-timeline"]
-        let predicate = NSPredicate(format: "exists == true AND isEnabled == true")
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: slider)
-        let result = XCTWaiter.wait(for: [expectation], timeout: timeout)
-        if result != .completed {
-            XCTFail("Video failed to load in setup - timeline slider not enabled")
-        }
-    }
-
     private func waitForValue(
         _ expected: String,
         in element: XCUIElement,
@@ -173,6 +154,29 @@ final class ReframerIntegrationTests: XCTestCase {
         let predicate = NSPredicate(format: "isHittable == %@", NSNumber(value: expected))
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func valueRemains(
+        _ expected: String,
+        in element: XCUIElement,
+        duration: TimeInterval = 0.5
+    ) -> Bool {
+        let changed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value != %@", expected),
+            object: element
+        )
+        changed.isInverted = true
+        return XCTWaiter.wait(for: [changed], timeout: duration) == .completed
+    }
+
+    private func relaunchPreservingIsolatedPreferences() {
+        app.terminate()
+        UITestConfig.configure(app, resetPreferences: false)
+        app.launch()
+        XCTAssertTrue(
+            UITestVideoLoader.openAndWaitForReady(fixtureURL, in: app),
+            "Relaunch should reopen the fixture through Launch Services"
+        )
     }
 
     // MARK: - Video Loading
@@ -455,27 +459,39 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertTrue(zoomField.isEnabled, "Zoom field should be enabled after unlocking")
     }
 
-    /// The app-active path exercises the same command resolver without leaving
-    /// the test process.
-    func testLockMode_CmdPageDownStepsFrames() throws {
+    /// The app-active path covers both directions and every advertised factor.
+    func testFrameStepShortcutsCoverBothDirectionsAndMultipliers() throws {
         XCTAssertTrue(isVideoLoaded())
-        ensureLocked()
-
-        let initialFrame = getFrameValue()
-        app.typeKey(.pageDown, modifierFlags: .command)
         let frameField = app.textFields["input-frame"]
+        frameField.click()
+        app.typeKey("a", modifierFlags: .command)
+        app.typeText("20")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitForNumericValue(20, in: frameField))
+
+        app.typeKey(.pageDown, modifierFlags: .command)
         XCTAssertTrue(
-            waitForNumericValue(Double(initialFrame + 1), in: frameField),
-            "Cmd+PageDown should step 1 frame when locked"
+            waitForNumericValue(21, in: frameField),
+            "Command-Page Down should advance one frame"
         )
 
         app.typeKey(.pageDown, modifierFlags: [.command, .shift])
         XCTAssertTrue(
-            waitForNumericValue(Double(initialFrame + 11), in: frameField),
-            "Cmd+Shift+PageDown should step 10 frames when locked"
+            waitForNumericValue(31, in: frameField),
+            "Command-Shift-Page Down should advance ten frames"
         )
 
-        ensureUnlocked()
+        app.typeKey(.pageUp, modifierFlags: .command)
+        XCTAssertTrue(
+            waitForNumericValue(30, in: frameField),
+            "Command-Page Up should reverse one frame"
+        )
+
+        app.typeKey(.pageUp, modifierFlags: [.command, .shift])
+        XCTAssertTrue(
+            waitForNumericValue(20, in: frameField),
+            "Command-Shift-Page Up should reverse ten frames"
+        )
     }
 
     // MARK: - F-OP-001: Opacity Field
@@ -577,6 +593,123 @@ final class ReframerIntegrationTests: XCTestCase {
         )
     }
 
+    func testFilterAndDocumentationShortcutsOpenAndEscapeCloses() {
+        app.typeKey("f", modifierFlags: [])
+        let filterWindow = app.windows["window-filter-panel"]
+        XCTAssertTrue(
+            filterWindow.waitForExistence(timeout: 3),
+            "F should open Advanced Filters"
+        )
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(
+            waitForHittable(false, element: filterWindow),
+            "Escape should close Advanced Filters"
+        )
+
+        app.typeKey("/", modifierFlags: [.command, .shift])
+        let documentationWindow = app.windows["window-documentation"]
+        XCTAssertTrue(
+            documentationWindow.waitForExistence(timeout: 3),
+            "Command-? should open Reframer documentation"
+        )
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(
+            waitForHittable(false, element: documentationWindow),
+            "Escape should close documentation"
+        )
+    }
+
+    func testFocusedFilterControlsKeepNativeSpaceActivation() {
+        let playButton = app.buttons["button-play"]
+        XCTAssertTrue(waitForValue("Paused", in: playButton))
+
+        let filterButton = app.buttons["button-filter-menu"]
+        filterButton.click()
+        let invertItem = app.menuItems["quick-filter-invert"]
+        XCTAssertTrue(invertItem.waitForExistence(timeout: 2))
+        app.typeKey(.escape, modifierFlags: [])
+
+        app.typeKey(" ", modifierFlags: [])
+        XCTAssertTrue(
+            invertItem.waitForExistence(timeout: 2),
+            "Space on the focused Quick Filter control should open its menu"
+        )
+        XCTAssertTrue(
+            valueRemains("Paused", in: playButton),
+            "Quick Filter activation must not also toggle playback"
+        )
+        app.typeKey(.escape, modifierFlags: [])
+
+        app.typeKey("f", modifierFlags: [])
+        let brightness = app.switches["Brightness"]
+        XCTAssertTrue(brightness.waitForExistence(timeout: 3))
+        brightness.click()
+        let clickedValue = brightness.value as? String ?? ""
+        app.typeKey(" ", modifierFlags: [])
+        let toggled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value != %@", clickedValue),
+            object: brightness
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [toggled], timeout: 3), .completed)
+        XCTAssertTrue(
+            valueRemains("Paused", in: playButton),
+            "Space on a focused filter switch must not toggle playback"
+        )
+    }
+
+    func testReboundShortcutReplacesOldChordAndPersistsDisable() {
+        let playButton = app.buttons["button-play"]
+        XCTAssertTrue(waitForValue("Paused", in: playButton))
+
+        app.typeKey("h", modifierFlags: [])
+        let shortcutButton = app.buttons["Play / Pause shortcut"]
+        XCTAssertTrue(shortcutButton.waitForExistence(timeout: 3))
+        shortcutButton.click()
+        app.typeKey("j", modifierFlags: [])
+        app.typeKey(.escape, modifierFlags: [])
+
+        app.typeKey(" ", modifierFlags: [])
+        XCTAssertTrue(
+            valueRemains("Paused", in: playButton),
+            "The old Space binding should stop working after rebinding"
+        )
+        app.typeKey("j", modifierFlags: [])
+        XCTAssertTrue(waitForValue("Playing", in: playButton))
+        app.typeKey("j", modifierFlags: [])
+        XCTAssertTrue(waitForValue("Paused", in: playButton))
+
+        relaunchPreservingIsolatedPreferences()
+        let relaunchedPlayButton = app.buttons["button-play"]
+        app.typeKey(" ", modifierFlags: [])
+        XCTAssertTrue(
+            valueRemains("Paused", in: relaunchedPlayButton),
+            "The replaced Space binding should remain inactive after relaunch"
+        )
+        app.typeKey("j", modifierFlags: [])
+        XCTAssertTrue(waitForValue("Playing", in: relaunchedPlayButton))
+        app.typeKey("j", modifierFlags: [])
+        XCTAssertTrue(waitForValue("Paused", in: relaunchedPlayButton))
+
+        app.typeKey("h", modifierFlags: [])
+        let enable = app.checkBoxes["Enable Play / Pause"]
+        XCTAssertTrue(enable.waitForExistence(timeout: 3))
+        enable.click()
+        app.typeKey(.escape, modifierFlags: [])
+        app.typeKey("j", modifierFlags: [])
+        XCTAssertTrue(
+            valueRemains("Paused", in: relaunchedPlayButton),
+            "Disabling the rebound action should suppress it"
+        )
+
+        relaunchPreservingIsolatedPreferences()
+        let disabledPlayButton = app.buttons["button-play"]
+        app.typeKey("j", modifierFlags: [])
+        XCTAssertTrue(
+            valueRemains("Paused", in: disabledPlayButton),
+            "Disabled shortcut state should survive relaunch"
+        )
+    }
+
     // Note: Help button removed from toolbar per design decision
     // Help is accessible via H key or Help menu instead
 
@@ -669,8 +802,10 @@ final class ReframerIntegrationTests: XCTestCase {
         XCTAssertTrue(waitForValue("Audible", in: muteButton))
         XCTAssertTrue(waitForHittable(true, element: volumeSlider))
 
-        let restoredVolume = getSliderValue("slider-volume")
-        XCTAssertEqual(restoredVolume, initialVolume, accuracy: 0.05, "Unmute should restore previous volume")
+        XCTAssertTrue(
+            waitForNumericValue(initialVolume, in: volumeSlider, accuracy: 0.05),
+            "Unmute should restore the previous volume"
+        )
     }
 
     // MARK: - Compound Workflow Tests

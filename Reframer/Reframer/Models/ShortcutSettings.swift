@@ -70,6 +70,7 @@ enum ReframerCommandOrigin: Equatable {
 struct ReframerCommandAvailabilityContext {
     let isVideoLoaded: Bool
     let isLocked: Bool
+    let canNavigateFrames: Bool
     let isHelpVisible: Bool
     let isFilterPanelVisible: Bool
     let isDocumentationVisible: Bool
@@ -85,7 +86,7 @@ enum ReframerCommandAvailability {
         case .togglePlayPause:
             return context.isVideoLoaded
         case .step:
-            return context.isVideoLoaded
+            return context.canNavigateFrames
                 && (origin != .globalShortcut || context.isLocked)
         case .pan, .resetZoom, .resetView:
             return context.isVideoLoaded && !context.isLocked

@@ -496,7 +496,7 @@ final class HelpView: NSView {
                     "Global shortcuts are off. Local shortcuts remain available while Reframer is active."
             case .active(let count):
                 statusLabel.stringValue =
-                    "\(count) global shortcut\(count == 1 ? "" : "s") registered. Reframer observes only those exact chords; no Accessibility or Input Monitoring permission is required."
+                    "\(count) global shortcut\(count == 1 ? "" : "s") registered. Frame-step chords register only while a navigable video is loaded and locked. Reframer observes only those exact chords; no Accessibility or Input Monitoring permission is required."
             case .pending:
                 statusLabel.stringValue = "Registering enabled global shortcuts…"
             case .partial:

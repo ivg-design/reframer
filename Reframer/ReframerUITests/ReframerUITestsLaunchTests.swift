@@ -12,11 +12,7 @@ final class ReframerUITestsLaunchTests: XCTestCase {
 
     func testLaunch() throws {
         let app = XCUIApplication()
-        app.launchEnvironment["UITEST_MODE"] = "1"
-        app.launchArguments += [
-            "-ApplePersistenceIgnoreState", "YES",
-            "-VideoOverlay.quickFilter", "__UITEST_NONE__"
-        ]
+        UITestConfig.configure(app)
         app.launch()
         addTeardownBlock {
             app.terminate()

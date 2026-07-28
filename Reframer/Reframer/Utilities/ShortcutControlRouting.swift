@@ -1,5 +1,11 @@
 import Cocoa
 
+protocol ReframerShortcutOwningResponder: AnyObject {
+    /// Returns true when this responder's documented native interaction owns
+    /// the chord before Reframer's configurable command layer sees it.
+    func ownsReframerShortcut(_ stroke: ShortcutKeystroke) -> Bool
+}
+
 enum FocusedControlKind {
     case none
     case textEditor
@@ -16,6 +22,8 @@ enum ShortcutControlRouting {
             return .textEditor
         case is NSPopUpButton:
             return .popUpButton
+        case is NSSwitch:
+            return .button
         case is NSButton:
             return .button
         case is NSSlider:
@@ -25,6 +33,17 @@ enum ShortcutControlRouting {
         default:
             return .none
         }
+    }
+
+    static func focusedResponderOwns(
+        stroke: ShortcutKeystroke,
+        responder: NSResponder?
+    ) -> Bool {
+        if let owner = responder as? ReframerShortcutOwningResponder,
+           owner.ownsReframerShortcut(stroke) {
+            return true
+        }
+        return focusedControlOwns(stroke: stroke, kind: kind(for: responder))
     }
 
     /// Returns true only when AppKit convention assigns this key to the

@@ -33,12 +33,10 @@ enum UITestVideoLoader {
             return false
         }
 
-        let candidates = NSWorkspace.shared.runningApplications.filter {
-            $0.bundleIdentifier == "com.reframer.app" && !$0.isTerminated
-        }
-        guard let runningApplication = candidates.max(by: {
-            $0.processIdentifier < $1.processIdentifier
-        }), let applicationURL = runningApplication.bundleURL else {
+        guard let runningApplication = NSWorkspace.shared.frontmostApplication,
+              runningApplication.bundleIdentifier == "com.reframer.app",
+              !runningApplication.isTerminated,
+              let applicationURL = runningApplication.bundleURL else {
             XCTFail("Could not locate the launched Reframer bundle", file: file, line: line)
             return false
         }
@@ -63,6 +61,33 @@ enum UITestVideoLoader {
         }
         if let openError {
             XCTFail("Launch Services could not open the fixture: \(openError)", file: file, line: line)
+            return false
+        }
+        return true
+    }
+
+    static func openAndWaitForReady(
+        _ videoURL: URL,
+        in app: XCUIApplication,
+        timeout: TimeInterval = 8,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> Bool {
+        guard open(videoURL, in: app, timeout: timeout, file: file, line: line) else {
+            return false
+        }
+
+        let timeline = app.sliders["slider-timeline"]
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == true AND isEnabled == true"),
+            object: timeline
+        )
+        guard XCTWaiter.wait(for: [ready], timeout: timeout) == .completed else {
+            XCTFail(
+                "The Launch Services fixture did not reach ready playback state",
+                file: file,
+                line: line
+            )
             return false
         }
         return true

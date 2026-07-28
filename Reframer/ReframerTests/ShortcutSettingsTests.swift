@@ -308,6 +308,12 @@ final class ShortcutSettingsTests: XCTestCase {
         XCTAssertEqual(descriptors.filter(\.allowsRepeat).count, 4)
         XCTAssertFalse(descriptors.last!.allowsRepeat)
 
+        let lockOnlyDescriptors = GlobalHotKeyPlan.descriptors(
+            for: settings,
+            includeFrameSteps: false
+        )
+        XCTAssertEqual(lockOnlyDescriptors.map(\.identifier), [5])
+
         assertSuccess(settings.setEnabled(false, for: .frameStepBackward))
         let reducedDescriptors = GlobalHotKeyPlan.descriptors(for: settings)
         XCTAssertEqual(reducedDescriptors.count, 3)
@@ -447,6 +453,7 @@ final class ShortcutSettingsTests: XCTestCase {
         let unlocked = ReframerCommandAvailabilityContext(
             isVideoLoaded: true,
             isLocked: false,
+            canNavigateFrames: true,
             isHelpVisible: false,
             isFilterPanelVisible: false,
             isDocumentationVisible: false
@@ -454,6 +461,7 @@ final class ShortcutSettingsTests: XCTestCase {
         let locked = ReframerCommandAvailabilityContext(
             isVideoLoaded: true,
             isLocked: true,
+            canNavigateFrames: true,
             isHelpVisible: false,
             isFilterPanelVisible: false,
             isDocumentationVisible: false
@@ -480,6 +488,25 @@ final class ShortcutSettingsTests: XCTestCase {
             origin: inactiveOrigin,
             context: locked
         ))
+
+        let unavailable = ReframerCommandAvailabilityContext(
+            isVideoLoaded: true,
+            isLocked: true,
+            canNavigateFrames: false,
+            isHelpVisible: false,
+            isFilterPanelVisible: false,
+            isDocumentationVisible: false
+        )
+        XCTAssertFalse(ReframerCommandAvailability.isAvailable(
+            command,
+            origin: .localShortcut,
+            context: unavailable
+        ))
+        XCTAssertFalse(ReframerCommandAvailability.isAvailable(
+            command,
+            origin: .globalShortcut,
+            context: unavailable
+        ))
     }
 
     func testActiveTextEditorOwnsRegisteredPageNavigationChord() {
@@ -491,6 +518,33 @@ final class ShortcutSettingsTests: XCTestCase {
         XCTAssertTrue(ShortcutControlRouting.focusedControlOwns(
             stroke: stroke!,
             kind: .textEditor
+        ))
+    }
+
+    func testCustomAndSwitchRespondersKeepTheirNativeShortcuts() {
+        let filterButton = FilterMenuButton(frame: .zero)
+        XCTAssertTrue(ShortcutControlRouting.focusedResponderOwns(
+            stroke: ShortcutKeystroke(keyCode: KeyCode.space, modifiers: 0),
+            responder: filterButton
+        ))
+
+        let toggle = NSSwitch()
+        XCTAssertTrue(ShortcutControlRouting.focusedResponderOwns(
+            stroke: ShortcutKeystroke(keyCode: KeyCode.space, modifiers: 0),
+            responder: toggle
+        ))
+
+        let dragHandle = WindowDragHandle(frame: .zero)
+        XCTAssertTrue(ShortcutControlRouting.focusedResponderOwns(
+            stroke: ShortcutKeystroke(
+                keyCode: KeyCode.leftArrow,
+                modifiers: NSEvent.ModifierFlags.option.rawValue
+            ),
+            responder: dragHandle
+        ))
+        XCTAssertFalse(ShortcutControlRouting.focusedResponderOwns(
+            stroke: ShortcutKeystroke(keyCode: KeyCode.leftArrow, modifiers: 0),
+            responder: dragHandle
         ))
     }
 

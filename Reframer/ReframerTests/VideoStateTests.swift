@@ -385,6 +385,16 @@ final class VideoStateTests: XCTestCase {
             .unavailable
         )
         XCTAssertFalse(FrameNavigationPrecision.unavailable.supportsFrameNavigation)
+
+        videoState.isVideoLoaded = true
+        videoState.totalFrames = 12
+        videoState.frameNavigationPrecision = .indexing
+        XCTAssertTrue(videoState.canNavigateFrames)
+        videoState.frameNavigationPrecision = .unavailable
+        XCTAssertFalse(videoState.canNavigateFrames)
+        videoState.frameNavigationPrecision = .exact
+        videoState.totalFrames = 0
+        XCTAssertFalse(videoState.canNavigateFrames)
     }
 
     func testCurrentTimeDefaults() {

@@ -188,7 +188,7 @@ class VideoState: ObservableObject {
     @Published var isRecordingShortcut: Bool = false
 
     // Shortcut settings (configurable keyboard shortcuts)
-    let shortcutSettings = ShortcutSettings()
+    let shortcutSettings: ShortcutSettings
 
     // Requests
     let seekRequests = PassthroughSubject<SeekRequest, Never>()
@@ -223,6 +223,12 @@ class VideoState: ObservableObject {
         opacity * 100
     }
 
+    var canNavigateFrames: Bool {
+        isVideoLoaded
+            && totalFrames > 0
+            && frameNavigationPrecision.supportsFrameNavigation
+    }
+
     var formattedCurrentTime: String {
         formatTime(currentTime)
     }
@@ -243,8 +249,10 @@ class VideoState: ObservableObject {
         static let filterSettings = "VideoOverlay.filterSettings"
     }
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(defaults: UserDefaults? = nil) {
+        let resolvedDefaults = defaults ?? Self.runtimeDefaults()
+        self.defaults = resolvedDefaults
+        self.shortcutSettings = ShortcutSettings(userDefaults: resolvedDefaults)
         isLoadingPreferences = true
         loadPreferences()
         isLoadingPreferences = false
@@ -252,6 +260,22 @@ class VideoState: ObservableObject {
 
     deinit {
         securityScopedVideoURL?.stopAccessingSecurityScopedResource()
+    }
+
+    private static func runtimeDefaults() -> UserDefaults {
+        #if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        if environment["UITEST_MODE"] == "1",
+           let suiteName = environment["UITEST_PREFERENCES_SUITE"],
+           !suiteName.isEmpty,
+           let defaults = UserDefaults(suiteName: suiteName) {
+            if environment["UITEST_RESET_PREFERENCES"] == "1" {
+                defaults.removePersistentDomain(forName: suiteName)
+            }
+            return defaults
+        }
+        #endif
+        return .standard
     }
 
     // MARK: - Methods

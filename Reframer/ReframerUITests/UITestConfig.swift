@@ -1,6 +1,21 @@
-import Foundation
+import XCTest
 
 enum UITestConfig {
+    private static let isolatedPreferencesSuite = "com.reframer.app.uitests"
+
+    /// Gives every UI launch deterministic defaults without deleting or
+    /// overwriting the user's real Reframer preferences.
+    static func configure(
+        _ app: XCUIApplication,
+        resetPreferences: Bool = true
+    ) {
+        app.launchEnvironment["UITEST_MODE"] = "1"
+        app.launchEnvironment["UITEST_PREFERENCES_SUITE"] = isolatedPreferencesSuite
+        app.launchEnvironment["UITEST_RESET_PREFERENCES"] =
+            resetPreferences ? "1" : "0"
+        app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
+    }
+
     static func value(for key: String) -> String? {
         if let value = ProcessInfo.processInfo.environment[key], !value.isEmpty {
             return value

@@ -11,12 +11,7 @@ final class ZoomScreenshotTest: XCTestCase {
             relativeTo: #filePath
         )
         let app = XCUIApplication()
-        app.launchEnvironment["UITEST_MODE"] = "1"
-        app.launchArguments += [
-            "-ApplePersistenceIgnoreState", "YES",
-            "-VideoOverlay.quickFilter", "__UITEST_NONE__",
-            "-VideoOverlay.opacity", "1.0"
-        ]
+        UITestConfig.configure(app)
         app.launch()
 
         addTeardownBlock {
@@ -24,7 +19,7 @@ final class ZoomScreenshotTest: XCTestCase {
         }
 
         XCTAssertTrue(
-            UITestVideoLoader.open(fixture, in: app),
+            UITestVideoLoader.openAndWaitForReady(fixture, in: app),
             "Fixture should open through Launch Services"
         )
 

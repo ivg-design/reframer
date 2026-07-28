@@ -20,7 +20,7 @@ final class TimelineSlider: NSSlider {
 /// A dedicated grip for moving the main overlay window from its attached
 /// control window. Keeping this as an arranged view means its hit region can
 /// never cover playback controls.
-final class WindowDragHandle: NSView {
+final class WindowDragHandle: NSView, ReframerShortcutOwningResponder {
     weak var targetWindow: NSWindow?
 
     var isDragEnabled = true {
@@ -161,6 +161,13 @@ final class WindowDragHandle: NSView {
         default:
             return nil
         }
+    }
+
+    func ownsReframerShortcut(_ stroke: ShortcutKeystroke) -> Bool {
+        Self.keyboardMoveDelta(
+            keyCode: stroke.keyCode,
+            modifiers: NSEvent.ModifierFlags(rawValue: stroke.modifiers)
+        ) != nil
     }
 
     private func makeMoveAction(
@@ -803,9 +810,7 @@ class ControlBar: NSView {
 
     private func updateFrameNavigationPresentation() {
         guard let state = videoState else { return }
-        let supportsFrames = state.isVideoLoaded
-            && state.totalFrames > 0
-            && state.frameNavigationPrecision.supportsFrameNavigation
+        let supportsFrames = state.canNavigateFrames
         stepBackButton?.isEnabled = supportsFrames
         stepForwardButton?.isEnabled = supportsFrames
         frameField?.isEnabled = supportsFrames

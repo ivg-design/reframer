@@ -2,7 +2,7 @@ import Cocoa
 import Combine
 
 /// Custom button that shows quick filter icon and opens dropdown for single-filter selection
-class FilterMenuButton: NSView {
+class FilterMenuButton: NSView, ReframerShortcutOwningResponder {
 
     // MARK: - Properties
 
@@ -205,6 +205,10 @@ class FilterMenuButton: NSView {
         default:
             super.keyDown(with: event)
         }
+    }
+
+    func ownsReframerShortcut(_ stroke: ShortcutKeystroke) -> Bool {
+        stroke.modifiers == 0 && [36, 49, 76].contains(stroke.keyCode)
     }
 
     override func accessibilityPerformPress() -> Bool {

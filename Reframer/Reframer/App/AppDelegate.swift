@@ -618,6 +618,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             }
             .store(in: &cancellables)
 
+        Publishers.CombineLatest4(
+            videoState.$isVideoLoaded,
+            videoState.$isLocked,
+            videoState.$totalFrames,
+            videoState.$frameNavigationPrecision
+        )
+            .map { isLoaded, isLocked, totalFrames, precision in
+                isLoaded
+                    && isLocked
+                    && totalFrames > 0
+                    && precision.supportsFrameNavigation
+            }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.registerGlobalHotKeys()
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: .reconfigureGlobalHotKeys)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -661,6 +680,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         let status = globalHotKeyRegistrar.apply(
             settings: settings,
+            includeFrameSteps: videoState.isLocked && videoState.canNavigateFrames,
             suspended: settings.recordingAction != nil
         )
         settings.setGlobalRegistrationStatus(status)
@@ -696,8 +716,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
 
         let responder = activeFieldEditor() ?? NSApp.keyWindow?.firstResponder
-        let controlKind = ShortcutControlRouting.kind(for: responder)
-        if ShortcutControlRouting.focusedControlOwns(stroke: stroke, kind: controlKind) {
+        if ShortcutControlRouting.focusedResponderOwns(
+            stroke: stroke,
+            responder: responder
+        ) {
             responder?.keyDown(with: event)
             return true
         }
@@ -723,8 +745,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let settings = videoState.shortcutSettings
         guard let stroke = settings.keystroke(for: match) else { return false }
         let responder = activeFieldEditor() ?? NSApp.keyWindow?.firstResponder
-        let kind = ShortcutControlRouting.kind(for: responder)
-        guard ShortcutControlRouting.focusedControlOwns(stroke: stroke, kind: kind),
+        guard ShortcutControlRouting.focusedResponderOwns(
+            stroke: stroke,
+            responder: responder
+        ),
               let responder,
               let window = NSApp.keyWindow else {
             return false
@@ -813,6 +837,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             context: ReframerCommandAvailabilityContext(
                 isVideoLoaded: videoState.isVideoLoaded,
                 isLocked: videoState.isLocked,
+                canNavigateFrames: videoState.canNavigateFrames,
                 isHelpVisible: videoState.showHelp,
                 isFilterPanelVisible: videoState.showFilterPanel,
                 isDocumentationVisible: documentationWindow?.isVisible == true

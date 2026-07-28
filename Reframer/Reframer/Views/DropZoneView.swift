@@ -2,7 +2,7 @@ import Cocoa
 import UniformTypeIdentifiers
 
 /// Pure AppKit drop zone view for video files
-class DropZoneView: NSView {
+class DropZoneView: NSView, ReframerShortcutOwningResponder {
 
     // MARK: - Properties
 
@@ -152,6 +152,10 @@ class DropZoneView: NSView {
         default:
             super.keyDown(with: event)
         }
+    }
+
+    func ownsReframerShortcut(_ stroke: ShortcutKeystroke) -> Bool {
+        stroke.modifiers == 0 && [36, 49, 76].contains(stroke.keyCode)
     }
 
     override func accessibilityPerformPress() -> Bool {

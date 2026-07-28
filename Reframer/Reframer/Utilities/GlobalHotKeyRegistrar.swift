@@ -11,12 +11,19 @@ struct GlobalHotKeyDescriptor: Equatable {
 }
 
 enum GlobalHotKeyPlan {
-    static func descriptors(for settings: ShortcutSettings) -> [GlobalHotKeyDescriptor] {
+    static func descriptors(
+        for settings: ShortcutSettings,
+        includeFrameSteps: Bool = true
+    ) -> [GlobalHotKeyDescriptor] {
         guard settings.globalShortcutsEnabled else { return [] }
 
         var descriptors: [GlobalHotKeyDescriptor] = []
 
         for action in ShortcutSettings.Action.allCases where action.isGlobal {
+            if !includeFrameSteps,
+               action == .frameStepForward || action == .frameStepBackward {
+                continue
+            }
             let binding = settings.binding(for: action)
             guard binding.isEnabled, let shortcut = binding.shortcut else { continue }
 
@@ -95,6 +102,7 @@ final class GlobalHotKeyRegistrar {
 
     func apply(
         settings: ShortcutSettings,
+        includeFrameSteps: Bool,
         suspended: Bool = false
     ) -> GlobalShortcutRegistrationStatus {
         unregisterAll()
@@ -109,7 +117,10 @@ final class GlobalHotKeyRegistrar {
             installEventHandler()
         }
         guard eventHandler != nil else {
-            let failures = GlobalHotKeyPlan.descriptors(for: settings).map {
+            let failures = GlobalHotKeyPlan.descriptors(
+                for: settings,
+                includeFrameSteps: includeFrameSteps
+            ).map {
                 GlobalShortcutRegistrationFailure(
                     action: $0.match.action,
                     variant: $0.match.variant,
@@ -121,7 +132,10 @@ final class GlobalHotKeyRegistrar {
         }
 
         var failures: [GlobalShortcutRegistrationFailure] = []
-        for descriptor in GlobalHotKeyPlan.descriptors(for: settings) {
+        for descriptor in GlobalHotKeyPlan.descriptors(
+            for: settings,
+            includeFrameSteps: includeFrameSteps
+        ) {
             var reference: EventHotKeyRef?
             let hotKeyID = EventHotKeyID(
                 signature: Self.signature,

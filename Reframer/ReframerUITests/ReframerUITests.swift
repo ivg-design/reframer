@@ -9,12 +9,7 @@ final class ReframerUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchEnvironment["UITEST_MODE"] = "1"
-        app.launchArguments += [
-            "-ApplePersistenceIgnoreState", "YES",
-            "-VideoOverlay.quickFilter", "__UITEST_NONE__",
-            "-VideoOverlay.opacity", "1.0"
-        ]
+        UITestConfig.configure(app)
         app.launch()
 
         XCTAssertTrue(
@@ -44,7 +39,7 @@ final class ReframerUITests: XCTestCase {
             line: line
         )
         XCTAssertTrue(
-            app.buttons["Open"].firstMatch.exists,
+            app.buttons["Open"].firstMatch.waitForExistence(timeout: 2),
             "The file picker should expose its Open action",
             file: file,
             line: line
