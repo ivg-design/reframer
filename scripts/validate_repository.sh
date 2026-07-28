@@ -59,41 +59,43 @@ if ! xcrun ibtool \
     exit 65
 fi
 
-if rg -n 'clipping its content' "$IBTOOL_LOG"; then
+if /usr/bin/grep -En 'clipping its content' "$IBTOOL_LOG"; then
     cat "$IBTOOL_LOG"
     echo "error: Interface Builder reports clipped controls" >&2
     exit 65
 fi
 
-if rg -n \
+if /usr/bin/grep -ERnI \
+    --exclude=validate_repository.sh \
     'sqlite3[^[:cntrl:]]*TCC|INSERT OR REPLACE INTO access|killall[[:space:]]+tccd|codesign[^[:cntrl:]]*--force[^[:cntrl:]]*--sign[[:space:]]+-' \
-    scripts .github Reframer \
-    --glob '!validate_repository.sh'; then
+    scripts .github Reframer; then
     echo "error: unsafe privacy or signing mutation found" >&2
     exit 65
 fi
 
-if rg -n \
+if /usr/bin/grep -ERnI \
+    --include='*.swift' \
     'NSEvent\.addGlobalMonitorForEvents|AXIsProcessTrusted|AXIsProcessTrustedWithOptions|CGEvent\.tapCreate' \
-    Reframer/Reframer \
-    --glob '*.swift'; then
+    Reframer/Reframer; then
     echo "error: broad or permission-gated global keyboard observation found" >&2
     exit 65
 fi
 
-if rg -n \
+if /usr/bin/grep -En \
     'PBXFileSystemSynchronizedRootGroup|MainMenu\.xib|default\.profraw|ControlBar\.xib\.new' \
     Reframer/Reframer.xcodeproj/project.pbxproj; then
     echo "error: obsolete or internal resources remain in the app target" >&2
     exit 65
 fi
 
-if ! rg -q 'ENABLE_HARDENED_RUNTIME = YES;' Reframer/Reframer.xcodeproj/project.pbxproj; then
+if ! /usr/bin/grep -Fq \
+    'ENABLE_HARDENED_RUNTIME = YES;' \
+    Reframer/Reframer.xcodeproj/project.pbxproj; then
     echo "error: Hardened Runtime is not enabled in the Xcode project" >&2
     exit 65
 fi
 
-if rg -n \
+if /usr/bin/grep -ERnI \
     'com\.apple\.security\.get-task-allow|com\.apple\.security\.cs\.disable-library-validation' \
     Reframer/Reframer/Resources; then
     echo "error: prohibited release entitlement is present" >&2
@@ -108,7 +110,7 @@ while IFS= read -r action_reference; do
         exit 65
     fi
 done < <(
-    rg --no-filename -o 'uses:[[:space:]]+[^[:space:]#]+' .github/workflows |
+    /usr/bin/grep -ERho 'uses:[[:space:]]+[^[:space:]#]+' .github/workflows |
         awk '{ print $2 }'
 )
 
@@ -119,7 +121,7 @@ while IFS= read -r action_reference; do
         exit 65
     fi
 done < <(
-    rg --no-filename -o 'actions/(checkout|upload-artifact)@[A-Za-z0-9._-]+' \
+    /usr/bin/grep -ERho 'actions/(checkout|upload-artifact)@[A-Za-z0-9._-]+' \
         .github/workflows
 )
 
@@ -137,12 +139,12 @@ for workflow in .github/workflows/*.yml; do
 done
 
 CHECKOUT_COUNT="$(
-    rg -c "uses: $CHECKOUT_ACTION" .github/workflows/*.yml |
-        awk -F: '{ total += $2 } END { print total + 0 }'
+    /usr/bin/grep -hFc "uses: $CHECKOUT_ACTION" .github/workflows/*.yml |
+        awk '{ total += $1 } END { print total + 0 }'
 )"
 NONPERSISTENT_CHECKOUT_COUNT="$(
-    rg -c 'persist-credentials: false' .github/workflows/*.yml |
-        awk -F: '{ total += $2 } END { print total + 0 }'
+    /usr/bin/grep -hFc 'persist-credentials: false' .github/workflows/*.yml |
+        awk '{ total += $1 } END { print total + 0 }'
 )"
 if [ "$CHECKOUT_COUNT" -ne "$NONPERSISTENT_CHECKOUT_COUNT" ]; then
     echo "error: every checkout must disable persisted credentials" >&2
