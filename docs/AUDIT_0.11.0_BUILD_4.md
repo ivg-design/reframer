@@ -129,7 +129,7 @@ All three decode to the same normalized raw-alpha SHA-256,
 | Gate | Build-4 result | Evidence |
 |---|---|---|
 | Clean `main` equals `origin/main` | Passed | The implementation and final audit commits were pushed; final post-push verification confirmed a clean `main` at `origin/main` |
-| Configured YouTube Data API key | Blocked | `REFRAMER_YOUTUBE_DATA_API_KEY` is absent locally and no repository secret or variable is configured; source builds intentionally fail closed without a key |
+| Configured YouTube Data API key | Passed | Enabled YouTube Data API v3 and API Keys API on `forge-ivg`; created the API-restricted `reframer-youtube-data-v2` key, stored it in the login Keychain and as the encrypted repository `REFRAMER_YOUTUBE_DATA_API_KEY` secret, and received HTTP 200 with a definite Made for Kids value from a live `videos.list` preflight |
 | Developer ID app/helper signatures and exact entitlements | Pending | — |
 | Apple notarization accepted | Blocked | `xcrun notarytool history --keychain-profile notary` reports no matching Keychain password item; no build-4 submission is possible with the current profile |
 | Ticket stapled and validated | Pending | — |
