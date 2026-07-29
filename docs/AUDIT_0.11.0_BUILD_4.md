@@ -1,8 +1,8 @@
 # Reframer 0.11.0 build 4 audit and release readiness
 
 Date: 2026-07-28
-Status: source candidate under final validation; no build-4 notarization or
-manual acceptance is claimed by this record yet
+Status: source implementation validated and pushed; no build-4 notarization
+or manual acceptance is claimed by this record yet
 
 Historical build-1 through build-3 evidence remains in
 [`AUDIT_2026-07-28.md`](AUDIT_2026-07-28.md). It must not be reused as proof
@@ -128,7 +128,7 @@ All three decode to the same normalized raw-alpha SHA-256,
 
 | Gate | Build-4 result | Evidence |
 |---|---|---|
-| Clean `main` equals `origin/main` | Blocked | The remediation worktree is still uncommitted; packaging refuses dirty source |
+| Clean `main` equals `origin/main` | Passed | The implementation and final audit commits were pushed; final post-push verification confirmed a clean `main` at `origin/main` |
 | Configured YouTube Data API key | Blocked | `REFRAMER_YOUTUBE_DATA_API_KEY` is absent locally and no repository secret or variable is configured; source builds intentionally fail closed without a key |
 | Developer ID app/helper signatures and exact entitlements | Pending | — |
 | Apple notarization accepted | Blocked | `xcrun notarytool history --keychain-profile notary` reports no matching Keychain password item; no build-4 submission is possible with the current profile |
