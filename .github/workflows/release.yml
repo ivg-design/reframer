@@ -108,7 +108,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/Reframer-Debug" \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Build and inspect unsigned Release
+      - name: Build and inspect ad hoc signed Release
         run: |
           xcodebuild build \
             -project Reframer/Reframer.xcodeproj \
@@ -118,7 +118,9 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/Reframer-Release" \
             ARCHS='arm64 x86_64' \
             ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM=
           scripts/validate_bundle.sh \
             "$RUNNER_TEMP/Reframer-Release/Build/Products/Release/Reframer.app"
 

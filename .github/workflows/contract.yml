@@ -1,0 +1,61 @@
+name: Product Contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'CHANGELOG.md'
+      - 'LICENSE'
+      - 'README.md'
+      - 'SECURITY.md'
+      - 'Reframer/CHANGELOG.md'
+      - 'Reframer/README.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'CHANGELOG.md'
+      - 'LICENSE'
+      - 'README.md'
+      - 'SECURITY.md'
+      - 'Reframer/CHANGELOG.md'
+      - 'Reframer/README.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: product-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Validate public product claims
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate product contract
+        run: python3 scripts/validate_product_contract.py
+
+      - name: Upload contract diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reframer-product-contract-diagnostics
+          path: |
+            docs/product-contract.json
+            CHANGELOG.md
+            README.md
+            SECURITY.md
+            Reframer/CHANGELOG.md
+            Reframer/README.md
+          if-no-files-found: ignore
+          retention-days: 7

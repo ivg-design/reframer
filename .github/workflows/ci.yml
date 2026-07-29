@@ -3,8 +3,25 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - 'Reframer/Reframer/**'
+      - 'Reframer/Reframer.xcodeproj/**'
+      - 'Reframer/Reframer.xctestplan'
+      - 'Reframer/ReframerTests/**'
+      - 'Reframer/ReframerUITests/**'
+      - 'scripts/**'
   pull_request:
     branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - 'Reframer/Reframer/**'
+      - 'Reframer/Reframer.xcodeproj/**'
+      - 'Reframer/Reframer.xctestplan'
+      - 'Reframer/ReframerTests/**'
+      - 'Reframer/ReframerUITests/**'
+      - 'scripts/**'
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -53,7 +70,9 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/Reframer-Release" \
             ARCHS='arm64 x86_64' \
             ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM=
           scripts/validate_bundle.sh \
             "$RUNNER_TEMP/Reframer-Release/Build/Products/Release/Reframer.app"
 
