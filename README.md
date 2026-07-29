@@ -133,11 +133,12 @@ the locally fetched `origin/main`.
 
 The audit records the historical build-1 and build-2 review runs, the packaging
 gap build 1 exposed, and the live product defects found after build 2 passed
-Apple's distribution checks. The build-3 source candidate has completed its
-background unit and repository validation; foreground/manual interaction and
-Apple distribution gates remain separately recorded until they are performed.
-Only evidence emitted for a particular artifact proves that artifact. A local
-review run does not create a version tag, GitHub release, or published
+Apple's distribution checks. Build 3 from source commit `3010955` passed its
+background validation and Apple distribution gates, and the notarized
+`0.10.0 (3)` app is installed in `/Applications` for operator review.
+Foreground/manual interaction remains an explicit candidate gate. Only
+evidence emitted for a particular artifact proves that artifact. This local
+review build does not create a version tag, GitHub release, or published
 distribution.
 
 See [Release Process](docs/RELEASE.md) for the local process and the GitHub
