@@ -14,3 +14,7 @@ invoking control.
 Filter parameters are clamped and persisted. Replacing a filter composition
 invalidates stale asynchronous results so an older render cannot overwrite the
 newer choice.
+
+Filters apply to native or prepared local media. They are disabled from a
+pending YouTube preflight through YouTube playback so the embedded player and
+its standard UI remain unobscured.

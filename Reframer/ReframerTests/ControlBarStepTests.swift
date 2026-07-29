@@ -370,7 +370,9 @@ final class ControlBarLayoutRegressionTests: XCTestCase {
         defaults.removePersistentDomain(forName: suiteName)
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let controller = MainViewController(videoState: VideoState(defaults: defaults))
+        let state = VideoState(defaults: defaults)
+        state.isVideoLoaded = true
+        let controller = MainViewController(videoState: state)
         var lockRequestCount = 0
         var reportedHeights: [CGFloat] = []
         controller.onToggleLockRequest = { lockRequestCount += 1 }
@@ -430,6 +432,7 @@ final class ControlBarLayoutRegressionTests: XCTestCase {
 
         let state = VideoState(defaults: defaults)
         retainedStates.append(state)
+        state.isVideoLoaded = true
         state.totalFrames = 9_876_543
         state.frameNavigationPrecision = .indexing
         state.volume = 0.5

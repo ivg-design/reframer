@@ -8,13 +8,14 @@
 </head>
 <body>
   <h1>Loading Videos</h1>
-  <p class="subtitle">Open a local MP4, M4V, or MOV reference.</p>
+  <p class="subtitle">Open a local reference or explicitly load YouTube.</p>
 
   <h2>Open methods</h2>
   <ul>
     <li>Activate Open in the empty state.</li>
     <li>Press <kbd>⌘O</kbd>.</li>
     <li>Drop a file on the unlocked window.</li>
+    <li>Press <kbd>⌥⌘O</kbd> or choose Open YouTube Video for a YouTube link.</li>
   </ul>
 
   <h2>Compatibility</h2>
@@ -24,13 +25,39 @@
   guarantee that every
   embedded codec is compatible.</p>
 
+  <p>Supported local containers are WebM, MP4/M4V/MOV, AVI, DV,
+  MPEG/MPEG-2/transport-stream, and 3GP/3G2. VP8/VP9 WebM uses the bundled
+  universal, network-disabled FFmpeg 8.1.2/libvpx 1.16.0 helper to create a
+  temporary ProRes 4444 movie with PCM audio. Alpha is preserved. Preparation
+  needs at least 2 GB of temporary capacity, has a 64 GB output ceiling, can
+  be cancelled, stops after five minutes without output progress or 12 hours
+  total, and cleans temporary output after replacement or termination.</p>
+
+  <h2>YouTube</h2>
+  <p>YouTube requires first-use consent, a configured Data API key, and a
+  per-video Made for Kids lookup before player HTML is created. Failure or an
+  unknown status stops the load. The privacy-enhanced player never autoplays,
+  uses adaptive quality, and retains standard controls, links, settings, ads,
+  branding, and WebKit element fullscreen. The web view fills the complete
+  video canvas and stays at least 200×200 points; YouTube owns internal aspect
+  fit and letterboxing. Filter and transform controls stay
+  disabled from pending preflight through playback. Reframer unlocks and
+  disables click-through Lock so required controls, captions, settings,
+  fullscreen, and links remain interactive. Use Always on Top When
+  Unlocked.</p>
+
+  <p>Only the accepted consent-notice version is stored locally. Reframer does
+  not retain the pasted URL or viewing history. See
+  <a href="youtube-privacy.html">YouTube Privacy and Terms</a> for the complete
+  network and storage disclosure.</p>
+
   <p>Selecting a replacement stops playback and the new video lands paused. A
   failed load leaves the player empty with an actionable error; Reframer never
   presents an unsupported, missing, or corrupt track as ready.</p>
 
   <div class="tip">
     <strong>Portable choice</strong>
-    H.264 video in an MP4 or MOV container is the most widely compatible.
+    H.264 video in an MP4 or MOV container remains a widely compatible choice.
   </div>
 
   <div class="nav-links">

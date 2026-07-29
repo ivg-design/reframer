@@ -1,187 +1,213 @@
 # Reframer product contract
 
-This document is the human-readable authority for Reframer 0.10.0. Its
-machine-readable counterpart is
+This document is the human-readable authority for Reframer 0.11.0 build 4.
+Its machine-readable counterpart is
 [`product-contract.json`](product-contract.json).
 
-## Platform and media
+## Sources and capabilities
 
-- Minimum system: macOS 15.0.
-- Supported containers: MP4, M4V, and MOV.
-- Decoder and compositor: AVFoundation and Core Image.
-- A supported extension is not a promise that every embedded codec is
-  decodable. Reframer preflights the selected asset and reports failure before
-  presenting it as loaded.
-- Reframer selects the first enabled usable video track, or the first usable
-  fallback track when no enabled track qualifies. Playback, Core Image
-  filtering, dimensions, nominal rate, and navigation all use that selected
-  track.
-- Playback is local and offline.
+Reframer accepts local WebM, MP4/M4V/MOV, AVI, DV, MPEG/MPEG-2/transport-
+stream, and 3GP/3G2 containers. A recognized extension is not a guarantee that
+every embedded codec is usable.
+
+Native containers are preflighted and played through AVFoundation. Reframer
+selects the first enabled usable video track, or the first usable fallback
+track. Playback, Core Image filtering, dimensions, nominal rate, and exact or
+estimated navigation all use that same track.
+
+VP8 and VP9 WebM media is prepared through the bundled universal
+`Contents/Helpers/reframer-ffmpeg`, built from FFmpeg 8.1.2 and libvpx 1.16.0
+with network protocols disabled. The app holds the user-selected read-only
+lease, opens the input, and gives the helper an inherited descriptor. The
+temporary output is ProRes 4444 with PCM audio so alpha is preserved and the
+normal AVFoundation pipeline can provide playback, navigation, filters, and
+audio. Preparation requires at least 2 GB of temporary capacity, is capped at
+64 GB, stops after five minutes without output progress or 12 hours total,
+supports cancellation, and cleans output after cancellation, replacement,
+failure, termination, and stale-output discovery at launch.
+
+YouTube is an explicit network source. Before any player HTML is created, the
+user accepts the first-use privacy and terms notice. Reframer stores only the
+accepted notice version locally; it does not retain the pasted URL or viewing
+history. Reframer then sends the video identifier to YouTube Data API
+`videos.list` for the required per-video Made for Kids check, with the API key
+in the `X-Goog-Api-Key` header. Google also necessarily receives ordinary
+HTTPS request and network metadata such as the source IP address. Missing
+credentials, rejected requests, unavailable videos, and unknown status fail
+closed. An approved source uses the
+privacy-enhanced YouTube IFrame Player in a nonpersistent `WKWebView`. It never
+autoplays, and Reframer clears the ephemeral website data store before each
+embed. YouTube chooses adaptive quality; its supported embed API does not let
+Reframer force maximum quality.
+
+| Capability | Local native/prepared | YouTube |
+|---|---:|---:|
+| Play/pause, time seek, mute, volume | Yes | Yes |
+| Exact or labeled estimated frame navigation | Yes | No |
+| Zoom and pan | Yes | No |
+| Core Image filters | Yes | No |
+| Reframer opacity transform | Yes | No |
+| Window move/resize | Yes | Yes |
+| Always on Top When Unlocked | Yes | Yes |
+| Click-through Lock | Yes | No |
+
+YouTube's standard controls, links, branding, ads, settings, and fullscreen UI
+remain visible and unobscured, and WebKit element fullscreen is enabled. From
+pending compliance preflight through active playback, Reframer disables every
+filter and transform control that could affect or obscure the embed. Reframer
+pauses it when hidden or occluded and does not automatically resume it.
+The web view fills the complete video canvas and remains at least 200×200
+points; YouTube owns its internal aspect fit and letterboxing. Reframer does
+not request or store YouTube credentials, pasted-link history, or viewing
+history. Its nonpersistent web view can hold session cookies or player data
+while a player is running, but never persists them and clears all website data
+before each embed.
+
+Click-through Lock is unavailable from pending YouTube preflight through
+playback. If the overlay was locked, Reframer unlocks before the preflight.
+This is required because YouTube's standard controls, captions, settings,
+fullscreen, and links must remain interactive. Always on Top When Unlocked is
+the topmost YouTube option.
+
+YouTube timeline-drag previews call the player without seek-ahead; releasing
+the scrubber and discrete time seeks allow seek-ahead. The ready snapshot may
+initialize the live embedded-player controls but must not overwrite saved
+native-media volume or mute preferences. Muting uses the official player mute
+state without setting retained player volume to zero, so the embedded
+player's own Unmute control restores the prior audible level.
 
 ## Overlay window
 
 The video surface and control bar are one canonical, externally managed
 `NSWindow`. Reframer must not expose a separately targetable control window.
-While unlocked, moving or resizing the window through macOS or a third-party
-window manager such as Mosaic moves or resizes the entire overlay.
+While unlocked, macOS or a third-party window manager such as Mosaic moves or
+resizes the entire overlay.
 
 The preferred initial width is 1,060 points and the minimum supported width is
-640 points. At 920 points or wider, the control bar is one 48-point row. From
-640 points through widths below 920 points, the exact same controls reflow into
-two 48-point rows with a total height of 96 points. No action, field, slider,
-status metadata, or accessibility element may be hidden or made unreachable by
-the layout change.
+640 points. At 920 points or wider, the control bar is one 48-point row. Below
+920 points through the minimum, it is two 48-point rows with a total height of
+96 points. No action, field, slider, status metadata, or accessibility element
+may be hidden or unreachable by that change.
 
-Always on Top When Unlocked is a persisted preference. It controls whether the
-unlocked overlay uses a floating or normal window level. Lock mode overrides
-that preference and atomically applies all of the following:
+Always on Top When Unlocked is a persisted preference available to every
+source. For native or prepared local media, Lock mode overrides it
+and atomically applies all of the following:
 
-- the complete overlay uses the public `NSWindow.Level.statusBar` tier, above
+- the complete overlay uses the public `NSWindow.Level.statusBar` tier above
   all ordinary application windows, including normal, floating, modal, and
   utility windows;
 - the complete overlay, including its video and control bar, ignores pointer
-  events so input reaches the app underneath;
+  events;
 - moving and resizing are disabled;
-- the enabled global lock shortcut is the recovery path that restores
-  interaction from another app.
+- the enabled registered global lock shortcut restores interaction from the
+  app underneath.
 
-Entering whole-overlay click-through is permitted only when the exact
-configured global Lock/Unlock chord is successfully registered. Unlocking is
-always permitted. If that registration later disappears or conflicts, is
-suspended while Shortcut Settings records a chord, or global shortcuts are
-disabled, Reframer must immediately unlock and present the configured chord
-plus recovery guidance. It must never leave a pointer-transparent overlay
-locked without its registered recovery path.
+Entering click-through is permitted only when the exact configured global
+Lock/Unlock chord is successfully registered. If that registration disappears
+or conflicts, is suspended during recording, or global shortcuts are disabled,
+Reframer must immediately unlock and present the configured chord plus
+recovery guidance. System pop-up menus, drag UI, the screen saver, and
+assistive-technology windows retain precedence.
 
-Lock mode does not cover critical system-owned UI above the public status-bar
-tier. System pop-up menus, drag UI, the screen saver, and assistive-technology
-windows retain precedence.
+## Commands and Shortcut Settings
 
-Unlocking restores pointer interaction and resizability, and returns the
-window level to the saved Always on Top When Unlocked preference.
+| Command | Default | Shortcut Settings | Guard |
+|---|---|---|---|
+| Open local video | Command-O | Fixed menu command | App active |
+| Open YouTube video | Option-Command-O | Fixed menu command | App active; consent, configured API key, and Made for Kids preflight |
+| Play / Pause | Space | Customizable | Source ready |
+| Step forward 1 | Command-Page Down | Customizable | Local media with sample navigation; global only when loaded and locked |
+| Step backward 1 | Command-Page Up | Customizable | Local media with sample navigation; global only when loaded and locked |
+| Step forward / backward 10 | Add Shift | Customizable multiplier | Same guard as frame step |
+| Pan 1 / 10 / 100 | Arrow / Shift-Arrow / Command-Shift-Arrow | Customizable multipliers | Local media, unlocked |
+| Reset zoom / view | 0 / R | Customizable | Local media, unlocked |
+| Toggle lock locally / globally | L / Command-Shift-L | Customizable | Native/prepared local media only; entry requires exact registered recovery chord |
+| Shortcut Settings | H | Customizable | App active |
+| Documentation | Command-? | Fixed Help command | App active |
+| Filter panel | F | Customizable | Local media ready |
+| Close current panel or recording | Escape | Customizable | Contextual |
 
-## Commands
+The 14 actions represented by editable rows are Play/Pause, both frame-step
+directions, four pan directions, Reset Zoom, Reset View, local Lock, global
+Lock, Shortcut Settings, Close Current Panel, and Filter Panel. Command-O,
+Option-Command-O, and Command-? are fixed menu/Help commands and do not appear
+as editable Shortcut Settings rows. Shift-scroll and Command-Shift-scroll are
+fixed pointer gestures rather than shortcut rows.
 
-| Command | Default | Guard |
-|---|---|---|
-| Open video | Command-O | App active |
-| Play / Pause | Space | App active, video loaded |
-| Step forward 1 | Command-Page Down | App active with sample navigation; global only when loaded, locked, and sample navigation is available |
-| Step backward 1 | Command-Page Up | App active with sample navigation; global only when loaded, locked, and sample navigation is available |
-| Step forward / backward 10 | Add Shift | Same guard as frame step |
-| Pan 1 | Arrow keys | App active, loaded, unlocked |
-| Pan 10 | Shift + Arrow | App active, loaded, unlocked |
-| Pan 100 | Command-Shift + Arrow | App active, loaded, unlocked |
-| Reset zoom | 0 | App active, loaded, unlocked |
-| Reset view | R | App active, loaded, unlocked |
-| Toggle lock | L | App active; entering lock also requires the exact configured global Lock/Unlock chord to be registered; unlocking is always allowed |
-| Toggle lock globally | Command-Shift-L | Global shortcuts enabled |
-| Shortcut settings | H | App active |
-| Documentation | Command-? | App active |
-| Filter panel | F | App active, loaded |
-| Close current panel or recording | Escape | Contextual |
+The enabled global lock chord stays registered in every video and lock state.
+The four global frame variants are registered only while local media is loaded,
+the overlay is locked, and exact or estimated navigation is available. At all
+other times they are neither registered nor swallowed through Reframer's
+global path. Registered hot keys require no Accessibility or Input Monitoring
+permission.
 
-Shift-scroll zooms in 5% steps. Command-Shift-scroll uses 0.1% steps. An
-unmodified scroll over unlocked video steps samples. Primary-button dragging
-the loaded video pans it while unlocked; the dedicated control-bar grip moves
-the same canonical overlay window. The grip accepts the first click when
-Reframer is inactive, supports Option-Arrow keyboard movement while focused
-(add Shift for 10-point steps), and exposes directional VoiceOver actions.
+Shortcut editing rejects collisions, reserved system chords, modifier collapse,
+and unsafe unmodified global keys. A customized chord replaces its old chord.
+Clearing, disabling, resetting, and multiplier choices persist.
 
-Shortcut editing must prevent collisions, reserved system chords, modifier
-collapse, and unsafe unmodified global keys. A customized chord replaces its
-old chord completely and fires once. Clearing or disabling an action survives
-relaunch. Toggle, panel, reset, and open actions consume key autorepeat without
-dispatching again; frame stepping and panning intentionally repeat while held.
+Shortcut Settings is resizable from 700×520 through 1100×1100 points, prefers
+780×1020, remembers a validated size, and scrolls vertically at compact
+heights. One shared five-column grid aligns enabled state, shortcut, action,
+multiplier, and clear controls across all sections. Keyboard traversal is
+row-major; Tab advances focus and is never recorded as a binding.
 
-Global actions use exclusive system-registered hot keys. During normal
-operation, the enabled global lock chord stays registered in every video and
-lock state. The four enabled frame-step variants are registered only while a
-video is loaded, the overlay is locked, and exact or estimated sample
-navigation is available. They are unregistered outside that actionable state,
-so Reframer neither receives nor swallows those key combinations through the
-global path while another app is active.
+## State, navigation, and accessibility
 
-Registrations are updated incrementally when shortcut settings or the
-actionable playback state changes, retaining unchanged registrations and their
-physical held-key state. They are suspended while the shortcut recorder is
-listening and removed on shutdown. Suspending or losing the registered
-Lock/Unlock chord while locked invokes the automatic-unlock safety policy
-above. Reframer does not install a broad global event monitor and requires
-neither Accessibility nor Input Monitoring permission. Registration conflicts
-are surfaced in Shortcut Settings with a retry action.
+Loading, ready, playing, paused, ended, and failed are distinct. A replacement
+stops prior playback and lands paused. New generations invalidate stale load,
+seek, filter, and scrub callbacks. Playback intent is main-thread-owned and
+revisioned so a delayed player or seek completion cannot undo a newer Pause.
 
-## State
+Exact local navigation uses presentation timestamps from the selected track.
+While indexing, when cursors are unavailable, or after the 2,000,000-sample
+ceiling, Reframer presents a labeled constant-rate estimate. A released scrub
+resolves to the nearest active boundary. YouTube is time-seek only and exposes
+no frame-navigation claim.
 
-- Loading, ready, playing, paused, ended, and failed are distinct states.
-- A new load cancels or invalidates all callbacks from the previous generation.
-- Model playback intent is authoritative: a delayed AVPlayer playing callback
-  after a rapid pause is stopped rather than allowed to revive playback.
-- Playback commands are main-thread-owned and revisioned. A generation-scoped,
-  two-second startup gate preserves Play through transient AVPlayer paused
-  reports, settles once playback starts, and returns the model to Paused if
-  AVPlayer has settled paused when the bounded grace period expires and no
-  authorized seek or scrub handoff is pending.
-- EOF-replay and scrub seek completions may resume only while authorized by the
-  current Play revision. A newer Pause always wins; a newer Play reauthorizes
-  the existing seek instead of starting competing transport.
-- Physical AVPlayer transport remains paused while scrubbing or while a
-  playback seek owns the handoff, even if a delayed playing transition arrives.
-  Scrub end performs the handoff synchronously so there is no unprotected pause
-  window.
-- Selecting a replacement stops the prior playback intent; loading and the
-  newly ready replacement remain paused.
-- The desired sample index is the authority during burst input.
-- Exact navigation uses presentation timestamps from the selected video track.
-  While exact indexing is running, when sample cursors are unavailable, or when
-  the 2,000,000-sample memory ceiling is reached, Reframer retains a visibly
-  labeled constant-rate estimate instead of allocating an unbounded table.
-- If an estimated frame table is replaced while a seek is pending, the latest
-  requested presentation time and replay intent are remapped to the exact table
-  under a new generation.
-- A scrub may use tolerant preview seeks while dragging; release resolves to
-  the nearest boundary in the active exact or labeled estimated timeline.
-- Ended media replays from the first sample when Play is invoked.
-- Each load owns one balanced security-scoped lease through preflight, player
-  use, seeks, filtering, and cooperative cancellation. Replacement acquires the
-  next lease before the prior player graph is dismantled.
+Controls expose task-oriented names, states, values, ranges, orientation, and
+actions. Focus enters and returns from panels predictably. Reduce Motion,
+Increase Contrast, and Reduce Transparency updates remain live. Decorative
+overlays do not intercept pointer input.
 
-Opacity, last audible volume, mute, Always on Top When Unlocked, window
-placement, filter settings, and shortcut customization persist. Values are
-validated and clamped when restored. Restored legacy window geometry is
-migrated once so the formerly separate control-bar footprint becomes part of
-the canonical overlay without moving its top edge.
+The documentation window renders bundled Help HTML as native AppKit content.
+Help does not launch a WebKit process or fetch network content. Only allowlisted
+YouTube and Google policy links can leave Help, and they open in the system
+browser.
 
-## Accessibility and input
+## Privacy and release
 
-All controls have a task-oriented label, role, current value/state where
-applicable, and keyboard/VoiceOver action. Sliders publish value, minimum,
-maximum, and orientation; frame, zoom, and lock ready-state badges are
-individually reachable; and the empty-state Open action reports enabled.
-Opening a panel moves focus into it;
-Escape closes the key/frontmost auxiliary panel and returns focus to its
-invoker. Dynamic shortcut and filter failures are announced. Decorative and
-status overlays never intercept pointer input. Ready video shows frame, zoom,
-and lock status, with the locked state persistently visible. Focused controls
-do not dim. Reduce Motion removes nonessential fades and pulses; Increase
-Contrast and Reduce Transparency keep critical controls and status fully
-visible, including when those settings change while Reframer is running.
+The app entitlement allowlist is exactly:
 
-A focused text editor retains text and standard editing commands. Other
-controls retain only their conventional activation and navigation keys; they
-do not suppress plain or Shift-based Reframer shortcuts they do not own.
-System file and alert sheets bypass the application shortcut layer, and the
-documentation view retains native Space, arrow, and page navigation. The
-documentation window renders bundled Help HTML as native AppKit content; it
-does not launch a WebKit web process, fetch network content, or require a
-network entitlement.
+- `com.apple.security.app-sandbox`;
+- `com.apple.security.files.user-selected.read-only`;
+- `com.apple.security.network.client`.
 
-## Release
+The helper entitlement allowlist is exactly App Sandbox plus
+`com.apple.security.inherit`. Inheritance may include the app's network-client
+sandbox profile, but the helper binary itself is compiled without networking
+and exposes only file/pipe protocols. Third-party source revisions, download
+locations, licenses, patent
+grant, and source-offer details ship in `ThirdPartyLicenses` and are described
+in [Third-party software](THIRD_PARTY.md).
 
-A shippable candidate must be a universal, Hardened Runtime Developer ID build
-in App Sandbox with only user-selected, read-only file access. Release
-acceptance requires successful notarization, stapling, Gatekeeper assessment,
-and an internal-document/test-artifact leakage check. Repository, unsigned, or
-ad hoc signed build validation is not evidence that these external Apple gates
-ran. The exact release entitlement allowlist remains App Sandbox plus
-user-selected, read-only file access; network access is not included.
+The network entitlement supports only the explicit YouTube workflow:
+ephemeral Data API preflight and privacy-enhanced playback from YouTube,
+Google API, and YouTube media hosts. There is no analytics, updater, telemetry,
+or native executable-download channel. The YouTube player necessarily
+downloads remote web content and IFrame API JavaScript inside WebKit.
+The only YouTube-related preference stored locally is the accepted consent
+notice version. The Data API query contains the parsed video identifier and
+sends the API key in the `X-Goog-Api-Key` header; Google still receives
+ordinary HTTPS request/network metadata such as source IP. The player uses a
+nonpersistent website data store. Session cookies and player data may exist
+while it is running, but are never persisted and are cleared before every
+embed.
+
+A release must be universal arm64/x86_64, use Hardened Runtime and Developer ID
+signing, sign the nested helper with its exact inherited-sandbox entitlements,
+pass exact bundle allowlists, and pass notarization, stapling, Gatekeeper, and
+final-ZIP round-trip checks. The Data API key is supplied as the secret
+`REFRAMER_YOUTUBE_DATA_API_KEY`, injected as `YOUTUBE_DATA_API_KEY`, and must
+never be committed. A desktop key is extractable; restrict it by API/quota and
+prefer a production preflight backend when stronger credential control is
+needed.

@@ -35,8 +35,27 @@
   remains paused until the seek or scrub handoff completes.</p>
 
   <p>The frame-step chords work from another app only while a video is loaded,
-  Reframer is locked, and exact or estimated sample navigation is available.
+  Reframer is locked, and exact or estimated local sample navigation is available.
   They are not registered or swallowed in any other state.</p>
+
+  <h2>YouTube</h2>
+  <p>YouTube shares play/pause, time scrub, mute, volume, and window controls.
+  Its API is time-based, so exact frame entry and stepping are
+  unavailable. Quality is adaptive and cannot be forced through the supported
+  embed API. Standard controls, links, branding, ads, settings, and WebKit
+  element fullscreen stay available. Reframer does not autoplay. The web view
+  fills the complete video canvas and remains at least 200×200 points; YouTube
+  owns its internal aspect fit and letterboxing.</p>
+
+  <p>Click-through Lock is unavailable. Reframer unlocks before YouTube
+  preflight so required controls, captions, settings, fullscreen, and links
+  stay interactive. Use Always on Top When Unlocked instead.</p>
+
+  <p>Timeline-drag previews do not allow YouTube seek-ahead; release and
+  discrete seeks do. A YouTube ready snapshot does not overwrite saved
+  native-media volume or mute preferences. Mute uses the official player mute
+  state without setting retained volume to zero, so the player's own Unmute
+  restores the prior audible level.</p>
 
   <div class="nav-links">
     <p><strong>Next:</strong> <a href="zoom-pan.html">Zoom &amp; Pan</a></p>

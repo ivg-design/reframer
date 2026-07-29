@@ -13,7 +13,7 @@ finds an element is not proof of the action behind it.
 | `xcodebuild analyze` | Xcode static analysis reports no blocking issue | Absence of every runtime defect |
 | `TEST_SCOPE=unit scripts/runner_test.sh` | Deterministic model and AppKit contract tests pass | WindowServer event routing, visual output, or another-app shortcuts |
 | `xcodebuild docbuild` | DocC compiles; bundle validation separately checks Apple Help packaging | Documentation accuracy beyond the validated contract |
-| `scripts/validate_bundle.sh` | The universal bundle matches the version, per-slice deployment target, exact Contents/signature/executable/runtime/Help allowlists, modern Help index, source stamp, source privacy allowlist, and contains no symlinks; an optional top-level stapled ticket must validate with `stapler` | Embedded release entitlements, Developer ID trust, notarization, or Gatekeeper acceptance when no ticket is present |
+| `scripts/validate_bundle.sh` | The universal app and WebM helper match version, architecture, deployment target, exact app/helper entitlements, Contents/signature/executable/helper/runtime/Help/license allowlists, source stamp, configured YouTube key, and symlink restrictions; an optional top-level ticket must validate | Developer ID trust, notarization, or Gatekeeper acceptance when no ticket is present |
 | Release packaging workflow | The extracted final ZIP passed bundle, signing, notarization-ticket, and Gatekeeper verification after the source app passed the same post-staple gates | Behavior not exercised by the preceding test jobs |
 
 `build-for-testing` is a compile gate for both test targets. It is not recorded
@@ -26,11 +26,37 @@ result bundles remain as diagnostics without retained `.app` products.
 
 The unit target currently proves:
 
-- MP4, M4V, and MOV are the only advertised extensions and content types, and
-  preflight accepts a known playable fixture while rejecting a missing file,
-  corrupt data with a supported extension, and a valid audio-only MP4.
-  Synthetic MOV and M4V container fixtures also reach the ready,
-  exact-navigation playback state.
+- WebM, MP4/M4V/MOV, AVI, DV, MPEG/MPEG-2/transport-stream, and 3GP/3G2
+  extensions and content types match the contract. Real playable fixtures
+  cover AVI, DV, MPG, MPEG, elementary M2V, TS, MTS, M2TS, 3GP, and 3G2 in
+  addition to MP4/MOV/M4V; M2V explicitly requests precise duration and timing
+  metadata. Missing files, corrupt data with supported extensions, and a valid
+  audio-only MP4 are rejected. Synthetic MOV and M4V container fixtures also
+  reach the ready, exact-navigation playback state.
+- WebM probing rejects malformed EBML and unsupported video codecs, recognizes
+  VP8/VP9 and alpha metadata, exercises bounded/cancellable preparation, and
+  checks the temporary ProRes 4444/PCM contract. Real VP8-alpha+Vorbis,
+  VP9-alpha+Opus, and VP9-alpha-without-audio fixtures round-trip through the
+  exact bundled helper; decoded alpha pixels are compared to the expected
+  source mask, and optional audio behavior is verified. Watchdog policy tests
+  prove output progress extends only the stall deadline—not the 12-hour
+  absolute limit—and that no output progress triggers the stall timeout.
+- YouTube URL parsing admits only supported HTTPS video forms, rejects
+  ambiguous/credentialed/ported links and invalid identifiers, and checks the
+  privacy-enhanced HTML markers. A fake transport verifies that every video
+  reaches the Made for Kids Data API preflight, that unknown/rejected results
+  fail closed, that the key travels in `X-Goog-Api-Key`, and that no player
+  authorization exists without a configured key.
+- The source capability matrix keeps play/pause, time seek, mute, volume,
+  window movement, and Always on Top When Unlocked available for YouTube while
+  disabling frame stepping, zoom/pan, opacity, filters, and click-through Lock
+  from pending preflight through playback.
+- YouTube HTML/source contract checks distinguish no-seek-ahead drag previews
+  from seek-ahead release/discrete seeks. Viewport coverage proves the web view
+  fills the complete minimum player canvas. Audio reconciliation proves the
+  ready snapshot cannot overwrite saved native-media volume or mute and that
+  mute does not zero the retained player volume needed by the official Unmute
+  control.
 - Frame lookup uses presentation timestamps. Packaged media exercises exact
   23.976, 29.97, 59.94, and 60.00 fps sample indexing plus a real
   variable-frame-rate fixture with irregular intervals. An in-memory table
@@ -75,6 +101,9 @@ The unit target currently proves:
   forced unlock after recovery loss, system-sheet bypass, native
   table/document navigation, and active-versus-inactive dispatch policy also
   have unit coverage.
+- Shortcut Settings coverage verifies one shared five-column alignment grid,
+  700×520 minimum, 780×1020 preferred, 1100×1100 maximum, compact-height
+  scrolling, row-major focus, Tab traversal, and validated size persistence.
 - Window recovery, one-time migration from the former split-window footprint,
   whole-overlay placement, attached-panel placement, and invalid geometry
   handling are checked as pure geometry.
@@ -84,6 +113,9 @@ The unit target currently proves:
   nonmovable/nonresizable geometry regardless of the saved Always on Top When
   Unlocked preference, while unlock restores that preference. It does not
   claim precedence over higher critical system UI.
+- Command availability coverage rejects Lock when no local source is loaded or
+  a YouTube selection is pending while still permitting recovery Unlock from
+  an already locked state.
 - AppKit hierarchy coverage proves that video and controls share one canonical
   window with no separately managed control child.
 - Responsive control-bar coverage fixes the preferred width at 1,060 points,
@@ -97,8 +129,9 @@ The unit target currently proves:
   pointer-transparent overlays are checked through AppKit objects.
 - The native documentation loader rejects traversal outside the bundled Help
   root, renders known nonblank Help text in an AppKit text view, and provides
-  an explicit fallback page for missing content without requiring WebKit or
-  network access.
+  an explicit fallback page for missing content without using WebKit or
+  network access. Allowlisted external policy links leave through the system
+  browser.
 
 These checks do not prove that macOS delivered a physical key, pointer, drag,
 display, accessibility, or workspace event to the running app.
@@ -112,7 +145,7 @@ flow.
 
 The bullets below define what a passing execution proves. Candidate-specific
 results belong in the dated
-[audit and release-readiness record](AUDIT_2026-07-28.md), not in this stable
+[build-4 readiness record](AUDIT_0.11.0_BUILD_4.md), not in this stable
 test contract:
 
 - the empty state exposes a labeled, enabled Open video action;
@@ -121,7 +154,8 @@ test contract:
 - with a video loaded, native Down/Space input in the replacement file picker
   does not pan, step, or toggle playback;
 - H presents the labeled Shortcut Settings group and its labeled Close action
-  dismisses it;
+  dismisses it; deterministic AppKit checks cover alignment and resizing, but
+  final all-rows-at-once visual inspection remains manual;
 - video and controls are descendants of the named primary overlay window, and
   no separately targetable controls window is exposed;
 - the Launch Services fixture reaches a ready, enabled timeline and exposes
@@ -191,6 +225,18 @@ The following claims need an observed live pass because the current automated
 suite does not measure their result:
 
 - selecting a real file in the picker and Finder Open With;
+- loading representative AVI, DV, MPEG/transport-stream, and 3GP/3G2 files
+  whose embedded codecs AVFoundation can decode;
+- preparing representative VP8 and VP9 WebM files with alpha and audio,
+  confirming transparent pixels, frame navigation, filtering, cancellation,
+  replacement cleanup, and no retained temporary output;
+- accepting the YouTube notice, completing a real per-video Made for Kids
+  preflight, then checking play/pause, time scrub, mute, volume, adaptive
+  quality, standard player controls/links/settings/fullscreen, errors, pause
+  on hiding/occlusion, automatic unlock before preflight, disabled Lock, and
+  Always on Top When Unlocked. Confirm required controls, captions, settings,
+  fullscreen, and links remain interactive and exact frames, zoom/pan,
+  opacity, and filters remain unavailable for YouTube;
 - valid/invalid file drag-and-drop feedback and loading;
 - video-surface pointer pan at 1x and above, including reversal across the drag
   origin;
@@ -221,7 +267,9 @@ suite does not measure their result:
   recovery path;
 - multi-display placement, display removal, and visible-frame clamping;
 - keyboard-only traversal and focus restoration for shortcut, filter, and
-  documentation panels;
+  documentation panels; resize Shortcut Settings from minimum to maximum,
+  confirm neat shared columns at every width, inspect all rows at the preferred
+  height, and verify compact-height scrolling;
 - VoiceOver announcements/actions, Increase Contrast/Reduce Transparency, and
   Reduce Motion;
 - visual filter correctness, composited opacity, and VFR audiovisual playback;

@@ -22,9 +22,21 @@ final class VideoFormatsTests: XCTestCase {
                       "M4V should be a supported format")
     }
 
-    func testAVIIsNotAdvertisedOrAccepted() {
-        XCTAssertFalse(VideoFormats.supportedExtensions.contains("avi"))
-        XCTAssertFalse(VideoFormats.isSupported(URL(fileURLWithPath: "/test/video.avi")))
+    func testAdditionalNativeContainersAreAdvertisedAndAccepted() {
+        for fileExtension in [
+            "avi", "dv", "mpg", "mpeg", "m2v",
+            "ts", "mts", "m2ts", "3gp", "3g2"
+        ] {
+            XCTAssertTrue(
+                VideoFormats.supportedExtensions.contains(fileExtension)
+            )
+            XCTAssertTrue(
+                VideoFormats.isSupported(
+                    URL(fileURLWithPath: "/test/video.\(fileExtension)")
+                )
+            )
+        }
+        XCTAssertTrue(VideoFormats.supportedExtensions.contains("webm"))
     }
 
     func testSupportedTypesNotEmpty() {
@@ -34,7 +46,16 @@ final class VideoFormatsTests: XCTestCase {
 
     func testSupportedExtensionsNotEmpty() {
         XCTAssertFalse(VideoFormats.supportedExtensions.isEmpty, "Should have supported extensions")
-        XCTAssertEqual(VideoFormats.supportedExtensions, ["mp4", "m4v", "mov"])
+        XCTAssertEqual(
+            VideoFormats.supportedExtensions,
+            [
+                "mp4", "m4v", "mov",
+                "avi", "dv",
+                "mpg", "mpeg", "m2v", "ts", "mts", "m2ts",
+                "3gp", "3g2",
+                "webm"
+            ]
+        )
     }
 
     // MARK: - isSupported URL method
@@ -155,8 +176,8 @@ final class VideoFormatsTests: XCTestCase {
                       "QuickTime movie type should be supported")
     }
 
-    func testAVITypeIsNotSupported() {
-        XCTAssertFalse(VideoFormats.isSupported(contentType: .avi))
+    func testAVITypeIsSupported() {
+        XCTAssertTrue(VideoFormats.isSupported(contentType: .avi))
     }
 
     // MARK: - Display String
@@ -166,6 +187,7 @@ final class VideoFormatsTests: XCTestCase {
         XCTAssertTrue(VideoFormats.displayString.contains("MP4"), "Display string should mention MP4")
         XCTAssertTrue(VideoFormats.displayString.contains("M4V"))
         XCTAssertTrue(VideoFormats.displayString.contains("MOV"))
+        XCTAssertTrue(VideoFormats.displayString.contains("WebM"))
     }
 
     func testPreflightAcceptsKnownFixture() async throws {
@@ -190,6 +212,75 @@ final class VideoFormatsTests: XCTestCase {
             named: "test_playable",
             extension: "m4v"
         )
+    }
+
+    func testPreflightAcceptsPlayableAVIFixture() async throws {
+        try await assertPreflightAcceptsPlayableFixture(
+            named: "test_playable",
+            extension: "avi"
+        )
+    }
+
+    func testPreflightAcceptsPlayableDVFixture() async throws {
+        try await assertPreflightAcceptsPlayableFixture(
+            named: "test_playable",
+            extension: "dv"
+        )
+    }
+
+    func testPreflightAcceptsPlayableMPEGProgramStreamFixtures() async throws {
+        for fileExtension in ["mpg", "mpeg"] {
+            try await assertPreflightAcceptsPlayableFixture(
+                named: "test_playable",
+                extension: fileExtension
+            )
+        }
+    }
+
+    func testPreflightAcceptsPlayableMPEG2ElementaryStreamFixture() async throws {
+        try await assertPreflightAcceptsPlayableFixture(
+            named: "test_playable",
+            extension: "m2v"
+        )
+    }
+
+    func testMPEG2ElementaryStreamUsesPreciseTimingWithoutChangingOtherFormats() {
+        XCTAssertTrue(
+            VideoFormats.prefersPreciseDurationAndTiming(
+                for: URL(fileURLWithPath: "/test/video.m2v")
+            )
+        )
+
+        for fileExtension in [
+            "mp4", "mov", "avi", "dv", "mpg", "mpeg",
+            "ts", "mts", "m2ts", "3gp", "3g2"
+        ] {
+            XCTAssertFalse(
+                VideoFormats.prefersPreciseDurationAndTiming(
+                    for: URL(
+                        fileURLWithPath: "/test/video.\(fileExtension)"
+                    )
+                )
+            )
+        }
+    }
+
+    func testPreflightAcceptsPlayableTransportStreamFixtures() async throws {
+        for fileExtension in ["ts", "mts", "m2ts"] {
+            try await assertPreflightAcceptsPlayableFixture(
+                named: "test_playable",
+                extension: fileExtension
+            )
+        }
+    }
+
+    func testPreflightAcceptsPlayableMobileContainerFixtures() async throws {
+        for fileExtension in ["3gp", "3g2"] {
+            try await assertPreflightAcceptsPlayableFixture(
+                named: "test_playable",
+                extension: fileExtension
+            )
+        }
     }
 
     func testSelectedFixtureTrackIsEnabledUsableAndCoherent() async throws {
@@ -468,16 +559,48 @@ final class VideoFormatsTests: XCTestCase {
                 withExtension: fileExtension
             )
         )
+        XCTAssertTrue(
+            VideoFormats.isSupported(url),
+            "Fixture should pass extension and content-type validation: \(url.lastPathComponent)"
+        )
 
         let asset = try await VideoFormats.preflight(url)
         let selectedTrack = try await VideoFormats.selectVideoTrack(in: asset)
+        let duration = try await asset.load(.duration)
         let isPlayable = try await selectedTrack.track.load(.isPlayable)
         let isDecodable = try await selectedTrack.track.load(.isDecodable)
+        let prepared = try await VideoFormats.preparePlaybackAsset(
+            from: asset,
+            selectedVideoTrack: selectedTrack
+        )
+        let preparedVideoTracks = try await prepared.asset.loadTracks(
+            withMediaType: .video
+        )
 
-        XCTAssertTrue(isPlayable)
-        XCTAssertTrue(isDecodable)
-        XCTAssertGreaterThan(selectedTrack.displaySize.width, 0)
-        XCTAssertGreaterThan(selectedTrack.displaySize.height, 0)
+        XCTAssertTrue(isPlayable, fileExtension)
+        XCTAssertTrue(isDecodable, fileExtension)
+        XCTAssertTrue(duration.isNumeric, fileExtension)
+        XCTAssertGreaterThan(
+            CMTimeCompare(duration, .zero),
+            0,
+            fileExtension
+        )
+        XCTAssertGreaterThan(
+            selectedTrack.displaySize.width,
+            0,
+            fileExtension
+        )
+        XCTAssertGreaterThan(
+            selectedTrack.displaySize.height,
+            0,
+            fileExtension
+        )
+        XCTAssertEqual(preparedVideoTracks.count, 1, fileExtension)
+        XCTAssertEqual(
+            preparedVideoTracks.first?.trackID,
+            prepared.selectedVideoTrackID,
+            fileExtension
+        )
     }
 
     private func makePassthroughFilterComposition(

@@ -524,9 +524,9 @@ final class ShortcutSettingsTests: XCTestCase {
                     charactersIgnoringModifiers: "\t"
                 )
             ),
-            .rejected(.unsupportedKey)
+            .focusTraversal
         )
-        XCTAssertEqual(settings.recordingAction, .playPause)
+        XCTAssertNil(settings.recordingAction)
 
         assertFailure(
             .unsupportedKey,
@@ -538,6 +538,159 @@ final class ShortcutSettingsTests: XCTestCase {
                 for: .playPause
             )
         )
+    }
+
+    @MainActor
+    func testShortcutSettingsWindowContractIsResizable() {
+        XCTAssertTrue(
+            ShortcutSettingsWindowConfiguration.styleMask.contains(.resizable)
+        )
+        XCTAssertTrue(
+            ShortcutSettingsWindowConfiguration.styleMask.contains(.borderless)
+        )
+        XCTAssertEqual(HelpView.minimumWindowSize, NSSize(width: 700, height: 520))
+        XCTAssertEqual(HelpView.preferredWindowSize, NSSize(width: 780, height: 1_020))
+        XCTAssertGreaterThan(
+            HelpView.preferredWindowSize.height,
+            HelpView.minimumWindowSize.height
+        )
+    }
+
+    @MainActor
+    func testShortcutSettingsUsesAlignedSharedColumns() {
+        let hosted = makeHostedShortcutSettingsView(
+            size: HelpView.preferredWindowSize
+        )
+        let view = hosted.view
+
+        let actions = ShortcutSettings.Action.allCases
+        let keyOrigins = actions.compactMap {
+            descendant(withIdentifier: "shortcut-key-\($0.rawValue)", in: view)
+                .map { $0.convert($0.bounds, to: view).minX }
+        }
+        let actionOrigins = actions.compactMap {
+            descendant(withIdentifier: "shortcut-action-\($0.rawValue)", in: view)
+                .map { $0.convert($0.bounds, to: view).minX }
+        }
+        let clearOrigins = actions.compactMap {
+            descendant(withIdentifier: "shortcut-clear-\($0.rawValue)", in: view)
+                .map { $0.convert($0.bounds, to: view).minX }
+        }
+        let multiplierOrigins = actions
+            .filter(\.hasMultiplierVariant)
+            .compactMap {
+                descendant(
+                    withIdentifier: "shortcut-multiplier-\($0.rawValue)",
+                    in: view
+                ).map { $0.convert($0.bounds, to: view).minX }
+            }
+
+        XCTAssertEqual(keyOrigins.count, actions.count)
+        XCTAssertEqual(actionOrigins.count, actions.count)
+        XCTAssertEqual(clearOrigins.count, actions.count)
+        assertAligned(keyOrigins)
+        assertAligned(actionOrigins)
+        assertAligned(clearOrigins)
+        assertAligned(multiplierOrigins)
+
+        let configurableKey = try! XCTUnwrap(
+            descendant(withIdentifier: "shortcut-key-playPause", in: view)
+        )
+        let staticKey = try! XCTUnwrap(
+            descendant(withIdentifier: "shortcut-key-static-drag-video", in: view)
+        )
+        let configurableAction = try! XCTUnwrap(
+            descendant(withIdentifier: "shortcut-action-playPause", in: view)
+        )
+        let staticAction = try! XCTUnwrap(
+            descendant(
+                withIdentifier: "shortcut-action-static-drag-video",
+                in: view
+            )
+        )
+        XCTAssertEqual(
+            configurableKey.convert(configurableKey.bounds, to: view).minX,
+            staticKey.convert(staticKey.bounds, to: view).minX,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(
+            configurableAction.convert(configurableAction.bounds, to: view).minX,
+            staticAction.convert(staticAction.bounds, to: view).minX,
+            accuracy: 0.5
+        )
+    }
+
+    @MainActor
+    func testShortcutSettingsExpandedHeightShowsAllRowsAndMinimumHeightScrolls() {
+        let expanded = makeHostedShortcutSettingsView(
+            size: HelpView.preferredWindowSize
+        )
+        let expandedScroll = try! XCTUnwrap(
+            descendant(withIdentifier: "shortcut-scroll", in: expanded.view)
+                as? NSScrollView
+        )
+        XCTAssertLessThanOrEqual(
+            expandedScroll.documentView?.frame.height ?? .greatestFiniteMagnitude,
+            expandedScroll.contentView.bounds.height + 1
+        )
+        XCTAssertLessThanOrEqual(
+            expandedScroll.documentView?.frame.width ?? .greatestFiniteMagnitude,
+            expandedScroll.contentView.bounds.width + 1
+        )
+
+        let compact = makeHostedShortcutSettingsView(
+            size: HelpView.minimumWindowSize
+        )
+        let compactScroll = try! XCTUnwrap(
+            descendant(withIdentifier: "shortcut-scroll", in: compact.view)
+                as? NSScrollView
+        )
+        XCTAssertGreaterThan(
+            compactScroll.documentView?.frame.height ?? 0,
+            compactScroll.contentView.bounds.height + 1
+        )
+        XCTAssertLessThanOrEqual(
+            compactScroll.documentView?.frame.width ?? .greatestFiniteMagnitude,
+            compactScroll.contentView.bounds.width + 1
+        )
+    }
+
+    @MainActor
+    func testShortcutSettingsGlobalScopeAppearsOnceAndFocusOrderIsRowMajor() {
+        let hosted = makeHostedShortcutSettingsView(
+            size: HelpView.preferredWindowSize
+        )
+        let view = hosted.view
+        let globalLockLabel = try! XCTUnwrap(
+            descendant(
+                withIdentifier: "shortcut-action-globalToggleLock",
+                in: view
+            ) as? NSTextField
+        )
+        XCTAssertEqual(globalLockLabel.stringValue, "Toggle lock · Global")
+
+        let close = try! XCTUnwrap(
+            descendant(withIdentifier: "help-close", in: view)
+        )
+        let firstEnable = try! XCTUnwrap(
+            descendant(withIdentifier: "shortcut-enable-playPause", in: view)
+        )
+        let firstKey = try! XCTUnwrap(
+            descendant(withIdentifier: "shortcut-key-playPause", in: view)
+        )
+        let firstClear = try! XCTUnwrap(
+            descendant(withIdentifier: "shortcut-clear-playPause", in: view)
+        )
+        let secondEnable = try! XCTUnwrap(
+            descendant(
+                withIdentifier: "shortcut-enable-frameStepForward",
+                in: view
+            )
+        )
+        XCTAssertTrue(close.nextKeyView === firstEnable)
+        XCTAssertTrue(firstEnable.nextKeyView === firstKey)
+        XCTAssertTrue(firstKey.nextKeyView === firstClear)
+        XCTAssertTrue(firstClear.nextKeyView === secondEnable)
     }
 
     func testAcceptedFunctionAndNavigationKeysHaveMenuEquivalents() {
@@ -1068,6 +1221,57 @@ final class ShortcutSettingsTests: XCTestCase {
             stroke: ShortcutKeystroke(keyCode: KeyCode.leftArrow, modifiers: 0),
             responder: dragHandle
         ))
+    }
+
+    @MainActor
+    private func makeHostedShortcutSettingsView(
+        size: NSSize
+    ) -> (view: HelpView, window: NSWindow, state: VideoState) {
+        let state = VideoState(defaults: defaults)
+        let view = HelpView(videoState: state)
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: ShortcutSettingsWindowConfiguration.styleMask,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = view
+        view.frame = NSRect(origin: .zero, size: size)
+        view.needsLayout = true
+        view.layoutSubtreeIfNeeded()
+        view.needsLayout = true
+        view.layoutSubtreeIfNeeded()
+        return (view, window, state)
+    }
+
+    @MainActor
+    private func descendant(
+        withIdentifier identifier: String,
+        in view: NSView
+    ) -> NSView? {
+        if view.identifier?.rawValue == identifier {
+            return view
+        }
+        for subview in view.subviews {
+            if let match = descendant(withIdentifier: identifier, in: subview) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    private func assertAligned(
+        _ origins: [CGFloat],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard let first = origins.first else {
+            XCTFail("Expected at least one column origin", file: file, line: line)
+            return
+        }
+        for origin in origins.dropFirst() {
+            XCTAssertEqual(origin, first, accuracy: 0.5, file: file, line: line)
+        }
     }
 
     private func assertSuccess(

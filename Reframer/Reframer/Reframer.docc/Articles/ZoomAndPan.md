@@ -16,3 +16,7 @@ to move one point. Add Shift for 10 points or Command-Shift for 100 points.
 
 Press R to reset zoom and pan together. Zoom and pan commands are suppressed
 while the overlay is locked or a text field is editing.
+
+Transforms apply to native or prepared local media. Zoom, pan, reset, and
+opacity controls are disabled from a pending YouTube preflight through
+YouTube playback.

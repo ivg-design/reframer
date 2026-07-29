@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YouTube Privacy and Terms - Reframer Help</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <h1>YouTube Privacy and Terms</h1>
+  <p class="subtitle">What happens when you explicitly load a YouTube link.</p>
+
+  <h2>Before the player opens</h2>
+  <p>Reframer sends the parsed video identifier to the YouTube Data API to
+  retrieve the current Made for Kids status. The identifier is in the request
+  query and the API key is sent in the <code>X-Goog-Api-Key</code> header,
+  rather than the URL. Google also necessarily receives ordinary HTTPS request
+  and network metadata such as your IP address. If that required check fails
+  or returns no status, Reframer does not load the embedded player.</p>
+
+  <h2>Player privacy</h2>
+  <p>After approval, Reframer loads YouTube's privacy-enhanced embedded player
+  in an ephemeral system WebKit view. YouTube receives network information
+  such as your IP address, user agent, Reframer's app identity, and the selected
+  video identifier. YouTube may display content, controls, links, and ads. The
+  WebKit data store is not persisted and is cleared before every embed. Session
+  cookies or player data can exist while that player runs, but are never
+  persisted. Reframer does not retain or log the pasted URL or viewing
+  history.</p>
+
+  <p>The player does not autoplay. YouTube selects adaptive quality; its
+  supported embed API does not let Reframer force maximum quality. Standard
+  controls, links, branding, ads, settings, and WebKit element fullscreen
+  remain available. The web view fills the complete video canvas and remains
+  at least 200×200 points; YouTube owns internal aspect fit and letterboxing.
+  Reframer disables filters and transforms from pending
+  preflight through playback. It also unlocks and disables click-through Lock
+  so controls, captions, settings, fullscreen, and links remain interactive.
+  Use Always on Top When Unlocked for a topmost YouTube window.</p>
+
+  <h2>Your choice</h2>
+  <p>YouTube is contacted only after you paste a link, review this notice, and
+  select Load Video. You can stop playback or replace the source at any time.
+  Reframer stores only the accepted notice version locally. It does not store
+  the pasted link, viewing history, or YouTube login credentials.</p>
+
+  <h2>Terms</h2>
+  <p>By using YouTube playback in Reframer, you agree to the
+  <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>.
+  YouTube's handling of data is described in the
+  <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.</p>
+
+  <div class="nav-links">
+    <p><a href="loading-videos.html">← Loading Videos</a></p>
+    <p><a href="index.html">Reframer Help</a></p>
+  </div>
+</body>
+</html>

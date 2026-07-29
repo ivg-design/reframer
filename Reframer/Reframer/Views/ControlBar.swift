@@ -1071,16 +1071,15 @@ class ControlBar: NSView {
             .sink { [weak self] loaded in
                 self?.playButton?.isEnabled = loaded
                 self?.timelineSlider?.isEnabled = loaded
-                self?.zoomField?.isEnabled = loaded && !(self?.videoState?.isLocked ?? false)
-                self?.opacityField?.isEnabled = loaded
-                self?.opacitySlider?.isEnabled = loaded
                 self?.updateFrameNavigationPresentation()
-                self?.updateOpacity()
-                if let filter = self?.videoState?.quickFilter {
-                    self?.updateSliderForQuickFilter(filter)
-                } else {
-                    self?.updateSliderForQuickFilter(nil)
-                }
+                self?.updateMediaCapabilityPresentation()
+            }
+            .store(in: &cancellables)
+
+        state.$webMediaSource
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateMediaCapabilityPresentation()
             }
             .store(in: &cancellables)
     }
@@ -1096,9 +1095,49 @@ class ControlBar: NSView {
         let help = isLocked ? Self.lockedLockHelp : Self.unlockedLockHelp
         lockButton?.toolTip = help
         lockButton?.setAccessibilityHelp(help)
-        zoomField?.isEnabled = !isLocked
-        resetButton?.isEnabled = !isLocked
+        updateMediaCapabilityPresentation()
+    }
+
+    private func updateMediaCapabilityPresentation() {
+        guard let state = videoState else { return }
+        let canTransform =
+            state.isVideoLoaded
+            && !state.isLocked
+            && state.supportsVideoTransforms
+        let canAdjustVisuals =
+            state.isVideoLoaded
+            && state.supportsVideoFilters
+        let canUseClickThroughLock =
+            state.isLocked
+            || (state.isVideoLoaded
+                && state.supportsClickThroughLock)
+
+        zoomField?.isEnabled = canTransform
+        resetButton?.isEnabled = canTransform
+        filterMenuButton?.isEnabled = canAdjustVisuals
+        lockButton?.isEnabled = canUseClickThroughLock
         updateOpacity()
+        updateSliderForQuickFilter(state.quickFilter)
+
+        if state.webMediaSource?.isYouTube == true {
+            zoomField?.toolTip =
+                "YouTube playback keeps the complete official player visible; video zoom and pan are unavailable."
+            filterMenuButton?.toolTip =
+                "YouTube playback does not support Reframer filters or opacity."
+            lockButton?.toolTip =
+                "YouTube requires its official controls to remain interactive. Use Always on Top while unlocked."
+            lockButton?.setAccessibilityHelp(lockButton?.toolTip)
+        } else {
+            zoomField?.toolTip = "Video zoom percentage"
+            filterMenuButton?.toolTip = state.quickFilter.map {
+                "Quick filter: \($0.rawValue)"
+            } ?? "Quick filter: None"
+            let lockHelp = state.isLocked
+                ? Self.lockedLockHelp
+                : Self.unlockedLockHelp
+            lockButton?.toolTip = lockHelp
+            lockButton?.setAccessibilityHelp(lockHelp)
+        }
     }
 
     private func updateFrameNavigationPresentation() {
@@ -1137,6 +1176,9 @@ class ControlBar: NSView {
 
     private func updateSliderForQuickFilter(_ filter: VideoFilter?) {
         guard let state = videoState else { return }
+        let canAdjustVisuals =
+            state.isVideoLoaded
+            && state.supportsVideoFilters
 
         if let filter = filter {
             opacitySlider?.setAccessibilityLabel("\(filter.rawValue) strength")
@@ -1147,10 +1189,10 @@ class ControlBar: NSView {
             opacitySlider?.minValue = 0.0
             opacitySlider?.maxValue = 1.0
             if filter.isQuickFilterAdjustable {
-                opacitySlider?.isEnabled = state.isVideoLoaded
-                opacityField?.isEnabled = state.isVideoLoaded
-                opacityField?.isEditable = state.isVideoLoaded
-                opacityField?.isSelectable = state.isVideoLoaded
+                opacitySlider?.isEnabled = canAdjustVisuals
+                opacityField?.isEnabled = canAdjustVisuals
+                opacityField?.isEditable = canAdjustVisuals
+                opacityField?.isSelectable = canAdjustVisuals
                 opacitySlider?.doubleValue = state.quickFilterValue
                 opacityField?.stringValue = formatFilterValue(filter: filter, normalizedValue: state.quickFilterValue)
                 if let opacityField {
@@ -1158,7 +1200,7 @@ class ControlBar: NSView {
                 }
             } else {
                 opacitySlider?.isEnabled = false
-                opacityField?.isEnabled = state.isVideoLoaded
+                opacityField?.isEnabled = canAdjustVisuals
                 opacityField?.isEditable = false
                 opacityField?.isSelectable = false
                 opacitySlider?.doubleValue = 1.0
@@ -1173,10 +1215,10 @@ class ControlBar: NSView {
             opacitySlider?.maxValue = 1.0
             opacitySlider?.doubleValue = state.opacity
             opacityField?.stringValue = "\(Int(state.opacity * 100))"
-            opacitySlider?.isEnabled = state.isVideoLoaded
-            opacityField?.isEnabled = state.isVideoLoaded
-            opacityField?.isEditable = state.isVideoLoaded
-            opacityField?.isSelectable = state.isVideoLoaded
+            opacitySlider?.isEnabled = canAdjustVisuals
+            opacityField?.isEnabled = canAdjustVisuals
+            opacityField?.isEditable = canAdjustVisuals
+            opacityField?.isSelectable = canAdjustVisuals
             if let opacityField {
                 restoreAccessibilityHelp(for: opacityField)
             }

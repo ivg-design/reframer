@@ -11,24 +11,32 @@
   <p class="subtitle">Defaults, guards, and customization.</p>
 
   <table>
-    <tr><th>Action</th><th>Default</th></tr>
-    <tr><td>Open</td><td><kbd>⌘O</kbd></td></tr>
-    <tr><td>Play / Pause</td><td><kbd>Space</kbd></td></tr>
-    <tr><td>Step forward / backward</td><td><kbd>⌘ Page Down</kbd> / <kbd>⌘ Page Up</kbd></td></tr>
-    <tr><td>Step ten</td><td>Add <kbd>⇧</kbd></td></tr>
-    <tr><td>Pan 1 / 10 / 100</td><td>Arrow / <kbd>⇧</kbd>Arrow / <kbd>⌘⇧</kbd>Arrow</td></tr>
-    <tr><td>Reset zoom / view</td><td><kbd>0</kbd> / <kbd>R</kbd></td></tr>
-    <tr><td>Lock locally / globally</td><td><kbd>L</kbd> / <kbd>⌘⇧L</kbd></td></tr>
-    <tr><td>Shortcut settings</td><td><kbd>H</kbd></td></tr>
-    <tr><td>Documentation</td><td><kbd>⌘?</kbd></td></tr>
-    <tr><td>Advanced filters</td><td><kbd>F</kbd></td></tr>
-    <tr><td>Close current panel or recording</td><td><kbd>Escape</kbd></td></tr>
+    <tr><th>Action</th><th>Default</th><th>Shortcut Settings</th></tr>
+    <tr><td>Open local video</td><td><kbd>⌘O</kbd></td><td>Fixed menu command</td></tr>
+    <tr><td>Open YouTube video</td><td><kbd>⌥⌘O</kbd></td><td>Fixed menu command</td></tr>
+    <tr><td>Play / Pause</td><td><kbd>Space</kbd></td><td>Customizable</td></tr>
+    <tr><td>Step forward / backward</td><td><kbd>⌘ Page Down</kbd> / <kbd>⌘ Page Up</kbd></td><td>Customizable</td></tr>
+    <tr><td>Step ten</td><td>Add <kbd>⇧</kbd></td><td>Customizable multiplier</td></tr>
+    <tr><td>Pan 1 / 10 / 100</td><td>Arrow / <kbd>⇧</kbd>Arrow / <kbd>⌘⇧</kbd>Arrow</td><td>Customizable multipliers</td></tr>
+    <tr><td>Reset zoom / view</td><td><kbd>0</kbd> / <kbd>R</kbd></td><td>Customizable</td></tr>
+    <tr><td>Lock locally / globally</td><td><kbd>L</kbd> / <kbd>⌘⇧L</kbd></td><td>Customizable</td></tr>
+    <tr><td>Shortcut settings</td><td><kbd>H</kbd></td><td>Customizable</td></tr>
+    <tr><td>Documentation</td><td><kbd>⌘?</kbd></td><td>Fixed Help command</td></tr>
+    <tr><td>Advanced filters</td><td><kbd>F</kbd></td><td>Customizable</td></tr>
+    <tr><td>Close current panel or recording</td><td><kbd>Escape</kbd></td><td>Customizable</td></tr>
   </table>
 
+  <p>Command-O, Option-Command-O, and Command-? are fixed menu/Help commands
+  and do not appear in Shortcut Settings. Shift-scroll and
+  Command-Shift-scroll are fixed pointer gestures. The panel's 14 editable
+  rows cover playback, both frame directions, four pan directions, two reset
+  actions, local and global Lock, Shortcut Settings, Close Current Panel, and
+  Filter Panel.</p>
+
   <h2>Scope</h2>
-  <p>Playback and inspection commands require a loaded video. Pan and zoom
-  require an unlocked overlay. Frame stepping works outside Reframer only with
-  a loaded, locked video whose exact or estimated sample navigation is
+  <p>Playback commands require a ready source. Pan, zoom, filters, opacity, and
+  frame commands require native or prepared local media. Frame stepping works
+  outside Reframer only with a loaded, locked local video whose exact or estimated sample navigation is
   available. Focused controls keep only their conventional activation and
   navigation keys, while text editing keeps normal field behavior. System file
   and alert sheets bypass Reframer commands, and documentation keeps native
@@ -39,7 +47,7 @@
   actions.</p>
 
   <p>The entire overlay, including its control bar, ignores pointer input while
-  locked. Keep an enabled global lock binding so <kbd>⌘⇧L</kbd>, or your
+  local media is locked. Keep an enabled global lock binding so <kbd>⌘⇧L</kbd>, or your
   customized replacement, can restore interaction from the app underneath.</p>
 
   <p>Reframer refuses to lock unless that exact configured global chord is
@@ -47,17 +55,29 @@
   while recording a shortcut, or global shortcuts are disabled, Reframer
   immediately unlocks and reports recovery. Unlocking is always permitted.</p>
 
+  <p>Lock commands are unavailable from pending YouTube preflight through
+  playback so the embedded player's required controls, captions, settings,
+  fullscreen, and links remain interactive.</p>
+
   <h2>Customize</h2>
   <p>Open shortcut settings with <kbd>H</kbd>. Change, clear, disable, or reset
-  an action. Reframer rejects duplicate, reserved, modifier-collapsing, and
-  unsafe global chords. A new chord replaces the old one and persists. Global
-  shortcuts can be disabled independently. During normal operation, the
+  an editable action. Fixed menu/Help commands and pointer gestures are not
+  shown in the panel. Reframer rejects duplicate, reserved,
+  modifier-collapsing, and unsafe global chords. A new chord replaces the old
+  one and persists. Global shortcuts can be disabled independently. During
+  normal operation, the
   enabled lock chord stays registered in every video and lock state. Frame
   chords are registered only in their actionable state and are not received or
   swallowed through the global path while another app is active. Registered
   hot keys require no Accessibility or Input Monitoring permission. If another
   app owns a chord, this panel reports the conflict and offers a retry
   action.</p>
+
+  <p>The resizable panel uses one shared five-column grid to align enabled
+  state, shortcut, action, multiplier, and clear controls across every section.
+  It resizes from 700×520 through 1100×1100, prefers 780×1020, remembers its
+  validated size, and scrolls at compact heights. Tab follows row-major focus
+  and is never recorded as a shortcut.</p>
 
   <div class="nav-links">
     <p><a href="index.html">← Reframer Help</a></p>

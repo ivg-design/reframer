@@ -9,7 +9,7 @@
 </head>
 <body>
   <h1>Reframer Help</h1>
-  <p class="subtitle">A precise, local video-reference overlay for macOS 15.0 and later.</p>
+  <p class="subtitle">A precise video-reference overlay for macOS 15.0 and later.</p>
 
   <div class="topic-grid">
     <a class="topic-card" href="getting-started.html"><h2>Getting Started</h2><p>Load and position a reference</p></a>
@@ -18,20 +18,25 @@
     <a class="topic-card" href="zoom-pan.html"><h2>Zoom &amp; Pan</h2><p>Inspect picture details</p></a>
     <a class="topic-card" href="opacity.html"><h2>Opacity</h2><p>Blend with your workspace</p></a>
     <a class="topic-card" href="filters.html"><h2>Filters</h2><p>Adjust the reference image</p></a>
-    <a class="topic-card" href="lock-mode.html"><h2>Lock Mode</h2><p>Work through the overlay</p></a>
+    <a class="topic-card" href="lock-mode.html"><h2>Lock Mode</h2><p>Work through a local-media overlay</p></a>
     <a class="topic-card" href="shortcuts.html"><h2>Shortcuts</h2><p>Defaults, guards, and customization</p></a>
+    <a class="topic-card" href="youtube-privacy.html"><h2>YouTube Privacy</h2><p>Consent, data, and player behavior</p></a>
   </div>
 
   <h2>Product boundaries</h2>
   <ul>
-    <li>Local MP4, M4V, and MOV files</li>
+    <li>Local WebM, MP4/M4V/MOV, AVI, DV, MPEG/transport-stream, and 3GP/3G2 media</li>
+    <li>Explicit, consent-gated YouTube playback after a Made for Kids preflight</li>
     <li>AVFoundation playback and Core Image filters</li>
     <li>One video-and-controls window for macOS and window managers</li>
     <li>One 48-point control row at 920 points and wider; two rows through the
       640-point minimum with no hidden controls</li>
-    <li>Whole-overlay lock requires a registered global recovery chord</li>
-    <li>Native bundled Help with no streaming, analytics, network entitlement,
-      or downloaded components</li>
+    <li>Local-media whole-overlay lock requires a registered global recovery chord</li>
+    <li>YouTube stays unlocked so required player controls remain interactive</li>
+    <li>Native bundled Help that never fetches network content</li>
+    <li>Network access only for the explicit YouTube workflow; no analytics,
+      updater, or downloaded native executable components; authorized YouTube
+      playback loads remote web content and IFrame API JavaScript in WebKit</li>
   </ul>
 </body>
 </html>

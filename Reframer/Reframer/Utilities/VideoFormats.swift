@@ -51,8 +51,8 @@ enum VideoPreflightError: LocalizedError {
         switch self {
         case .unsupportedExtension(let ext):
             return ext.isEmpty
-                ? "Choose an MP4, M4V, or MOV video."
-                : ".\(ext.uppercased()) is not supported. Choose an MP4, M4V, or MOV video."
+                ? "Choose a supported video file."
+                : ".\(ext.uppercased()) is not supported. Choose \(VideoFormats.displayString)."
         case .missingFile:
             return "The selected video no longer exists."
         case .unreadableFile:
@@ -74,17 +74,44 @@ enum VideoPreflightError: LocalizedError {
 }
 
 struct VideoFormats {
-    static let supportedExtensions = ["mp4", "m4v", "mov"]
+    static let nativeExtensions = [
+        "mp4", "m4v", "mov",
+        "avi", "dv",
+        "mpg", "mpeg", "m2v", "ts", "mts", "m2ts",
+        "3gp", "3g2"
+    ]
+    static let preparedExtensions = ["webm"]
+    static let supportedExtensions = nativeExtensions + preparedExtensions
 
     static let supportedTypes: [UTType] = {
-        var types: [UTType] = [.mpeg4Movie, .quickTimeMovie]
-        if let m4v = UTType("com.apple.m4v-video") {
-            types.append(m4v)
-        }
-        return types
+        [
+            "public.mpeg-4",
+            "com.apple.m4v-video",
+            "com.apple.quicktime-movie",
+            "public.avi",
+            "public.dv-movie",
+            "public.mpeg",
+            "public.mpeg-2-video",
+            "public.mpeg-2-transport-stream",
+            "public.3gpp",
+            "public.3gpp2",
+            "org.webmproject.webm"
+        ].compactMap(UTType.init)
     }()
 
-    static let displayString = "MP4 • M4V • MOV"
+    static let displayString =
+        "WebM, MP4/M4V/MOV, AVI, MPEG/TS, 3GP/3G2, or DV"
+
+    static func requiresWebMPreparation(_ url: URL) -> Bool {
+        preparedExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    static func prefersPreciseDurationAndTiming(for url: URL) -> Bool {
+        // AVFoundation recognizes a raw MPEG-2 elementary stream as playable,
+        // but without precise timing it can fail to load the track's format
+        // description (-12990). Keep the more expensive scan limited to M2V.
+        url.pathExtension.lowercased() == "m2v"
+    }
 
     static func isSupported(_ url: URL) -> Bool {
         let ext = url.pathExtension.lowercased()
@@ -101,7 +128,10 @@ struct VideoFormats {
     }
 
     static func isSupported(contentType: UTType) -> Bool {
-        supportedTypes.contains { contentType.conforms(to: $0) }
+        supportedTypes.contains {
+            contentType.identifier == $0.identifier
+                || contentType.conforms(to: $0)
+        }
     }
 
     /// Selects one video track for both player presentation and frame
@@ -369,7 +399,7 @@ struct VideoFormats {
     /// Validates the actual local asset before the UI declares it loaded.
     static func preflight(_ url: URL) async throws -> AVURLAsset {
         let ext = url.pathExtension.lowercased()
-        guard supportedExtensions.contains(ext) else {
+        guard nativeExtensions.contains(ext) else {
             throw VideoPreflightError.unsupportedExtension(ext)
         }
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -379,7 +409,11 @@ struct VideoFormats {
             throw VideoPreflightError.unreadableFile
         }
 
-        let asset = AVURLAsset(url: url)
+        let assetOptions: [String: Any]? =
+            prefersPreciseDurationAndTiming(for: url)
+                ? [AVURLAssetPreferPreciseDurationAndTimingKey: true]
+                : nil
+        let asset = AVURLAsset(url: url, options: assetOptions)
         let isPlayable: Bool
         do {
             isPlayable = try await asset.load(.isPlayable)

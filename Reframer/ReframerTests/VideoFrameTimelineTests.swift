@@ -851,7 +851,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             )
             videoView.videoState = state
 
-            state.videoURL = url
+            state.loadLocalMedia(url)
             let loaded = await waitUntil(timeout: 5) {
                 state.isVideoLoaded
                     && state.frameNavigationPrecision == .exact
@@ -869,7 +869,7 @@ final class VideoViewLifecycleTests: XCTestCase {
                 accuracy: 0.001
             )
             XCTAssertFalse(state.isPlaying)
-            state.videoURL = nil
+            state.clearMedia()
         }
     }
 
@@ -890,13 +890,13 @@ final class VideoViewLifecycleTests: XCTestCase {
         let videoView = VideoView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
         videoView.videoState = state
 
-        state.videoURL = firstURL
+        state.loadLocalMedia(firstURL)
         let firstStarted = await waitUntil {
             state.isVideoLoading || state.isVideoLoaded
         }
         XCTAssertTrue(firstStarted)
 
-        state.videoURL = secondURL
+        state.loadLocalMedia(secondURL)
         let secondFinished = await waitUntil(timeout: 5) {
             state.isVideoLoaded
                 && state.frameNavigationPrecision == .exact
@@ -934,7 +934,7 @@ final class VideoViewLifecycleTests: XCTestCase {
         )
         videoView.videoState = state
 
-        state.videoURL = firstURL
+        state.loadLocalMedia(firstURL)
         let firstLoaded = await waitUntil(timeout: 5) {
             state.isVideoLoaded
                 && state.frameNavigationPrecision == .exact
@@ -959,7 +959,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             loadTimeline: VideoLoadEnvironment.live.loadTimeline
         )
 
-        state.videoURL = secondURL
+        state.loadLocalMedia(secondURL)
         let replacementLoading = await waitUntil {
             state.isVideoLoading && !state.isVideoLoaded
         }
@@ -982,7 +982,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             state.isPlaying,
             "A newly selected replacement must land paused"
         )
-        state.videoURL = nil
+        state.clearMedia()
     }
 
     func testPlaybackStartupKeepsIntentAndAdvancesFrames() async throws {
@@ -1002,7 +1002,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             frame: NSRect(x: 0, y: 0, width: 640, height: 480)
         )
         videoView.videoState = state
-        state.videoURL = url
+        state.loadLocalMedia(url)
 
         let loaded = await waitUntil(timeout: 5) {
             state.isVideoLoaded
@@ -1029,7 +1029,7 @@ final class VideoViewLifecycleTests: XCTestCase {
 
         state.setPlaybackIntent(false)
         XCTAssertFalse(state.isPlaying)
-        state.videoURL = nil
+        state.clearMedia()
     }
 
     func testPauseInvalidatesPendingEndReplaySeek() async throws {
@@ -1049,7 +1049,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             frame: NSRect(x: 0, y: 0, width: 640, height: 480)
         )
         videoView.videoState = state
-        state.videoURL = url
+        state.loadLocalMedia(url)
 
         let loaded = await waitUntil(timeout: 5) {
             state.isVideoLoaded
@@ -1074,7 +1074,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             state.isPlaying,
             "A completed end-replay seek must not resurrect paused intent"
         )
-        state.videoURL = nil
+        state.clearMedia()
     }
 
     func testPauseThenPlayReauthorizesPendingEndReplaySeekAndAdvances() async throws {
@@ -1094,7 +1094,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             frame: NSRect(x: 0, y: 0, width: 640, height: 480)
         )
         videoView.videoState = state
-        state.videoURL = url
+        state.loadLocalMedia(url)
 
         let loaded = await waitUntil(timeout: 5) {
             state.isVideoLoaded
@@ -1125,7 +1125,7 @@ final class VideoViewLifecycleTests: XCTestCase {
         )
 
         state.setPlaybackIntent(false)
-        state.videoURL = nil
+        state.clearMedia()
     }
 
     func testPauseDuringScrubPreventsDeferredResume() async throws {
@@ -1145,7 +1145,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             frame: NSRect(x: 0, y: 0, width: 640, height: 480)
         )
         videoView.videoState = state
-        state.videoURL = url
+        state.loadLocalMedia(url)
 
         let loaded = await waitUntil(timeout: 5) {
             state.isVideoLoaded
@@ -1180,7 +1180,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             state.isPlaying,
             "A scrub seek completion must respect a newer Pause command"
         )
-        state.videoURL = nil
+        state.clearMedia()
     }
 
     func testPlayingScrubResumesWithoutAnUnprotectedPauseWindow() async throws {
@@ -1200,7 +1200,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             frame: NSRect(x: 0, y: 0, width: 640, height: 480)
         )
         videoView.videoState = state
-        state.videoURL = url
+        state.loadLocalMedia(url)
 
         let loaded = await waitUntil(timeout: 5) {
             state.isVideoLoaded
@@ -1236,7 +1236,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             "A playing scrub must install its resume seek before paused status can clear intent"
         )
         state.setPlaybackIntent(false)
-        state.videoURL = nil
+        state.clearMedia()
     }
 
     func testUnloadCancelsInFlightLoadAndPreventsLateReadiness() async throws {
@@ -1253,13 +1253,13 @@ final class VideoViewLifecycleTests: XCTestCase {
         let videoView = VideoView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
         videoView.videoState = state
 
-        state.videoURL = url
+        state.loadLocalMedia(url)
         let started = await waitUntil {
             state.isVideoLoading || state.isVideoLoaded
         }
         XCTAssertTrue(started)
 
-        state.videoURL = nil
+        state.clearMedia()
         let unloaded = await waitUntil {
             !state.isVideoLoading
                 && !state.isVideoLoaded
@@ -1317,13 +1317,13 @@ final class VideoViewLifecycleTests: XCTestCase {
         )
         videoView.videoState = state
 
-        state.videoURL = firstURL
+        state.loadLocalMedia(firstURL)
         let firstBlocked = await waitUntil {
             events.snapshot().contains("preflight:\(firstURL.lastPathComponent)")
         }
         XCTAssertTrue(firstBlocked)
 
-        state.videoURL = secondURL
+        state.loadLocalMedia(secondURL)
         let secondBlocked = await waitUntil {
             events.snapshot().contains("preflight:\(secondURL.lastPathComponent)")
         }
@@ -1346,7 +1346,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             try XCTUnwrap(snapshot.firstIndex(of: "stop:\(firstURL.lastPathComponent)"))
         )
 
-        state.videoURL = nil
+        state.clearMedia()
         let unloaded = await waitUntil { !state.isVideoLoading && !state.isVideoLoaded }
         XCTAssertTrue(unloaded)
         XCTAssertFalse(
@@ -1406,14 +1406,14 @@ final class VideoViewLifecycleTests: XCTestCase {
         )
         videoView.videoState = state
 
-        state.videoURL = url
+        state.loadLocalMedia(url)
         let loaded = await waitUntil(timeout: 5) {
             state.isVideoLoaded && state.frameNavigationPrecision == .exact
         }
         XCTAssertTrue(loaded)
         try await Task.sleep(nanoseconds: 50_000_000)
 
-        state.videoURL = nil
+        state.clearMedia()
         let stopped = await waitUntil {
             events.snapshot().contains("stop:player-torn-down")
         }
@@ -1456,7 +1456,7 @@ final class VideoViewLifecycleTests: XCTestCase {
         )
         videoView.videoState = state
 
-        state.videoURL = url
+        state.loadLocalMedia(url)
         let indexing = await waitUntil(timeout: 5) {
             state.isVideoLoaded
                 && state.frameNavigationPrecision == .indexing
@@ -1487,7 +1487,7 @@ final class VideoViewLifecycleTests: XCTestCase {
         XCTAssertNil(state.videoErrorMessage)
         XCTAssertTrue(state.frameNavigationPrecision.supportsFrameNavigation)
         XCTAssertNotNil(state.frameNavigationMessage)
-        state.videoURL = nil
+        state.clearMedia()
     }
 
     private func waitUntil(

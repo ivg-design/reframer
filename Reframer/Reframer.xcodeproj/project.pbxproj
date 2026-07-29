@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		0631DC8CF1CB9806E1F13AE0 /* ControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242CE7E3F5EFF404409747F7 /* ControlBar.swift */; };
 		0C895AB32C4B6FB0FA35D32A /* VideoFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19D82333A5671C5FB146764 /* VideoFormats.swift */; };
+		0D9B674BAB6335D8DDBD5002 /* WebMTranscoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D9B674BAB6335D8DDBD5001 /* WebMTranscoder.swift */; };
+		1F4B692EE5CB9730B7B28002 /* YouTubeCompliance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F4B692EE5CB9730B7B28001 /* YouTubeCompliance.swift */; };
 		15FDF44DEF2AEB44C895443B /* VideoState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE63ACD63859E708710A97D4 /* VideoState.swift */; };
 		1C151236800FA80F87CAAD76 /* ShortcutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A76BD7926C2FA781BB04D1 /* ShortcutSettings.swift */; };
 		2491A9B249AD2563B719271A /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C014B4F5CB12CD15A1A186 /* Notifications.swift */; };
@@ -17,6 +19,7 @@
 		7148C7DD0239873CFBA24CB6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12166D40D39C3C452F590B2E /* AppDelegate.swift */; };
 		7C580FCBE04BAD9DED666438 /* DropZoneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 205A94D5C521D2C8598E3FAA /* DropZoneView.swift */; };
 		903D85FA96F4D67AAE7D51A6 /* EdgeIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */; };
+		9A18A9F0179D640B973AA002 /* WebMediaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A18A9F0179D640B973AA001 /* WebMediaView.swift */; };
 		AAA00011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AAA10011 /* Assets.xcassets */; };
 		BBB00001 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10001 /* TestHelpers.swift */; };
 		BBB00002 /* VideoStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB10002 /* VideoStateTests.swift */; };
@@ -36,6 +39,8 @@
 		FP001002 /* FilterPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FP001001 /* FilterPanelView.swift */; };
 		FS001002 /* FilterSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FS001001 /* FilterSettings.swift */; };
 		KC001002 /* KeyCodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = KC001001 /* KeyCodes.swift */; };
+		MHF00002 /* reframer-ffmpeg in Copy WebM Helper */ = {isa = PBXBuildFile; fileRef = MHF00001 /* reframer-ffmpeg */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		MST001002 /* MediaSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MST001001 /* MediaSourceTests.swift */; };
 		SS001002 /* ScrollStepAccumulator.swift in Sources */ = {isa = PBXBuildFile; fileRef = SS001001 /* ScrollStepAccumulator.swift */; };
 		SST001002 /* ScrollStepAccumulatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SST001001 /* ScrollStepAccumulatorTests.swift */; };
 		SHC001002 /* ShortcutSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHC001001 /* ShortcutSettingsTests.swift */; };
@@ -52,6 +57,7 @@
 		F60000000000000000000002 /* GlobalHotKeyIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60000000000000000000001 /* GlobalHotKeyIntegrationTests.swift */; };
 		F70000000000000000000002 /* DocumentationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70000000000000000000001 /* DocumentationView.swift */; };
 		F80000000000000000000002 /* DocumentationViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000001 /* DocumentationViewTests.swift */; };
+		TPL00002 /* ThirdPartyLicenses in Resources */ = {isa = PBXBuildFile; fileRef = TPL00001 /* ThirdPartyLicenses */; };
 		DDD00004 /* test-video.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10004 /* test-video.mp4 */; };
 		DDD00005 /* test_23976fps_24f.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10005 /* test_23976fps_24f.mp4 */; };
 		DDD00006 /* test_5994fps_60f.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10006 /* test_5994fps_60f.mp4 */; };
@@ -59,6 +65,19 @@
 		DDD00008 /* test_audio_only.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = DDD10008 /* test_audio_only.mp4 */; };
 		DDD00009 /* test_playable.mov in Resources */ = {isa = PBXBuildFile; fileRef = DDD10009 /* test_playable.mov */; };
 		DDD00010 /* test_playable.m4v in Resources */ = {isa = PBXBuildFile; fileRef = DDD10010 /* test_playable.m4v */; };
+		DDD00012 /* test_vp8_alpha_vorbis.webm in Resources */ = {isa = PBXBuildFile; fileRef = DDD10012 /* test_vp8_alpha_vorbis.webm */; };
+		DDD00013 /* test_vp9_alpha_opus.webm in Resources */ = {isa = PBXBuildFile; fileRef = DDD10013 /* test_vp9_alpha_opus.webm */; };
+		DDD00014 /* test_vp9_alpha_no_audio.webm in Resources */ = {isa = PBXBuildFile; fileRef = DDD10014 /* test_vp9_alpha_no_audio.webm */; };
+		NFC00001 /* test_playable.avi in Resources */ = {isa = PBXBuildFile; fileRef = NFC10001 /* test_playable.avi */; };
+		NFC00002 /* test_playable.dv in Resources */ = {isa = PBXBuildFile; fileRef = NFC10002 /* test_playable.dv */; };
+		NFC00003 /* test_playable.mpg in Resources */ = {isa = PBXBuildFile; fileRef = NFC10003 /* test_playable.mpg */; };
+		NFC00004 /* test_playable.mpeg in Resources */ = {isa = PBXBuildFile; fileRef = NFC10004 /* test_playable.mpeg */; };
+		NFC00005 /* test_playable.m2v in Resources */ = {isa = PBXBuildFile; fileRef = NFC10005 /* test_playable.m2v */; };
+		NFC00006 /* test_playable.ts in Resources */ = {isa = PBXBuildFile; fileRef = NFC10006 /* test_playable.ts */; };
+		NFC00007 /* test_playable.mts in Resources */ = {isa = PBXBuildFile; fileRef = NFC10007 /* test_playable.mts */; };
+		NFC00008 /* test_playable.m2ts in Resources */ = {isa = PBXBuildFile; fileRef = NFC10008 /* test_playable.m2ts */; };
+		NFC00009 /* test_playable.3gp in Resources */ = {isa = PBXBuildFile; fileRef = NFC10009 /* test_playable.3gp */; };
+		NFC00010 /* test_playable.3g2 in Resources */ = {isa = PBXBuildFile; fileRef = NFC10010 /* test_playable.3g2 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -78,18 +97,36 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		MHF50001 /* Copy WebM Helper */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				MHF00002 /* reframer-ffmpeg in Copy WebM Helper */,
+			);
+			name = "Copy WebM Helper";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		12166D40D39C3C452F590B2E /* AppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		0D9B674BAB6335D8DDBD5001 /* WebMTranscoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WebMTranscoder.swift; sourceTree = "<group>"; };
 		1DD11BE9E49C9FFF9BB26A6E /* HelpView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
+		1F4B692EE5CB9730B7B28001 /* YouTubeCompliance.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = YouTubeCompliance.swift; sourceTree = "<group>"; };
 		205A94D5C521D2C8598E3FAA /* DropZoneView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DropZoneView.swift; sourceTree = "<group>"; };
 		242CE7E3F5EFF404409747F7 /* ControlBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlBar.swift; sourceTree = "<group>"; };
 		56A76BD7926C2FA781BB04D1 /* ShortcutSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShortcutSettings.swift; sourceTree = "<group>"; };
 		5F1E904417161A398ABD5FE0 /* VideoView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		70C014B4F5CB12CD15A1A186 /* Notifications.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		8072E56EC759E00E54249624 /* MainViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
+		9A18A9F0179D640B973AA001 /* WebMediaView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WebMediaView.swift; sourceTree = "<group>"; };
 		AAA10011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AAA10012 /* Reframer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Reframer.entitlements; sourceTree = "<group>"; };
 		AAA10013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		MHE00001 /* ReframerHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ReframerHelper.entitlements; sourceTree = "<group>"; };
 		AAA20001 /* Reframer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Reframer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE63ACD63859E708710A97D4 /* VideoState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoState.swift; sourceTree = "<group>"; };
 		B00A4247B054C63DA76D824C /* EdgeIndicatorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EdgeIndicatorView.swift; sourceTree = "<group>"; };
@@ -115,6 +152,19 @@
 		DDD10009 /* test_playable.mov */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.mov; sourceTree = "<group>"; };
 		DDD10010 /* test_playable.m4v */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.m4v; sourceTree = "<group>"; };
 		DDD10011 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		DDD10012 /* test_vp8_alpha_vorbis.webm */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_vp8_alpha_vorbis.webm; sourceTree = "<group>"; };
+		DDD10013 /* test_vp9_alpha_opus.webm */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_vp9_alpha_opus.webm; sourceTree = "<group>"; };
+		DDD10014 /* test_vp9_alpha_no_audio.webm */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_vp9_alpha_no_audio.webm; sourceTree = "<group>"; };
+		NFC10001 /* test_playable.avi */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.avi; sourceTree = "<group>"; };
+		NFC10002 /* test_playable.dv */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.dv; sourceTree = "<group>"; };
+		NFC10003 /* test_playable.mpg */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.mpg; sourceTree = "<group>"; };
+		NFC10004 /* test_playable.mpeg */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.mpeg; sourceTree = "<group>"; };
+		NFC10005 /* test_playable.m2v */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.m2v; sourceTree = "<group>"; };
+		NFC10006 /* test_playable.ts */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.ts; sourceTree = "<group>"; };
+		NFC10007 /* test_playable.mts */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.mts; sourceTree = "<group>"; };
+		NFC10008 /* test_playable.m2ts */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.m2ts; sourceTree = "<group>"; };
+		NFC10009 /* test_playable.3gp */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.3gp; sourceTree = "<group>"; };
+		NFC10010 /* test_playable.3g2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = test_playable.3g2; sourceTree = "<group>"; };
 		DZ001001 /* DropZoneViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropZoneViewTests.swift; sourceTree = "<group>"; };
 		EEE10001 /* Reframer.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = Reframer.docc; sourceTree = "<group>"; };
 		FFF10001 /* Reframer.help */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Reframer.help; sourceTree = "<group>"; };
@@ -122,6 +172,8 @@
 		FP001001 /* FilterPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FilterPanelView.swift; sourceTree = "<group>"; };
 		FS001001 /* FilterSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FilterSettings.swift; sourceTree = "<group>"; };
 		KC001001 /* KeyCodes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeyCodes.swift; sourceTree = "<group>"; };
+		MHF00001 /* reframer-ffmpeg */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "compiled.mach-o.executable"; path = "reframer-ffmpeg"; sourceTree = "<group>"; };
+		MST001001 /* MediaSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaSourceTests.swift; sourceTree = "<group>"; };
 		SS001001 /* ScrollStepAccumulator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScrollStepAccumulator.swift; sourceTree = "<group>"; };
 		SST001001 /* ScrollStepAccumulatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollStepAccumulatorTests.swift; sourceTree = "<group>"; };
 		SHC001001 /* ShortcutSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettingsTests.swift; sourceTree = "<group>"; };
@@ -138,6 +190,7 @@
 		F60000000000000000000001 /* GlobalHotKeyIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyIntegrationTests.swift; sourceTree = "<group>"; };
 		F70000000000000000000001 /* DocumentationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentationView.swift; sourceTree = "<group>"; };
 		F80000000000000000000001 /* DocumentationViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentationViewTests.swift; sourceTree = "<group>"; };
+		TPL00001 /* ThirdPartyLicenses */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = folder; path = ThirdPartyLicenses; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -183,6 +236,7 @@
 				AAA40006 /* Models */,
 				AAA40007 /* Utilities */,
 				AAA40008 /* Resources */,
+				MHF40001 /* Helpers */,
 				EEE10001 /* Reframer.docc */,
 				FFF10001 /* Reframer.help */,
 			);
@@ -219,6 +273,7 @@
 				FM001001 /* FilterMenuButton.swift */,
 				FP001001 /* FilterPanelView.swift */,
 				F70000000000000000000001 /* DocumentationView.swift */,
+				9A18A9F0179D640B973AA001 /* WebMediaView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -245,6 +300,8 @@
 				E20000000000000000000001 /* VideoFrameTimeline.swift */,
 				F30000000000000000000001 /* GlobalHotKeyRegistrar.swift */,
 				F40000000000000000000001 /* ShortcutControlRouting.swift */,
+				0D9B674BAB6335D8DDBD5001 /* WebMTranscoder.swift */,
+				1F4B692EE5CB9730B7B28001 /* YouTubeCompliance.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -255,11 +312,21 @@
 				AAA10011 /* Assets.xcassets */,
 				AAA10012 /* Reframer.entitlements */,
 				AAA10013 /* Info.plist */,
+				MHE00001 /* ReframerHelper.entitlements */,
 				B972E974DDAFCDB4952DE88C /* ControlBar.xib */,
+				TPL00001 /* ThirdPartyLicenses */,
 			);
 			name = Resources;
 			path = Reframer/Resources;
 			sourceTree = SOURCE_ROOT;
+		};
+		MHF40001 /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				MHF00001 /* reframer-ffmpeg */,
+			);
+			path = Helpers;
+			sourceTree = "<group>";
 		};
 		BBB40001 /* ReframerTests */ = {
 			isa = PBXGroup;
@@ -271,6 +338,7 @@
 				CBT001001 /* ControlBarStepTests.swift */,
 				SST001001 /* ScrollStepAccumulatorTests.swift */,
 				SHC001001 /* ShortcutSettingsTests.swift */,
+				MST001001 /* MediaSourceTests.swift */,
 				E10000000000000000000003 /* WindowPlacementTests.swift */,
 				E20000000000000000000003 /* VideoFrameTimelineTests.swift */,
 				F80000000000000000000001 /* DocumentationViewTests.swift */,
@@ -307,6 +375,19 @@
 				DDD10009 /* test_playable.mov */,
 				DDD10010 /* test_playable.m4v */,
 				DDD10011 /* README.md */,
+				DDD10012 /* test_vp8_alpha_vorbis.webm */,
+				DDD10013 /* test_vp9_alpha_opus.webm */,
+				DDD10014 /* test_vp9_alpha_no_audio.webm */,
+				NFC10001 /* test_playable.avi */,
+				NFC10002 /* test_playable.dv */,
+				NFC10003 /* test_playable.mpg */,
+				NFC10004 /* test_playable.mpeg */,
+				NFC10005 /* test_playable.m2v */,
+				NFC10006 /* test_playable.ts */,
+				NFC10007 /* test_playable.mts */,
+				NFC10008 /* test_playable.m2ts */,
+				NFC10009 /* test_playable.3gp */,
+				NFC10010 /* test_playable.3g2 */,
 			);
 			path = TestFixtures;
 			sourceTree = "<group>";
@@ -322,6 +403,8 @@
 				AAA50002 /* Sources */,
 				AAA30001 /* Frameworks */,
 				AAA50003 /* Resources */,
+				MHF50001 /* Copy WebM Helper */,
+				MHF50002 /* Sign WebM Helper */,
 				AAA50007 /* Stamp Build Info */,
 			);
 			buildRules = (
@@ -420,6 +503,7 @@
 				AAA00011 /* Assets.xcassets in Resources */,
 				FFF00001 /* Reframer.help in Resources */,
 				370628C9CD00AD6AA6DF0707 /* ControlBar.xib in Resources */,
+				TPL00002 /* ThirdPartyLicenses in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -437,6 +521,19 @@
 				DDD00008 /* test_audio_only.mp4 in Resources */,
 				DDD00009 /* test_playable.mov in Resources */,
 				DDD00010 /* test_playable.m4v in Resources */,
+				DDD00012 /* test_vp8_alpha_vorbis.webm in Resources */,
+				DDD00013 /* test_vp9_alpha_opus.webm in Resources */,
+				DDD00014 /* test_vp9_alpha_no_audio.webm in Resources */,
+				NFC00001 /* test_playable.avi in Resources */,
+				NFC00002 /* test_playable.dv in Resources */,
+				NFC00003 /* test_playable.mpg in Resources */,
+				NFC00004 /* test_playable.mpeg in Resources */,
+				NFC00005 /* test_playable.m2v in Resources */,
+				NFC00006 /* test_playable.ts in Resources */,
+				NFC00007 /* test_playable.mts in Resources */,
+				NFC00008 /* test_playable.m2ts in Resources */,
+				NFC00009 /* test_playable.3gp in Resources */,
+				NFC00010 /* test_playable.3g2 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -450,6 +547,23 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		MHF50002 /* Sign WebM Helper */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/Helpers/reframer-ffmpeg",
+				"$(SRCROOT)/Reframer/Resources/ReframerHelper.entitlements",
+			);
+			name = "Sign WebM Helper";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "set -euo pipefail\nif [ \"${CODE_SIGNING_ALLOWED:-NO}\" != \"YES\" ]; then\n  exit 0\nfi\nhelper=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers/reframer-ffmpeg\"\nentitlements=\"${SRCROOT}/Reframer/Resources/ReframerHelper.entitlements\"\nidentity=\"${EXPANDED_CODE_SIGN_IDENTITY:--}\"\ntimestamp_args=(--timestamp=none)\nif [ \"$identity\" != \"-\" ] && [ -n \"$identity\" ]; then\n  timestamp_args=(--timestamp)\nfi\n/usr/bin/codesign --force --sign \"$identity\" --identifier com.reframer.app.ffmpeg --options runtime \"${timestamp_args[@]}\" --entitlements \"$entitlements\" \"$helper\"\n/usr/bin/codesign --verify --strict --verbose=2 \"$helper\"\n";
+		};
 		AAA50007 /* Stamp Build Info */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -509,6 +623,9 @@
 				F30000000000000000000002 /* GlobalHotKeyRegistrar.swift in Sources */,
 				F40000000000000000000002 /* ShortcutControlRouting.swift in Sources */,
 				F70000000000000000000002 /* DocumentationView.swift in Sources */,
+				9A18A9F0179D640B973AA002 /* WebMediaView.swift in Sources */,
+				0D9B674BAB6335D8DDBD5002 /* WebMTranscoder.swift in Sources */,
+				1F4B692EE5CB9730B7B28002 /* YouTubeCompliance.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -523,6 +640,7 @@
 				CBT001002 /* ControlBarStepTests.swift in Sources */,
 				SST001002 /* ScrollStepAccumulatorTests.swift in Sources */,
 				SHC001002 /* ShortcutSettingsTests.swift in Sources */,
+				MST001002 /* MediaSourceTests.swift in Sources */,
 				E10000000000000000000004 /* WindowPlacementTests.swift in Sources */,
 				E20000000000000000000004 /* VideoFrameTimelineTests.swift in Sources */,
 				F80000000000000000000002 /* DocumentationViewTests.swift in Sources */,
@@ -689,11 +807,12 @@
 				CODE_SIGN_ENTITLEMENTS = Reframer/Resources/Reframer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Reframer/Preview Content\"";
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -705,12 +824,13 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.10.0;
+				MARKETING_VERSION = 0.11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
+				YOUTUBE_DATA_API_KEY = "";
 			};
 			name = Debug;
 		};
@@ -720,14 +840,17 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Reframer/Resources/Reframer.entitlements;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 7S422NVLUK;
 				DEVELOPMENT_ASSET_PATHS = "\"Reframer/Preview Content\"";
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -739,12 +862,14 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.10.0;
+				MARKETING_VERSION = 0.11.0;
+				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
+				YOUTUBE_DATA_API_KEY = "";
 			};
 			name = Release;
 		};
@@ -753,11 +878,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.0;
+				MARKETING_VERSION = 0.11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -771,11 +896,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.0;
+				MARKETING_VERSION = 0.11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -788,11 +913,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.0;
+				MARKETING_VERSION = 0.11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -805,11 +930,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.0;
+				MARKETING_VERSION = 0.11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reframer.app.ReframerUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

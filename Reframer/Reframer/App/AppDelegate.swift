@@ -99,6 +99,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
+    private final class YouTubeConsentGate: NSObject {
+        weak var loadButton: NSButton?
+
+        @objc func consentChanged(_ sender: NSButton) {
+            loadButton?.isEnabled = sender.state == .on
+        }
+    }
+
     override init() {
         super.init()
     }
@@ -132,6 +140,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     )
     private let windowFrameDefaultsKey = "VideoOverlay.mainWindowFrame"
     private let windowFrameSchemaDefaultsKey = "VideoOverlay.mainWindowFrameSchema"
+    private let shortcutSettingsSizeDefaultsKey =
+        "VideoOverlay.shortcutSettingsWindowSize"
+    private let youtubeConsentVersion = 1
+    private let youtubeConsentVersionDefaultsKey =
+        "OnlinePlayback.youtubeConsentVersion"
     private let integralControlBarFrameSchema = 2
     private var windowReclampWorkItem: DispatchWorkItem?
     private var isRepositioningWindows = false
@@ -139,6 +152,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var helpFocusSnapshot: FocusSnapshot?
     private var filterFocusSnapshot: FocusSnapshot?
     private var documentationFocusSnapshot: FocusSnapshot?
+    private let youtubeComplianceClient = YouTubeComplianceClient()
+    private var youtubePreflightTask: Task<Void, Never>?
+    private var youtubePreflightID: UUID?
+    private var youtubePreflightSelectionRevision: UInt64?
 
     private var mainViewController: MainViewController!
     private var shortcutMenuItems: [
@@ -148,6 +165,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     // MARK: - App Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        WebMPreparationSession.removeStaleOutputs()
         setupMainMenu()
         createMainWindow()
         observeWindowFrameChanges()
@@ -173,8 +191,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             let url = URL(fileURLWithPath: testVideoPath)
             if FileManager.default.fileExists(atPath: testVideoPath) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    self?.videoState.isVideoLoaded = false
-                    self?.videoState.videoURL = url
+                    self?.videoState.loadLocalMedia(url)
                 }
             }
         }
@@ -183,6 +200,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationWillTerminate(_ notification: Notification) {
         windowReclampWorkItem?.cancel()
+        youtubePreflightTask?.cancel()
+        youtubePreflightID = nil
+        youtubePreflightSelectionRevision = nil
+        persistShortcutSettingsWindowSize()
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         globalHotKeyRegistrar?.invalidate()
@@ -190,6 +211,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if let monitor = localShortcutMonitor {
             NSEvent.removeMonitor(monitor)
         }
+        mainViewController?.shutdownMediaPlayback()
+        videoState.discardPreparedMedia()
+        WebMPreparationSession.removeStaleOutputs()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -208,8 +232,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if VideoFormats.isSupported(url) {
             // Delay slightly to ensure windows are ready
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                self?.videoState.isVideoLoaded = false
-                self?.videoState.videoURL = url
+                self?.videoState.loadLocalMedia(url)
             }
         } else {
             // Show error for unsupported formats
@@ -274,6 +297,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             command: .openVideo,
             keyEquivalent: "o",
             modifiers: [.command]
+        ))
+        fileMenu.addItem(makeCommandMenuItem(
+            title: "Open YouTube Video…",
+            command: .openYouTube,
+            keyEquivalent: "o",
+            modifiers: [.command, .option]
         ))
 
         // A standard Edit menu keeps native text editing commands intact.
@@ -587,6 +616,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     // MARK: - State Observation
 
     private func observeState() {
+        videoState.mediaSelectionChanges
+            .sink { [weak self] revision in
+                guard let self,
+                      let expected =
+                        self.youtubePreflightSelectionRevision,
+                      revision != expected else {
+                    return
+                }
+                self.youtubePreflightTask?.cancel()
+                self.youtubePreflightTask = nil
+                self.youtubePreflightID = nil
+                self.youtubePreflightSelectionRevision = nil
+            }
+            .store(in: &cancellables)
+
+        videoState.reloadRequests
+            .sink { [weak self] in
+                guard let self,
+                      let reference = YouTubeReloadPolicy.reference(
+                        for: self.videoState.webMediaSource
+                      ) else {
+                    return
+                }
+                self.beginYouTubePreflight(for: reference)
+            }
+            .store(in: &cancellables)
+
         // Window presentation is one atomic policy. A locked overlay uses the
         // public status-bar tier, is non-resizable, and is pointer-transparent
         // regardless of the persisted unlocked-state Always on Top preference.
@@ -823,7 +879,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             if event.type == .flagsChanged {
                 return true
             }
-            return settings.record(stroke: ShortcutKeystroke(event: event)) != .notRecording
+            switch settings.record(stroke: ShortcutKeystroke(event: event)) {
+            case .notRecording, .focusTraversal:
+                return false
+            case .consumed, .saved, .rejected:
+                return true
+            }
         }
 
         guard event.type == .keyDown else { return false }
@@ -885,6 +946,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         switch command {
         case .openVideo:
             openVideoFile()
+        case .openYouTube:
+            promptForYouTubeVideo()
         case .togglePlayPause:
             videoState.togglePlaybackIntent()
         case .step(let direction, let amount):
@@ -940,7 +1003,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 canNavigateFrames: videoState.canNavigateFrames,
                 isHelpVisible: videoState.showHelp,
                 isFilterPanelVisible: videoState.showFilterPanel,
-                isDocumentationVisible: documentationWindow?.isVisible == true
+                isDocumentationVisible: documentationWindow?.isVisible == true,
+                canTransformMedia: videoState.supportsVideoTransforms,
+                canUseVideoFilters: videoState.supportsVideoFilters,
+                canUseClickThroughLock: videoState.supportsClickThroughLock
             )
         )
     }
@@ -973,6 +1039,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(selectFilter(_:))
+            || menuItem.action == #selector(clearQuickFilter(_:))
+            || menuItem.action == #selector(resetFilterSettings(_:)) {
+            return videoState.supportsVideoFilters
+        }
         guard let command = (menuItem.representedObject as? ReframerCommandBox)?.command else {
             return true
         }
@@ -1213,6 +1284,64 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         )
     }
 
+    private func shortcutSettingsSizeLimits() -> (minimum: NSSize, maximum: NSSize) {
+        let visibleFrames = currentVisibleScreenFrames()
+        let anchorFrame = WindowPlacement.bestVisibleFrame(
+            for: mainWindow.frame,
+            among: visibleFrames
+        ) ?? visibleFrames.first
+        let screenMaximum = NSSize(
+            width: max(1, (anchorFrame?.width ?? HelpView.maximumWindowSize.width) - 40),
+            height: max(1, (anchorFrame?.height ?? HelpView.maximumWindowSize.height) - 40)
+        )
+        let maximum = NSSize(
+            width: min(HelpView.maximumWindowSize.width, screenMaximum.width),
+            height: min(HelpView.maximumWindowSize.height, screenMaximum.height)
+        )
+        let minimum = NSSize(
+            width: min(HelpView.minimumWindowSize.width, maximum.width),
+            height: min(HelpView.minimumWindowSize.height, maximum.height)
+        )
+        return (minimum, maximum)
+    }
+
+    private func clampShortcutSettingsSize(
+        _ size: NSSize,
+        limits: (minimum: NSSize, maximum: NSSize)
+    ) -> NSSize {
+        guard size.width.isFinite,
+              size.height.isFinite,
+              size.width > 0,
+              size.height > 0 else {
+            return NSSize(
+                width: min(
+                    max(HelpView.preferredWindowSize.width, limits.minimum.width),
+                    limits.maximum.width
+                ),
+                height: min(
+                    max(HelpView.preferredWindowSize.height, limits.minimum.height),
+                    limits.maximum.height
+                )
+            )
+        }
+        return NSSize(
+            width: min(max(size.width, limits.minimum.width), limits.maximum.width),
+            height: min(max(size.height, limits.minimum.height), limits.maximum.height)
+        )
+    }
+
+    private func restoredShortcutSettingsSize(
+        limits: (minimum: NSSize, maximum: NSSize)
+    ) -> NSSize {
+        let storedSize = videoState.preferenceStore
+            .string(forKey: shortcutSettingsSizeDefaultsKey)
+            .map(NSSizeFromString)
+        return clampShortcutSettingsSize(
+            storedSize ?? HelpView.preferredWindowSize,
+            limits: limits
+        )
+    }
+
     private func captureFocus() -> FocusSnapshot {
         let window = NSApp.keyWindow ?? mainWindow
         return FocusSnapshot(window: window, responder: window?.firstResponder)
@@ -1242,12 +1371,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
 
         if shortcutsWindow == nil {
-            let size = NSSize(width: 520, height: 640)
+            let sizeLimits = shortcutSettingsSizeLimits()
+            let size = restoredShortcutSettingsSize(limits: sizeLimits)
             let frame = centeredAuxiliaryFrame(size: size)
 
             let panel = TransparentWindow(
                 contentRect: frame,
-                styleMask: [.borderless],
+                styleMask: ShortcutSettingsWindowConfiguration.styleMask,
                 backing: .buffered,
                 defer: false
             )
@@ -1258,6 +1388,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             panel.level = desiredAuxiliaryWindowLevel
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isMovableByWindowBackground = true
+            panel.contentMinSize = sizeLimits.minimum
+            panel.contentMaxSize = sizeLimits.maximum
             panel.title = "Shortcut Settings"
             panel.setAccessibilityLabel("Shortcut Settings")
 
@@ -1273,6 +1405,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             shortcutsWindow = panel
             shortcutsView = helpView
             mainWindow.addChildWindow(panel, ordered: .above)
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(shortcutSettingsWindowDidEndLiveResize),
+                name: NSWindow.didEndLiveResizeNotification,
+                object: panel
+            )
         }
 
         updateHelpWindowFrame()
@@ -1291,6 +1429,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func hideHelpWindow() {
         let shouldRestoreFocus = shortcutsWindow?.isKeyWindow == true
         videoState.shortcutSettings.cancelRecording()
+        persistShortcutSettingsWindowSize()
         shortcutsWindow?.orderOut(nil)
         let snapshot = helpFocusSnapshot
         helpFocusSnapshot = nil
@@ -1301,8 +1440,39 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func updateHelpWindowFrame() {
         guard let shortcutsWindow = shortcutsWindow else { return }
-        let frame = centeredAuxiliaryFrame(size: shortcutsWindow.frame.size)
+        let sizeLimits = shortcutSettingsSizeLimits()
+        shortcutsWindow.contentMinSize = sizeLimits.minimum
+        shortcutsWindow.contentMaxSize = sizeLimits.maximum
+        let size = clampShortcutSettingsSize(
+            shortcutsWindow.frame.size,
+            limits: sizeLimits
+        )
+        let frame = centeredAuxiliaryFrame(size: size)
         shortcutsWindow.setFrame(frame, display: shortcutsWindow.isVisible)
+    }
+
+    @objc private func shortcutSettingsWindowDidEndLiveResize(
+        _ notification: Notification
+    ) {
+        guard let window = notification.object as? NSWindow,
+              window === shortcutsWindow else {
+            return
+        }
+        persistShortcutSettingsWindowSize()
+    }
+
+    private func persistShortcutSettingsWindowSize() {
+        guard let window = shortcutsWindow else {
+            return
+        }
+        let size = clampShortcutSettingsSize(
+            window.frame.size,
+            limits: shortcutSettingsSizeLimits()
+        )
+        videoState.preferenceStore.set(
+            NSStringFromSize(size),
+            forKey: shortcutSettingsSizeDefaultsKey
+        )
     }
 
     // MARK: - Filter Panel Window
@@ -1418,16 +1588,193 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if let window = mainWindow {
             panel.beginSheetModal(for: window) { [weak self] response in
                 guard response == .OK, let url = panel.url else { return }
-                self?.videoState.isVideoLoaded = false
-                self?.videoState.videoURL = url
+                self?.videoState.loadLocalMedia(url)
             }
         } else {
             panel.begin { [weak self] response in
                 guard response == .OK, let url = panel.url else { return }
-                self?.videoState.isVideoLoaded = false
-                self?.videoState.videoURL = url
+                self?.videoState.loadLocalMedia(url)
             }
         }
+    }
+
+    private func promptForYouTubeVideo() {
+        let alert = NSAlert()
+        alert.messageText = "Open YouTube Video"
+        alert.informativeText =
+            "Paste a public or unlisted YouTube video link. Reframer checks its audience status, then loads YouTube only after your consent. \(YouTubeVideoReference.qualityDisclosure)"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Load Video")
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSTextField()
+        field.placeholderString = "https://www.youtube.com/watch?v=…"
+        field.setAccessibilityLabel("YouTube video URL")
+        field.widthAnchor.constraint(equalToConstant: 460).isActive = true
+
+        let consentCheckbox = NSButton(
+            checkboxWithTitle:
+                "I agree to Reframer’s YouTube Privacy Notice and Terms",
+            target: nil,
+            action: nil
+        )
+        let hasAcceptedCurrentTerms =
+            videoState.preferenceStore.integer(
+                forKey: youtubeConsentVersionDefaultsKey
+            ) >= youtubeConsentVersion
+        consentCheckbox.state = hasAcceptedCurrentTerms ? .on : .off
+        consentCheckbox.setAccessibilityHelp(
+            "Consent is required before Reframer contacts the YouTube Data API or player."
+        )
+
+        let consentGate = YouTubeConsentGate()
+        consentGate.loadButton = alert.buttons.first
+        consentCheckbox.target = consentGate
+        consentCheckbox.action = #selector(
+            YouTubeConsentGate.consentChanged(_:)
+        )
+        alert.buttons.first?.isEnabled = hasAcceptedCurrentTerms
+
+        let links = NSStackView(views: [
+            makeYouTubePolicyLink(
+                title: "Privacy Notice",
+                action: #selector(openYouTubePrivacyNotice)
+            ),
+            makeYouTubePolicyLink(
+                title: "YouTube Terms",
+                action: #selector(openYouTubeTerms)
+            ),
+            makeYouTubePolicyLink(
+                title: "Google Privacy",
+                action: #selector(openGooglePrivacy)
+            )
+        ])
+        links.orientation = .horizontal
+        links.spacing = 14
+        links.alignment = .centerY
+
+        let accessory = NSStackView(
+            views: [field, consentCheckbox, links]
+        )
+        accessory.orientation = .vertical
+        accessory.alignment = .leading
+        accessory.spacing = 8
+        accessory.frame = NSRect(x: 0, y: 0, width: 460, height: 76)
+        alert.accessoryView = accessory
+
+        let completion: (NSApplication.ModalResponse) -> Void = {
+            [weak self, weak field, weak consentCheckbox, consentGate] response in
+            _ = consentGate
+            guard response == .alertFirstButtonReturn,
+                  consentCheckbox?.state == .on,
+                  let value = field?.stringValue,
+                  let reference = YouTubeVideoReference.parse(value) else {
+                if response == .alertFirstButtonReturn {
+                    self?.showErrorAlert(
+                        title: "Invalid YouTube Link",
+                        message:
+                            "Paste one public or unlisted YouTube video URL, not a playlist, channel, or search page."
+                    )
+                }
+                return
+            }
+            guard let self else { return }
+            self.videoState.preferenceStore.set(
+                self.youtubeConsentVersion,
+                forKey: self.youtubeConsentVersionDefaultsKey
+            )
+            self.beginYouTubePreflight(for: reference)
+        }
+
+        if let mainWindow {
+            alert.beginSheetModal(for: mainWindow, completionHandler: completion)
+        } else {
+            completion(alert.runModal())
+        }
+    }
+
+    private func beginYouTubePreflight(
+        for reference: YouTubeVideoReference
+    ) {
+        youtubePreflightTask?.cancel()
+        let requestID = UUID()
+        let selectionRevision = videoState.beginPendingMediaSelection(
+            displayName: "YouTube video"
+        )
+        youtubePreflightID = requestID
+        youtubePreflightSelectionRevision = selectionRevision
+        youtubePreflightTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                if self.youtubePreflightID == requestID {
+                    self.youtubePreflightID = nil
+                    self.youtubePreflightSelectionRevision = nil
+                    self.youtubePreflightTask = nil
+                }
+            }
+            do {
+                let authorization = try await
+                    self.youtubeComplianceClient.authorize(reference)
+                try Task.checkCancellation()
+                guard self.youtubePreflightID == requestID,
+                      self.videoState.isCurrentMediaSelection(
+                        selectionRevision
+                      ) else {
+                    return
+                }
+                _ = self.videoState.loadYouTube(
+                    authorization,
+                    ifCurrent: selectionRevision
+                )
+            } catch is CancellationError {
+                return
+            } catch let error as URLError
+                where error.code == .cancelled {
+                return
+            } catch {
+                guard self.youtubePreflightID == requestID,
+                      self.videoState.isCurrentMediaSelection(
+                        selectionRevision
+                      ) else {
+                    return
+                }
+                self.videoState.cancelPendingMediaSelection(
+                    selectionRevision
+                )
+                self.showErrorAlert(
+                    title: "YouTube Video Not Loaded",
+                    message: error.localizedDescription
+                )
+            }
+        }
+    }
+
+    private func makeYouTubePolicyLink(
+        title: String,
+        action: Selector
+    ) -> NSButton {
+        let button = NSButton(title: title, target: self, action: action)
+        button.bezelStyle = .inline
+        button.isBordered = false
+        button.font = .systemFont(ofSize: 11)
+        button.contentTintColor = .linkColor
+        return button
+    }
+
+    @objc private func openYouTubePrivacyNotice() {
+        openDocumentationWindow(pageName: "youtube-privacy.html")
+    }
+
+    @objc private func openYouTubeTerms() {
+        NSWorkspace.shared.open(
+            URL(string: "https://www.youtube.com/t/terms")!
+        )
+    }
+
+    @objc private func openGooglePrivacy() {
+        NSWorkspace.shared.open(
+            URL(string: "https://policies.google.com/privacy")!
+        )
     }
 
     /// Show an error alert as a sheet on the main window
@@ -1485,7 +1832,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         _ = dispatch(.openDocumentation, origin: .menu)
     }
 
-    private func openDocumentationWindow() {
+    private func openDocumentationWindow(pageName: String? = nil) {
         let resourceURL = Bundle.main.resourceURL ?? Bundle.main.bundleURL
         let helpRootURL = resourceURL
             .appendingPathComponent("Reframer.help")
@@ -1522,7 +1869,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
 
         updateDocumentationWindowFrame()
-        documentationView?.showHome()
+        if let pageName {
+            _ = documentationView?.navigate(
+                to: helpRootURL.appendingPathComponent(pageName)
+            )
+        } else {
+            documentationView?.showHome()
+        }
         documentationWindow?.makeKeyAndOrderFront(nil)
         DispatchQueue.main.async { [weak self] in
             guard let self,
@@ -1536,12 +1889,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     @IBAction func selectFilter(_ sender: NSMenuItem) {
-        guard let filter = sender.representedObject as? VideoFilter else { return }
+        guard videoState.supportsVideoFilters,
+              let filter = sender.representedObject as? VideoFilter else {
+            return
+        }
         // Single selection - same as toolbar behavior
         videoState.setQuickFilter(filter)
     }
 
     @IBAction func clearQuickFilter(_ sender: Any?) {
+        guard videoState.supportsVideoFilters else { return }
         videoState.setQuickFilter(nil)
     }
 
@@ -1554,6 +1911,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     @IBAction func resetFilterSettings(_ sender: Any?) {
+        guard videoState.supportsVideoFilters else { return }
         videoState.resetFilterSettings()
     }
 
@@ -1596,6 +1954,7 @@ extension AppDelegate: NSMenuDelegate {
         noneItem.target = self
         noneItem.action = #selector(clearQuickFilter(_:))
         noneItem.state = (videoState.quickFilter == nil) ? .on : .off
+        noneItem.isEnabled = videoState.supportsVideoFilters
         menu.insertItem(noneItem, at: 0)
 
         // Insert simple filters only (single selection like toolbar)
@@ -1608,6 +1967,7 @@ extension AppDelegate: NSMenuDelegate {
             item.representedObject = filter
             // Radio-style: checkmark only on current quickFilter
             item.state = (videoState.quickFilter == filter) ? .on : .off
+            item.isEnabled = videoState.supportsVideoFilters
             menu.insertItem(item, at: index + 1)  // +1 for "None" item
         }
     }

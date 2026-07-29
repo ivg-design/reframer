@@ -25,6 +25,9 @@ LICENSE_PATH = ROOT / "LICENSE"
 ENTITLEMENTS_PATH = (
     ROOT / "Reframer" / "Reframer" / "Resources" / "Reframer.entitlements"
 )
+HELPER_ENTITLEMENTS_PATH = (
+    ROOT / "Reframer" / "Reframer" / "Resources" / "ReframerHelper.entitlements"
+)
 SHORTCUT_SOURCE_PATH = (
     ROOT / "Reframer" / "Reframer" / "Models" / "ShortcutSettings.swift"
 )
@@ -46,6 +49,18 @@ CONTROL_BAR_PATH = ROOT / "Reframer" / "Reframer" / "Views" / "ControlBar.swift"
 VIDEO_STATE_PATH = ROOT / "Reframer" / "Reframer" / "Models" / "VideoState.swift"
 DOCUMENTATION_VIEW_PATH = (
     ROOT / "Reframer" / "Reframer" / "Views" / "DocumentationView.swift"
+)
+WEB_MEDIA_VIEW_PATH = (
+    ROOT / "Reframer" / "Reframer" / "Views" / "WebMediaView.swift"
+)
+WEBM_TRANSCODER_PATH = (
+    ROOT / "Reframer" / "Reframer" / "Utilities" / "WebMTranscoder.swift"
+)
+YOUTUBE_COMPLIANCE_PATH = (
+    ROOT / "Reframer" / "Reframer" / "Utilities" / "YouTubeCompliance.swift"
+)
+VIDEO_FORMATS_PATH = (
+    ROOT / "Reframer" / "Reframer" / "Utilities" / "VideoFormats.swift"
 )
 WINDOW_PLACEMENT_TESTS_PATH = (
     ROOT / "Reframer" / "ReframerTests" / "WindowPlacementTests.swift"
@@ -114,8 +129,6 @@ PUBLIC_DOCUMENT_ROOTS = (
 
 STALE_CLAIMS = {
     "libmpv": "third-party codec installation is not part of the product",
-    "youtube": "URL streaming is not implemented",
-    "webm": "WebM is not in the supported container contract",
     "mkv": "Matroska is not in the supported container contract",
     "macos 14": "the deployment target is macOS 15.0",
     "global shortcuts require the normal macos privacy": (
@@ -130,7 +143,9 @@ EXPECTED_CONTRACT_KEYS = {
     "schemaVersion",
     "product",
     "playback",
+    "youtube",
     "globalShortcuts",
+    "shortcutSettings",
     "overlay",
     "documentation",
     "privacy",
@@ -187,6 +202,10 @@ EXPECTED_OVERLAY_CONTRACT = {
         "The entire overlay, including video and controls, ignores pointer events"
     ),
     "lockedGeometry": "Moving and resizing are disabled",
+    "lockedMediaScope": (
+        "Native or prepared local media only; YouTube must remain unlocked "
+        "and interactive"
+    ),
     "unlockRecovery": (
         "The exact configured global Lock/Unlock chord restores interaction "
         "from another app; Reframer refuses lock without it and automatically "
@@ -198,6 +217,9 @@ EXPECTED_DOCUMENTATION_CONTRACT = {
     "renderer": "Native AppKit attributed text rendered from bundled Help HTML",
     "bundledContentOnly": True,
     "networkAccess": False,
+    "externalLinks": (
+        "Allowlisted YouTube and Google policy links open in the system browser"
+    ),
     "requiresNetworkEntitlement": False,
 }
 
@@ -215,7 +237,12 @@ PUBLIC_CLAIM_MARKERS = {
         "automatically unlocks with a recovery report",
         "pop-up menus, drag ui, the screen saver, and assistive-technology windows",
         "renders the bundled help pages with native appkit",
-        "does not require a network entitlement",
+        "webm",
+        "prores 4444",
+        "youtube",
+        "adaptive quality",
+        "made for kids",
+        "resizable shortcut settings",
     ),
     ROOT / "docs" / "FEATURES.md": (
         "one canonical transparent overlay window",
@@ -230,7 +257,10 @@ PUBLIC_CLAIM_MARKERS = {
         "lock entry requires the exact configured global lock/unlock chord",
         "automatically unlocks and reports recovery guidance",
         "bundled help renders through native appkit",
-        "without webkit or a network entitlement",
+        "webm",
+        "prores 4444",
+        "youtube",
+        "shared five-column grid",
     ),
     ROOT / "docs" / "PRODUCT_CONTRACT.md": (
         "one canonical, externally managed",
@@ -248,16 +278,18 @@ PUBLIC_CLAIM_MARKERS = {
         "must immediately unlock and present the configured chord plus recovery guidance",
         "system pop-up menus, drag ui, the screen saver, and assistive-technology windows",
         "renders bundled help html as native appkit content",
-        (
-            "does not launch a webkit web process, fetch network content, "
-            "or require a network entitlement"
-        ),
+        "webm",
+        "ffmpeg 8.1.2",
+        "libvpx 1.16.0",
+        "made for kids",
+        "adaptive quality",
+        "five-column grid",
     ),
     ROOT / "docs" / "FEATURE_TESTS.md": (
         "video and controls share one canonical window",
         "no separately managed control child",
         "renders known nonblank help text",
-        "without requiring webkit or network access",
+        "without using webkit or network access",
         "mosaic move/resize operations",
         "preferred width at 1,060 points",
         "supported minimum at 640",
@@ -268,6 +300,9 @@ PUBLIC_CLAIM_MARKERS = {
         "public status-bar level above all ordinary application windows",
         "critical system ui",
         "whole-overlay click-through",
+        "webm",
+        "made for kids",
+        "shortcut settings",
     ),
     ROOT / "docs" / "RELEASE.md": (
         "macos or mosaic to move and resize the unlocked overlay",
@@ -282,6 +317,9 @@ PUBLIC_CLAIM_MARKERS = {
         "ignores pointer input over both video and controls",
         "system pop-up menus, drag ui, the screen saver, and assistive-technology ui",
         "known bundled content is visible in the native view",
+        "reframer_youtube_data_api_key",
+        "reframer-ffmpeg",
+        "made for kids",
     ),
     LOCK_DOCC_PATH: (
         "public status-bar tier above all ordinary application windows",
@@ -644,14 +682,13 @@ def validate_documentation_implementation(contract: dict[str, object]) -> None:
         r"\bWKURLSchemeHandler\b|"
         r"\bWKNavigation[A-Za-z]*\b"
     )
-    for path in sorted(PRODUCTION_SWIFT_ROOT.rglob("*.swift")):
-        source = path.read_text(encoding="utf-8")
-        match = prohibited_webkit_pattern.search(source)
-        if match is not None:
-            fail(
-                f"{path.relative_to(ROOT)} uses prohibited WebKit "
-                f"documentation implementation marker: {match.group(0).strip()}"
-            )
+    documentation_source = DOCUMENTATION_VIEW_PATH.read_text(encoding="utf-8")
+    match = prohibited_webkit_pattern.search(documentation_source)
+    if match is not None:
+        fail(
+            f"{DOCUMENTATION_VIEW_PATH.relative_to(ROOT)} uses prohibited WebKit "
+            f"documentation implementation marker: {match.group(0).strip()}"
+        )
 
     if not HELP_HOME_PATH.is_file():
         fail(f"Help home page is missing: {HELP_HOME_PATH.relative_to(ROOT)}")
@@ -672,7 +709,7 @@ def validate_public_claim_markers() -> None:
         for marker in markers:
             if marker not in prose:
                 fail(
-                    f"{path.relative_to(ROOT)} omits build-3 public claim: "
+                    f"{path.relative_to(ROOT)} omits required public claim: "
                     f"{marker}"
                 )
 
@@ -808,6 +845,10 @@ def validate_shortcut_implementation(contract: dict[str, object]) -> None:
         "stepForward": "Command-Page Down",
         "stepBackward": "Command-Page Up",
         "stepMultiplier": 10,
+        "toggleLockAvailability": (
+            "Local media only; unavailable from pending YouTube preflight "
+            "through playback"
+        ),
         "lockEntryRequirement": (
             "The exact configured global Lock/Unlock chord must be registered "
             "before whole-overlay click-through can begin"
@@ -859,6 +900,284 @@ def validate_shortcut_implementation(contract: dict[str, object]) -> None:
     )
     if registration_guard not in app_delegate:
         fail("frame hot keys are not registered behind the actionable-state guard")
+
+
+def validate_shortcut_settings_implementation(contract: dict[str, object]) -> None:
+    expected = {
+        "resizable": True,
+        "minimumContentSize": {"width": 700, "height": 520},
+        "preferredContentSize": {"width": 780, "height": 1020},
+        "maximumContentSize": {"width": 1100, "height": 1100},
+        "layout": (
+            "One shared five-column grid aligns enabled state, shortcut, action, "
+            "multiplier, and clear controls across every section"
+        ),
+        "overflow": "Vertical scrolling at compact heights",
+        "focus": "Row-major keyboard traversal; Tab is never captured as a shortcut",
+        "persistence": "Validated window size and shortcut bindings persist",
+        "customizableActions": [
+            "Play / Pause",
+            "Step frame forward",
+            "Step frame backward",
+            "Pan left",
+            "Pan right",
+            "Pan up",
+            "Pan down",
+            "Reset zoom to 100%",
+            "Reset zoom and pan",
+            "Toggle lock mode",
+            "Toggle lock globally",
+            "Shortcut settings",
+            "Close current panel",
+            "Toggle filter panel",
+        ],
+        "fixedMenuCommands": [
+            "Command-O: Open local video",
+            "Option-Command-O: Open YouTube video",
+            "Command-?: Documentation",
+        ],
+    }
+    validate_exact_value(
+        contract.get("shortcutSettings"),
+        expected,
+        "shortcutSettings",
+    )
+
+    help_source = require_source_markers(
+        ROOT / "Reframer" / "Reframer" / "Views" / "HelpView.swift",
+        (
+            "static let styleMask: NSWindow.StyleMask = [.borderless, .resizable]",
+            "static let minimumWindowSize = NSSize(width: 700, height: 520)",
+            "static let preferredWindowSize = NSSize(width: 780, height: 1_020)",
+            "static let maximumWindowSize = NSSize(width: 1_100, height: 1_100)",
+            "private let shortcutGrid = NSGridView()",
+            "scrollView.hasVerticalScroller = true",
+            "shortcutGrid.column(at: GridColumn.enabled.rawValue)",
+            "shortcutGrid.column(at: GridColumn.shortcut.rawValue)",
+            "shortcutGrid.column(at: GridColumn.action.rawValue)",
+            "shortcutGrid.column(at: GridColumn.multiplier.rawValue)",
+            "shortcutGrid.column(at: GridColumn.clear.rawValue)",
+        ),
+    )
+    if help_source.count("NSGridView()") != 1:
+        fail("Shortcut Settings must use one shared NSGridView")
+
+    require_source_markers(
+        APP_DELEGATE_PATH,
+        (
+            "panel.contentMinSize = sizeLimits.minimum",
+            "panel.contentMaxSize = sizeLimits.maximum",
+            "shortcutSettingsWindowDidEndLiveResize",
+            "persistShortcutSettingsWindowSize",
+            'title: "Open Video…"',
+            'title: "Open YouTube Video…"',
+            'title: "Reframer Documentation"',
+        ),
+    )
+
+
+def validate_media_source_implementation(contract: dict[str, object]) -> None:
+    playback = contract["playback"]
+    expected_extensions = [
+        "mp4", "m4v", "mov", "avi", "dv", "mpg", "mpeg", "m2v",
+        "ts", "mts", "m2ts", "3gp", "3g2",
+    ]
+    if playback.get("nativeExtensions") != expected_extensions:
+        fail("native media extension contract is not canonical")
+    if playback.get("preparedExtensions") != ["webm"]:
+        fail("prepared media extension contract is not canonical")
+    source_capabilities = {
+        item.get("source"): item
+        for item in playback.get("sourceCapabilities", [])
+        if isinstance(item, dict)
+    }
+    youtube_capabilities = source_capabilities.get("YouTube", {})
+    if (
+        youtube_capabilities.get("alwaysOnTopWhileUnlocked") is not True
+        or youtube_capabilities.get("clickThroughLock") is not False
+        or youtube_capabilities.get("filters") is not False
+        or youtube_capabilities.get("zoomPan") is not False
+    ):
+        fail("YouTube capability matrix does not preserve interactive player controls")
+
+    webm = playback.get("webM")
+    if not isinstance(webm, dict):
+        fail("WebM preparation contract is missing")
+    expected_webm_values = {
+        "acceptedVideoCodecs": ["VP8", "VP9"],
+        "helper": "Contents/Helpers/reframer-ffmpeg",
+        "helperSigningIdentifier": "com.reframer.app.ffmpeg",
+        "helperArchitectures": ["arm64", "x86_64"],
+        "helperComponents": "FFmpeg 8.1.2 and libvpx 1.16.0",
+        "helperNetworkProtocols": False,
+        "intermediate": "Temporary ProRes 4444 MOV with PCM audio",
+        "alphaPreserved": True,
+        "minimumFreeTemporaryBytes": 2 * 1024 * 1024 * 1024,
+        "maximumTemporaryOutputBytes": 64 * 1024 * 1024 * 1024,
+        "stallTimeoutSeconds": 5 * 60,
+        "maximumRuntimeSeconds": 12 * 60 * 60,
+        "cancellation": (
+            "Cooperative termination followed by bounded forced termination"
+        ),
+        "cleanup": (
+            "Prepared intermediates are removed on failure, replacement, "
+            "cancellation, termination, and stale-output startup cleanup"
+        ),
+    }
+    validate_exact_value(webm, expected_webm_values, "playback.webM")
+
+    require_source_markers(
+        VIDEO_FORMATS_PATH,
+        (
+            'static let preparedExtensions = ["webm"]',
+            '"public.avi"',
+            '"public.mpeg-2-transport-stream"',
+            '"org.webmproject.webm"',
+        ),
+    )
+    require_source_markers(
+        WEBM_TRANSCODER_PATH,
+        (
+            'case "V_VP8":',
+            'case "V_VP9":',
+            '"-c:v", "prores_ks"',
+            '"-pix_fmt", "yuva444p10le"',
+            '"-c:a", "pcm_s16le"',
+            '"-i", "pipe:0"',
+            "let hardLimit: Int64 = 64 * 1_024 * 1_024 * 1_024",
+            "let minimumCapacity: Int64 = 2 * 1_024 * 1_024 * 1_024",
+            "stallTimeout: TimeInterval = 5 * 60",
+            "maximumRuntime: TimeInterval = 12 * 60 * 60",
+            "case timedOut",
+            "func cancelAndWait(timeout: TimeInterval = 2)",
+        ),
+    )
+
+    youtube = contract.get("youtube")
+    if not isinstance(youtube, dict):
+        fail("YouTube contract is missing")
+    if youtube.get("autoplay") is not False:
+        fail("YouTube playback must not autoplay")
+    if youtube.get("webKitElementFullscreen") is not True:
+        fail("YouTube playback must enable WebKit element fullscreen")
+    if youtube.get("acceptedLinks") != (
+        "HTTPS youtube.com watch, shorts, embed, and live links; YouTube "
+        "No-Cookie embed links; and youtu.be video links"
+    ):
+        fail("YouTube accepted-link contract is not canonical")
+    if youtube.get("consentPreference") != (
+        "Only the accepted privacy and terms notice version is stored locally; "
+        "pasted links and viewing history are not retained"
+    ):
+        fail("YouTube consent preference disclosure is not canonical")
+    if youtube.get("dataAPIDisclosure") != (
+        "The request query contains the parsed video identifier, the API key is "
+        "sent in X-Goog-Api-Key, and Google necessarily receives ordinary HTTPS "
+        "request/network metadata such as source IP"
+    ):
+        fail("YouTube Data API request disclosure is not canonical")
+    if youtube.get("player") != (
+        "Privacy-enhanced YouTube IFrame Player in a nonpersistent WKWebView "
+        "cleared before every embed"
+    ):
+        fail("YouTube player storage-isolation contract is not canonical")
+    if youtube.get("playerViewport") != (
+        "The WKWebView fills the video canvas and remains at least 200 by 200 "
+        "points across supported window sizes; YouTube owns internal aspect fit "
+        "and letterboxing"
+    ):
+        fail("YouTube player viewport contract is not canonical")
+    if youtube.get("filterAndTransformControls") != (
+        "Disabled from pending preflight through YouTube playback"
+    ):
+        fail("YouTube filter/transform controls are not disabled for the full lifecycle")
+    if youtube.get("lockMode") != (
+        "Unavailable from pending preflight through YouTube playback; an existing "
+        "lock is automatically released so required player controls remain interactive"
+    ):
+        fail("YouTube lock policy does not preserve required player interaction")
+    if youtube.get("seekBehavior") != (
+        "Timeline drag previews seek without allowing seek-ahead; release and "
+        "discrete seeks allow seek-ahead"
+    ):
+        fail("YouTube preview and committed seek policy is not canonical")
+    if youtube.get("audioPreferenceIsolation") != (
+        "YouTube ready-state snapshots do not overwrite saved native-media "
+        "volume or mute preferences"
+    ):
+        fail("YouTube ready snapshot must preserve native-media audio preferences")
+    if youtube.get("muteBehavior") != (
+        "Mute uses the official player mute state without setting retained "
+        "player volume to zero, so the embedded player's Unmute restores the "
+        "prior audible level"
+    ):
+        fail("YouTube mute contract must preserve the official player's Unmute level")
+    if (
+        youtube.get("retainsPastedURLOrViewingHistory") is not False
+        or youtube.get("storesYouTubeCredentials") is not False
+        or youtube.get("persistentCookies") is not False
+    ):
+        fail("YouTube retained-storage contract is not canonical")
+    if youtube.get("websiteDataStore") != (
+        "Nonpersistent session data may exist while the player runs; it is "
+        "cleared before every embed and is never persisted"
+    ):
+        fail("YouTube session-storage disclosure is not canonical")
+    if "storesURLHistoryCookiesOrCredentials" in youtube:
+        fail("YouTube contract must not collapse session and persistent storage")
+    if "does not let Reframer force" not in str(youtube.get("quality", "")):
+        fail("YouTube quality contract must disclose adaptive quality")
+    require_source_markers(
+        YOUTUBE_COMPLIANCE_PATH,
+        (
+            'components.host = "www.googleapis.com"',
+            'components.path = "/youtube/v3/videos"',
+            'URLQueryItem(name: "part", value: "id,status")',
+            'request.setValue(apiKey, forHTTPHeaderField: "X-Goog-Api-Key")',
+            "URLSessionConfiguration.ephemeral",
+            "guard let madeForKids",
+        ),
+    )
+    require_source_markers(
+        WEB_MEDIA_VIEW_PATH,
+        (
+            "configuration.websiteDataStore = .nonPersistent()",
+            "WKWebsiteDataStore.allWebsiteDataTypes()",
+            "configuration.preferences.isElementFullscreenEnabled = true",
+            "youtube-nocookie.com/embed/",
+            "autoplay=0",
+            "controls=1",
+            "qualityDisclosure",
+            'message.frameInfo.securityOrigin.host == "com.reframer.app"',
+            "frame stepping is unavailable",
+            "allowSeekAhead: false",
+            "allowSeekAhead: true",
+            'messageType != "ready"',
+            "webView.frame = bounds",
+            "shouldSetPlayerVolume",
+            "playerVolumeWhenUnmuted",
+        ),
+    )
+    require_source_markers(
+        VIDEO_STATE_PATH,
+        (
+            "pendingSourceDisplayName == nil",
+            "webMediaSource?.isYouTube != true",
+            "var supportsClickThroughLock: Bool",
+            "isLocked = false",
+            "func beginPendingMediaSelection(",
+        ),
+    )
+    require_source_markers(
+        APP_DELEGATE_PATH,
+        (
+            "canUseClickThroughLock: videoState.supportsClickThroughLock",
+            "private let youtubeConsentVersion = 1",
+            '"OnlinePlayback.youtubeConsentVersion"',
+            "self.youtubeConsentVersion,",
+            "forKey: self.youtubeConsentVersionDefaultsKey",
+        ),
+    )
 
 
 def validate_playback_implementation(contract: dict[str, object]) -> None:
@@ -968,7 +1287,7 @@ def main() -> None:
             f"product contract keys {sorted(contract)} do not equal "
             f"{sorted(EXPECTED_CONTRACT_KEYS)}"
         )
-    validate_exact_value(contract.get("schemaVersion"), 2, "schemaVersion")
+    validate_exact_value(contract.get("schemaVersion"), 3, "schemaVersion")
     validate_overlay_implementation(contract)
     validate_documentation_implementation(contract)
 
@@ -986,14 +1305,35 @@ def main() -> None:
     ):
         fail("global shortcut privacy contract must prohibit broad key observation")
     validate_shortcut_implementation(contract)
+    validate_shortcut_settings_implementation(contract)
+    validate_media_source_implementation(contract)
 
     privacy = contract["privacy"]
     if privacy.get("appSandbox") is not True:
         fail("product contract must require App Sandbox")
     if privacy.get("userSelectedFileAccess") != "read-only":
         fail("product contract must allow only user-selected read-only files")
-    if privacy.get("networkAccess") is not False:
-        fail("product contract must prohibit network access")
+    if privacy.get("networkClientEntitlement") is not True:
+        fail("product contract must require the scoped network-client entitlement")
+    if "explicit YouTube workflow" not in privacy.get("networkScope", ""):
+        fail("network scope must be limited to the explicit YouTube workflow")
+    if privacy.get("youTubeConsentPreference") != (
+        "Only the accepted privacy and terms notice version is stored locally; "
+        "pasted links and viewing history are not retained"
+    ):
+        fail("privacy contract must disclose the persisted YouTube consent version")
+    if privacy.get("youTubeDataAPITransport") != (
+        "The request query contains the parsed video identifier, the API key is "
+        "sent in X-Goog-Api-Key, and Google necessarily receives ordinary HTTPS "
+        "request/network metadata such as source IP"
+    ):
+        fail("privacy contract must disclose YouTube Data API transport metadata")
+    if privacy.get("youTubeSessionStorage") != (
+        "Nonpersistent WebKit session cookies or player data may exist while "
+        "playback runs; all website data is cleared before every embed and is "
+        "never persisted"
+    ):
+        fail("privacy contract must distinguish session from persistent player data")
 
     if re.fullmatch(r"\d+\.\d+\.\d+", version) is None:
         fail(f"contract version is not semantic: {version}")
@@ -1008,6 +1348,11 @@ def main() -> None:
     if len(build_versions) != 1 or not next(iter(build_versions)).isdigit():
         fail(f"project build versions are not one numeric value: {build_versions}")
     build_version = next(iter(build_versions))
+    if product.get("build") != int(build_version):
+        fail(
+            f"product contract build {product.get('build')!r} "
+            f"does not equal project build {build_version}"
+        )
 
     deployment_targets = set(re.findall(r"MACOSX_DEPLOYMENT_TARGET = ([^;]+);", project))
     if deployment_targets != {minimum_macos}:
@@ -1025,6 +1370,8 @@ def main() -> None:
         fail("Info.plist must derive its build from CURRENT_PROJECT_VERSION")
     if info.get("CFBundleIdentifier") != "$(PRODUCT_BUNDLE_IDENTIFIER)":
         fail("Info.plist must derive its identifier from PRODUCT_BUNDLE_IDENTIFIER")
+    if info.get("ReframerYouTubeDataAPIKey") != "$(YOUTUBE_DATA_API_KEY)":
+        fail("Info.plist must receive the YouTube API key from its build setting")
     expected_copyright = "Copyright © 2026 IVG Design"
     if info.get("NSHumanReadableCopyright") != expected_copyright:
         fail("Info.plist copyright does not identify IVG Design consistently")
@@ -1062,17 +1409,37 @@ def main() -> None:
             "user-selected file build settings are not uniformly read-only: "
             f"{selected_file_settings}"
         )
+    outgoing_network_settings = set(
+        re.findall(r"ENABLE_OUTGOING_NETWORK_CONNECTIONS = ([^;]+);", project)
+    )
+    if outgoing_network_settings != {"YES"}:
+        fail(
+            "outgoing network build settings are not uniformly enabled: "
+            f"{outgoing_network_settings}"
+        )
 
     with ENTITLEMENTS_PATH.open("rb") as entitlement_file:
         entitlements = plistlib.load(entitlement_file)
     expected_entitlements = {
         "com.apple.security.app-sandbox": True,
         "com.apple.security.files.user-selected.read-only": True,
+        "com.apple.security.network.client": True,
     }
     if entitlements != expected_entitlements:
         fail(
             "source entitlements do not equal the sandbox allowlist: "
             f"{entitlements}"
+        )
+    with HELPER_ENTITLEMENTS_PATH.open("rb") as entitlement_file:
+        helper_entitlements = plistlib.load(entitlement_file)
+    expected_helper_entitlements = {
+        "com.apple.security.app-sandbox": True,
+        "com.apple.security.inherit": True,
+    }
+    if helper_entitlements != expected_helper_entitlements:
+        fail(
+            "helper entitlements do not equal the inherited sandbox allowlist: "
+            f"{helper_entitlements}"
         )
 
     expected_content_types = {
@@ -1091,8 +1458,48 @@ def main() -> None:
             f"{sorted(actual_content_types)} do not equal the product contract "
             f"{sorted(expected_content_types)}"
         )
-    if info.get("UTImportedTypeDeclarations"):
-        fail("Info.plist must not import unsupported custom media types")
+    expected_webm_declaration = [
+        {
+            "UTTypeConformsTo": ["public.movie"],
+            "UTTypeDescription": "WebM Video",
+            "UTTypeIdentifier": "org.webmproject.webm",
+            "UTTypeTagSpecification": {
+                "public.filename-extension": ["webm"],
+                "public.mime-type": "video/webm",
+            },
+        }
+    ]
+    if info.get("UTImportedTypeDeclarations") != expected_webm_declaration:
+        fail("Info.plist WebM imported type declaration is not canonical")
+
+    required_third_party_files = (
+        ROOT / "docs" / "THIRD_PARTY.md",
+        ROOT / "Reframer" / "Reframer" / "Resources"
+        / "ThirdPartyLicenses" / "FFmpeg-LICENSE.md",
+        ROOT / "Reframer" / "Reframer" / "Resources"
+        / "ThirdPartyLicenses" / "FFmpeg-LGPL-2.1.txt",
+        ROOT / "Reframer" / "Reframer" / "Resources"
+        / "ThirdPartyLicenses" / "libvpx-LICENSE.txt",
+        ROOT / "Reframer" / "Reframer" / "Resources"
+        / "ThirdPartyLicenses" / "libvpx-PATENTS.txt",
+        ROOT / "Reframer" / "Reframer" / "Resources"
+        / "ThirdPartyLicenses" / "SOURCE.md",
+    )
+    for path in required_third_party_files:
+        if not path.is_file() or path.stat().st_size == 0:
+            fail(f"third-party source/license record is missing: {path.relative_to(ROOT)}")
+    source_offer = normalized_prose(
+        required_third_party_files[-1].read_text(encoding="utf-8")
+    )
+    for marker in (
+        "at least three years",
+        "complete machine-readable corresponding",
+        "object/relink material",
+        "at no charge",
+        "no more than the actual distribution medium and postage",
+    ):
+        if marker not in source_offer:
+            fail(f"third-party source/relink offer omits: {marker}")
 
     public_texts = read_public_texts()
     validate_public_links(public_texts)
@@ -1114,6 +1521,11 @@ def main() -> None:
         "MP4",
         "M4V",
         "MOV",
+        "WebM",
+        "YouTube",
+        "Made for Kids",
+        "adaptive quality",
+        "ProRes 4444",
         "no Accessibility or Input Monitoring permission",
         "App Sandbox",
         "2,000,000",

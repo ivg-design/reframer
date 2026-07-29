@@ -40,7 +40,9 @@ class DropZoneView: NSView, ReframerShortcutOwningResponder {
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
         setAccessibilityLabel("Open video")
-        setAccessibilityHelp("Open or drop an MP4, M4V, or MOV video")
+        setAccessibilityHelp(
+            "Open or drop \(VideoFormats.displayString), including transparent WebM"
+        )
         setAccessibilityIdentifier("open-video-drop-zone")
         setAccessibilityEnabled(true)
 
@@ -221,8 +223,7 @@ class DropZoneView: NSView, ReframerShortcutOwningResponder {
     func loadVideo(from url: URL) -> Bool {
         guard VideoFormats.isSupported(url) else { return false }
 
-        videoState?.isVideoLoaded = false
-        videoState?.videoURL = url
+        videoState?.loadLocalMedia(url)
         return true
     }
 }

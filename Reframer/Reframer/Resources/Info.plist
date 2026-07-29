@@ -22,6 +22,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ReframerYouTubeDataAPIKey</key>
+	<string>$(YOUTUBE_DATA_API_KEY)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.video</string>
 	<key>LSMinimumSystemVersion</key>
@@ -52,7 +54,37 @@
 				<string>public.mpeg-4</string>
 				<string>com.apple.m4v-video</string>
 				<string>com.apple.quicktime-movie</string>
+				<string>public.avi</string>
+				<string>public.dv-movie</string>
+				<string>public.mpeg</string>
+				<string>public.mpeg-2-video</string>
+				<string>public.mpeg-2-transport-stream</string>
+				<string>public.3gpp</string>
+				<string>public.3gpp2</string>
+				<string>org.webmproject.webm</string>
 			</array>
+		</dict>
+	</array>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.movie</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>WebM Video</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.webmproject.webm</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>webm</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>video/webm</string>
+			</dict>
 		</dict>
 	</array>
 	<key>CFBundleHelpBookFolder</key>

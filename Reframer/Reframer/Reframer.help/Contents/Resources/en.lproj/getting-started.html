@@ -12,7 +12,9 @@
 
   <ol>
     <li>Activate the empty-state Open action, drop a file, or press <kbd>⌘O</kbd>.</li>
-    <li>Choose an MP4, M4V, or MOV file.</li>
+    <li>Choose a supported local file. To use YouTube, choose Open YouTube
+      Video, paste a link, review the first-use notice, and complete the
+      required Made for Kids preflight.</li>
     <li>Press <kbd>Space</kbd> to play or pause.</li>
     <li>Use <kbd>⌘ Page Down</kbd> and <kbd>⌘ Page Up</kbd> to step.</li>
     <li>The video and controls share one window. Drag the control-bar grip to
@@ -25,7 +27,7 @@
       48-point row. Below 920 through the 640-point minimum, they use two rows
       totaling 96 points. Every control remains visible and
       accessibility-reachable.</li>
-    <li>Press <kbd>L</kbd> to place the complete overlay at the public
+    <li>For local media, press <kbd>L</kbd> to place the complete overlay at the public
       status-bar tier above all ordinary app windows and make both video and
       controls click-through. Use <kbd>⌘⇧L</kbd> from the app underneath to
       restore interaction.</li>
@@ -33,6 +35,12 @@
 
   <p>Reframer checks that macOS can decode a usable video track before
   presenting the asset as ready.</p>
+
+  <p>VP8/VP9 WebM is prepared as temporary ProRes 4444/PCM so alpha is
+  preserved. YouTube never autoplays, uses adaptive quality, and keeps its
+  standard player UI and fullscreen behavior. YouTube stays unlocked so its
+  controls, captions, settings, fullscreen, and links remain interactive; use
+  Always on Top When Unlocked.</p>
 
   <p>Locking requires the exact configured global Lock/Unlock chord to be
   registered. Reframer refuses lock without that recovery path and

@@ -4,6 +4,82 @@ Notable Reframer changes are recorded here. The project uses semantic
 versioning once a build is published; earlier repository milestones were
 development snapshots, not production releases.
 
+## [0.11.0] - Unreleased
+
+### Added
+
+- Local AVI, DV, MPEG/MPEG-2/transport-stream, 3GP, and 3G2 container
+  selection through AVFoundation, subject to the codecs macOS can decode
+- VP8 and VP9 WebM preparation through a bundled universal, network-disabled
+  FFmpeg 8.1.2/libvpx 1.16.0 helper. WebM alpha is preserved in a temporary
+  ProRes 4444 intermediate and audio is converted to PCM
+- Cancellation, disk-capacity checks, a 64 GB output ceiling, a five-minute
+  no-progress watchdog, a 12-hour absolute runtime ceiling, replacement and
+  termination cleanup, and startup cleanup for stale WebM intermediates
+- Consent-gated YouTube playback through a privacy-enhanced,
+  nonpersistent `WKWebView`, preceded by a per-video Made for Kids lookup
+  through the YouTube Data API
+- A local YouTube privacy/terms Help page and explicit source/license records
+  for the bundled media helper
+
+### Changed
+
+- Shortcut Settings now uses one shared five-column grid for consistent
+  alignment across sections. The panel is resizable, remembers a validated
+  size, scrolls at compact heights, and traverses controls in row-major order
+- YouTube shares play/pause, time seek, mute, volume, and window controls.
+  It keeps YouTube's standard controls, links, branding, ads, settings, and
+  fullscreen behavior; quality remains adaptive because the supported embed
+  API cannot force maximum quality
+- Exact frame stepping, zoom/pan, opacity, and Core Image filters are disabled
+  for YouTube because those operations are not provided by the IFrame Player
+  API and must not obscure or transform the embedded player
+- Click-through Lock is unavailable from pending YouTube preflight through
+  playback. Reframer automatically unlocks so YouTube's required controls,
+  captions, settings, fullscreen, and links remain interactive; Always on Top
+  When Unlocked is the topmost option for that source
+- App Sandbox now includes outbound network-client access scoped by product
+  behavior to the explicit YouTube workflow. Bundled Help remains native and
+  offline; allowlisted policy links open in the system browser
+- Release packaging requires `REFRAMER_YOUTUBE_DATA_API_KEY`, injects it
+  through the Xcode build setting, and rejects missing or unexpanded values
+- The release bundle allowlist includes the separately signed inherited-
+  sandbox WebM helper, its stable `com.reframer.app.ffmpeg` signing identity,
+  and bundled third-party license/source records
+
+### Security
+
+- The YouTube Data API client uses an ephemeral session, the player uses a
+  nonpersistent website data store, and the app fails closed before creating
+  player HTML if the required Made for Kids lookup is missing, rejected, or
+  inconclusive
+- YouTube never autoplays. Reframer pauses it when the app/window becomes
+  hidden or occluded and does not request or store YouTube credentials,
+  pasted-link history, or viewing history. Session cookies or player data can
+  exist while the player runs but are never persisted; every embed starts
+  after the nonpersistent website data store has been cleared
+- Shipping a desktop API key permits extraction from the app bundle. Restrict
+  the key by API and quota; a production backend is recommended for stronger
+  credential control
+- The Made for Kids preflight sends that key in the `X-Goog-Api-Key` request
+  header instead of placing it in the request URL
+
+### Fixed
+
+- Visibility changes no longer issue redundant YouTube Pause commands while
+  the player is already cued or paused, and non-playing terminal states now
+  acknowledge a pending Pause instead of blocking later official-player Play
+- Native mute no longer sends a destructive zero-volume command to YouTube;
+  the retained unmuted level remains available to both Reframer and the
+  embedded player's own Unmute control
+- Native M2V preflight now requests precise duration and timing metadata, so
+  valid elementary MPEG-2 video streams reach the normal ready state
+- Lock entry is disabled when no local source is loaded, including while a
+  YouTube selection is pending; Unlock remains available from a locked state
+- The YouTube web view now fills the complete video canvas at every supported
+  window size, including the 200×200-point minimum required by the embedded
+  player
+
 ## [0.10.0] - Unreleased
 
 ### Added

@@ -438,10 +438,25 @@ final class DocumentationView: NSView, NSTextViewDelegate {
         } else {
             url = nil
         }
-        guard let url, navigate(to: url) else {
+        guard let url else {
             NSSound.beep()
             return true
         }
+        if navigate(to: url) {
+            return true
+        }
+        let allowedExternalHosts = [
+            "www.youtube.com",
+            "youtube.com",
+            "policies.google.com"
+        ]
+        if url.scheme?.lowercased() == "https",
+           let host = url.host?.lowercased(),
+           allowedExternalHosts.contains(host) {
+            NSWorkspace.shared.open(url)
+            return true
+        }
+        NSSound.beep()
         return true
     }
 }

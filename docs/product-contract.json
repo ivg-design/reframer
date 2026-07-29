@@ -1,17 +1,44 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "product": {
     "name": "Reframer",
     "bundleIdentifier": "com.reframer.app",
-    "version": "0.10.0",
+    "version": "0.11.0",
+    "build": 4,
     "minimumMacOS": "15.0",
     "license": "MIT"
   },
   "playback": {
     "containers": [
+      "WebM",
       "MP4",
       "M4V",
-      "MOV"
+      "MOV",
+      "AVI",
+      "DV",
+      "MPEG",
+      "MPEG-2 video",
+      "MPEG transport stream",
+      "3GP",
+      "3G2"
+    ],
+    "nativeExtensions": [
+      "mp4",
+      "m4v",
+      "mov",
+      "avi",
+      "dv",
+      "mpg",
+      "mpeg",
+      "m2v",
+      "ts",
+      "mts",
+      "m2ts",
+      "3gp",
+      "3g2"
+    ],
+    "preparedExtensions": [
+      "webm"
     ],
     "documentTypes": [
       {
@@ -28,9 +55,49 @@
         "container": "MOV",
         "extension": "mov",
         "contentType": "com.apple.quicktime-movie"
+      },
+      {
+        "container": "AVI",
+        "extension": "avi",
+        "contentType": "public.avi"
+      },
+      {
+        "container": "DV",
+        "extension": "dv",
+        "contentType": "public.dv-movie"
+      },
+      {
+        "container": "MPEG",
+        "extension": "mpg",
+        "contentType": "public.mpeg"
+      },
+      {
+        "container": "MPEG-2 video",
+        "extension": "m2v",
+        "contentType": "public.mpeg-2-video"
+      },
+      {
+        "container": "MPEG transport stream",
+        "extension": "ts",
+        "contentType": "public.mpeg-2-transport-stream"
+      },
+      {
+        "container": "3GP",
+        "extension": "3gp",
+        "contentType": "public.3gpp"
+      },
+      {
+        "container": "3G2",
+        "extension": "3g2",
+        "contentType": "public.3gpp2"
+      },
+      {
+        "container": "WebM",
+        "extension": "webm",
+        "contentType": "org.webmproject.webm"
       }
     ],
-    "decoder": "AVFoundation",
+    "decoder": "AVFoundation for native and prepared media",
     "trackSelection": "First enabled usable video track, otherwise first usable video track; playback, Core Image filtering, metadata, and navigation use the same track",
     "replacementStartsPaused": true,
     "playbackIntent": {
@@ -43,7 +110,7 @@
       "scrubHandoff": "Synchronous on the main thread"
     },
     "frameNavigation": {
-      "exactSource": "Presentation timestamps from the selected video track",
+      "exactSource": "Presentation timestamps from the selected native or prepared video track",
       "estimatedFallback": "Clearly labeled constant-rate estimate while indexing, when exact sample cursors are unavailable, or when the exact-sample limit is exceeded",
       "maximumExactSamples": 2000000
     },
@@ -51,20 +118,92 @@
       "forward": "Page Down",
       "backward": "Page Up",
       "multiplier": 10
-    }
+    },
+    "webM": {
+      "acceptedVideoCodecs": [
+        "VP8",
+        "VP9"
+      ],
+      "helper": "Contents/Helpers/reframer-ffmpeg",
+      "helperSigningIdentifier": "com.reframer.app.ffmpeg",
+      "helperArchitectures": [
+        "arm64",
+        "x86_64"
+      ],
+      "helperComponents": "FFmpeg 8.1.2 and libvpx 1.16.0",
+      "helperNetworkProtocols": false,
+      "intermediate": "Temporary ProRes 4444 MOV with PCM audio",
+      "alphaPreserved": true,
+      "minimumFreeTemporaryBytes": 2147483648,
+      "maximumTemporaryOutputBytes": 68719476736,
+      "stallTimeoutSeconds": 300,
+      "maximumRuntimeSeconds": 43200,
+      "cancellation": "Cooperative termination followed by bounded forced termination",
+      "cleanup": "Prepared intermediates are removed on failure, replacement, cancellation, termination, and stale-output startup cleanup"
+    },
+    "sourceCapabilities": [
+      {
+        "source": "Native or prepared local media",
+        "playPause": true,
+        "timeSeek": true,
+        "exactOrEstimatedFrames": true,
+        "zoomPan": true,
+        "filters": true,
+        "opacity": true,
+        "alwaysOnTopWhileUnlocked": true,
+        "clickThroughLock": true
+      },
+      {
+        "source": "YouTube",
+        "playPause": true,
+        "timeSeek": true,
+        "exactOrEstimatedFrames": false,
+        "zoomPan": false,
+        "filters": false,
+        "opacity": false,
+        "alwaysOnTopWhileUnlocked": true,
+        "clickThroughLock": false
+      }
+    ]
+  },
+  "youtube": {
+    "enabledOnlyWithAPIKey": true,
+    "acceptedLinks": "HTTPS youtube.com watch, shorts, embed, and live links; YouTube No-Cookie embed links; and youtu.be video links",
+    "consent": "Explicit first-use privacy and terms consent before any YouTube request",
+    "consentPreference": "Only the accepted privacy and terms notice version is stored locally; pasted links and viewing history are not retained",
+    "madeForKidsPreflight": "Every video identifier is checked with YouTube Data API videos.list before player HTML is created; failure or unknown status fails closed",
+    "dataAPIDisclosure": "The request query contains the parsed video identifier, the API key is sent in X-Goog-Api-Key, and Google necessarily receives ordinary HTTPS request/network metadata such as source IP",
+    "player": "Privacy-enhanced YouTube IFrame Player in a nonpersistent WKWebView cleared before every embed",
+    "playerViewport": "The WKWebView fills the video canvas and remains at least 200 by 200 points across supported window sizes; YouTube owns internal aspect fit and letterboxing",
+    "autoplay": false,
+    "quality": "YouTube adaptive quality; the supported embed API does not let Reframer force a quality level",
+    "standardControls": true,
+    "standardBrandingLinksAdsAndFullscreen": true,
+    "webKitElementFullscreen": true,
+    "filterAndTransformControls": "Disabled from pending preflight through YouTube playback",
+    "lockMode": "Unavailable from pending preflight through YouTube playback; an existing lock is automatically released so required player controls remain interactive",
+    "topmostAlternative": "Always on Top When Unlocked",
+    "seekBehavior": "Timeline drag previews seek without allowing seek-ahead; release and discrete seeks allow seek-ahead",
+    "audioPreferenceIsolation": "YouTube ready-state snapshots do not overwrite saved native-media volume or mute preferences",
+    "muteBehavior": "Mute uses the official player mute state without setting retained player volume to zero, so the embedded player's Unmute restores the prior audible level",
+    "pauseOnHiddenOrOccluded": true,
+    "retainsPastedURLOrViewingHistory": false,
+    "storesYouTubeCredentials": false,
+    "persistentCookies": false,
+    "websiteDataStore": "Nonpersistent session data may exist while the player runs; it is cleared before every embed and is never persisted"
   },
   "globalShortcuts": {
     "mechanism": "exclusive registered system hot keys",
     "observesUnregisteredKeys": false,
     "requiresAccessibilityPermission": false,
     "requiresInputMonitoringPermission": false,
-    "toggleLockAvailability": "Always during normal operation while global shortcuts and the lock binding are enabled",
+    "toggleLockAvailability": "Local media only; unavailable from pending YouTube preflight through playback",
     "toggleLockRegistration": "Registered in every video and lock state; suspended only during shortcut recording and removed on shutdown",
     "lockEntryRequirement": "The exact configured global Lock/Unlock chord must be registered before whole-overlay click-through can begin",
     "lockEntryFailure": "Lock is refused and recovery guidance identifies the configured chord",
     "lockRecoveryLoss": "Registration loss, conflict, recording suspension, or disabling global shortcuts while locked immediately unlocks the overlay and reports recovery",
     "unlockAvailability": "Unlocking is always permitted",
-    "frameStepAvailability": "Loaded video with lock mode enabled and exact or estimated sample navigation available",
+    "frameStepAvailability": "Loaded local media with lock mode enabled and exact or estimated sample navigation available",
     "frameStepRegistration": "Registered only while frame stepping is actionable",
     "inactiveFrameStepHandling": "Not registered, received, or swallowed through Reframer's global path while another app is active",
     "toggleLock": "Command-Shift-L",
@@ -72,6 +211,46 @@
     "stepBackward": "Command-Page Up",
     "stepMultiplier": 10,
     "failureRecovery": "Shortcut Settings reports conflicts and offers retry"
+  },
+  "shortcutSettings": {
+    "resizable": true,
+    "minimumContentSize": {
+      "width": 700,
+      "height": 520
+    },
+    "preferredContentSize": {
+      "width": 780,
+      "height": 1020
+    },
+    "maximumContentSize": {
+      "width": 1100,
+      "height": 1100
+    },
+    "layout": "One shared five-column grid aligns enabled state, shortcut, action, multiplier, and clear controls across every section",
+    "overflow": "Vertical scrolling at compact heights",
+    "focus": "Row-major keyboard traversal; Tab is never captured as a shortcut",
+    "persistence": "Validated window size and shortcut bindings persist",
+    "customizableActions": [
+      "Play / Pause",
+      "Step frame forward",
+      "Step frame backward",
+      "Pan left",
+      "Pan right",
+      "Pan up",
+      "Pan down",
+      "Reset zoom to 100%",
+      "Reset zoom and pan",
+      "Toggle lock mode",
+      "Toggle lock globally",
+      "Shortcut settings",
+      "Close current panel",
+      "Toggle filter panel"
+    ],
+    "fixedMenuCommands": [
+      "Command-O: Open local video",
+      "Option-Command-O: Open YouTube video",
+      "Command-?: Documentation"
+    ]
   },
   "overlay": {
     "managedWindowCount": 1,
@@ -109,19 +288,28 @@
     ],
     "lockedPointerInput": "The entire overlay, including video and controls, ignores pointer events",
     "lockedGeometry": "Moving and resizing are disabled",
+    "lockedMediaScope": "Native or prepared local media only; YouTube must remain unlocked and interactive",
     "unlockRecovery": "The exact configured global Lock/Unlock chord restores interaction from another app; Reframer refuses lock without it and automatically unlocks if it becomes unavailable"
   },
   "documentation": {
     "renderer": "Native AppKit attributed text rendered from bundled Help HTML",
     "bundledContentOnly": true,
     "networkAccess": false,
+    "externalLinks": "Allowlisted YouTube and Google policy links open in the system browser",
     "requiresNetworkEntitlement": false
   },
   "privacy": {
     "appSandbox": true,
     "userSelectedFileAccess": "read-only",
-    "networkAccess": false,
+    "networkClientEntitlement": true,
+    "networkScope": "Only an explicit YouTube workflow contacts YouTube, Google APIs, and YouTube media hosts",
     "analytics": false,
-    "downloadsExecutableCode": false
+    "downloadsNativeExecutableCode": false,
+    "remoteWebCode": "Authorized YouTube playback downloads and executes IFrame API JavaScript and web content in an isolated WKWebView",
+    "youTubeDataStore": "Nonpersistent WebKit and ephemeral URLSession",
+    "credentials": "No YouTube login credentials are requested or stored",
+    "youTubeConsentPreference": "Only the accepted privacy and terms notice version is stored locally; pasted links and viewing history are not retained",
+    "youTubeDataAPITransport": "The request query contains the parsed video identifier, the API key is sent in X-Goog-Api-Key, and Google necessarily receives ordinary HTTPS request/network metadata such as source IP",
+    "youTubeSessionStorage": "Nonpersistent WebKit session cookies or player data may exist while playback runs; all website data is cleared before every embed and is never persisted"
   }
 }

@@ -1,12 +1,38 @@
 import Cocoa
 import Combine
 
+enum ShortcutSettingsWindowConfiguration {
+    static let styleMask: NSWindow.StyleMask = [.borderless, .resizable]
+}
+
 /// Keyboard shortcut settings presented in a floating AppKit panel.
 final class HelpView: NSView {
+    static let minimumWindowSize = NSSize(width: 700, height: 520)
+    static let preferredWindowSize = NSSize(width: 780, height: 1_020)
+    static let maximumWindowSize = NSSize(width: 1_100, height: 1_100)
+
+    private enum GridColumn: Int, CaseIterable {
+        case enabled
+        case shortcut
+        case action
+        case multiplier
+        case clear
+    }
+
+    private static let gridColumnSpacing: CGFloat = 12
+    private static let enabledColumnWidth: CGFloat = 22
+    private static let shortcutColumnWidth: CGFloat = 132
+    private static let minimumActionColumnWidth: CGFloat = 210
+    private static let multiplierColumnWidth: CGFloat = 178
+    private static let clearColumnWidth: CGFloat = 60
+    private static let contentHorizontalInset: CGFloat = 16
+
     private weak var videoState: VideoState?
     private let shortcutSettings: ShortcutSettings
     private let visualEffectView = NSVisualEffectView()
     private let closeButton = NSButton()
+    private let scrollView = NSScrollView()
+    private let shortcutGrid = NSGridView()
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
     private let globalShortcutsButton = NSButton(
         checkboxWithTitle: "Enable global shortcuts",
@@ -22,11 +48,12 @@ final class HelpView: NSView {
     private var enableButtons: [ShortcutSettings.Action: NSButton] = [:]
     private var clearButtons: [ShortcutSettings.Action: NSButton] = [:]
     private var multiplierButtons: [ShortcutSettings.Action: NSPopUpButton] = [:]
+    private var focusOrder: [NSView] = []
 
     init(videoState: VideoState) {
         self.videoState = videoState
         self.shortcutSettings = videoState.shortcutSettings
-        super.init(frame: NSRect(x: 0, y: 0, width: 520, height: 640))
+        super.init(frame: NSRect(origin: .zero, size: Self.preferredWindowSize))
         setup()
         observeSettings()
     }
@@ -105,6 +132,7 @@ final class HelpView: NSView {
         closeButton.setAccessibilityElement(true)
         closeButton.setAccessibilityRole(.button)
         closeButton.setAccessibilityIdentifier("help-close")
+        closeButton.identifier = NSUserInterfaceItemIdentifier("help-close")
         closeButton.setAccessibilityLabel("Close Shortcut Settings")
         closeButton.setAccessibilityHelp("Close this panel and return to the previous control")
         closeButton.toolTip = "Close Shortcut Settings"
@@ -115,56 +143,79 @@ final class HelpView: NSView {
         headerStack.addArrangedSubview(headerSpacer)
         headerStack.addArrangedSubview(closeButton)
         addSubview(headerStack)
+        focusOrder.append(closeButton)
 
         let infoBanner = makeInfoBanner()
         infoBanner.translatesAutoresizingMaskIntoConstraints = false
         addSubview(infoBanner)
 
-        let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.backgroundColor = .clear
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.setAccessibilityIdentifier("shortcut-scroll")
+        scrollView.identifier = NSUserInterfaceItemIdentifier("shortcut-scroll")
 
         let contentView = NSStackView()
         contentView.orientation = .vertical
         contentView.alignment = .leading
-        contentView.spacing = 16
+        contentView.spacing = 0
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 16, right: 16)
+        contentView.edgeInsets = NSEdgeInsets(
+            top: 12,
+            left: Self.contentHorizontalInset,
+            bottom: 16,
+            right: Self.contentHorizontalInset
+        )
 
-        contentView.addArrangedSubview(makeSection(title: "PLAYBACK", shortcuts: [
+        configureShortcutGrid()
+        addSection(title: "PLAYBACK", identifier: "playback", shortcuts: [
             .configurable(.playPause),
             .configurable(.frameStepForward),
             .configurable(.frameStepBackward)
-        ]))
-        contentView.addArrangedSubview(makeSection(title: "PAN", shortcuts: [
+        ])
+        addSection(title: "PAN", identifier: "pan", shortcuts: [
             .configurable(.panLeft),
             .configurable(.panRight),
             .configurable(.panUp),
             .configurable(.panDown)
-        ]))
-        contentView.addArrangedSubview(makeSection(title: "ZOOM & VIEW", shortcuts: [
-            .static("⇧ Scroll", "Zoom 5%"),
-            .static("⌘⇧ Scroll", "Fine zoom 0.1%"),
+        ])
+        addSection(title: "ZOOM & VIEW", identifier: "zoom-view", shortcuts: [
+            .static(identifier: "zoom-scroll", keys: "⇧ Scroll", description: "Zoom 5%"),
+            .static(
+                identifier: "fine-zoom-scroll",
+                keys: "⌘⇧ Scroll",
+                description: "Fine zoom 0.1%"
+            ),
             .configurable(.resetZoom),
             .configurable(.resetView)
-        ]))
-        contentView.addArrangedSubview(makeSection(title: "WINDOW & PANELS", shortcuts: [
+        ])
+        addSection(title: "WINDOW & PANELS", identifier: "window-panels", shortcuts: [
             .configurable(.toggleLock),
             .configurable(.globalToggleLock),
             .configurable(.showHelp),
             .configurable(.closeModal),
             .configurable(.toggleFilterPanel)
-        ]))
-        contentView.addArrangedSubview(makeSection(title: "POINTER", shortcuts: [
-            .static("Drag video", "Pan video"),
-            .static("Drag grip", "Move window"),
-            .static("Drag edges", "Resize window")
-        ]))
+        ])
+        addSection(title: "POINTER", identifier: "pointer", shortcuts: [
+            .static(identifier: "drag-video", keys: "Drag video", description: "Pan video"),
+            .static(identifier: "drag-grip", keys: "Drag grip", description: "Move window"),
+            .static(
+                identifier: "drag-edges",
+                keys: "Drag edges",
+                description: "Resize window"
+            )
+        ])
+        configureShortcutGridColumns()
 
+        contentView.addArrangedSubview(shortcutGrid)
+        shortcutGrid.widthAnchor.constraint(
+            equalTo: contentView.widthAnchor,
+            constant: -(Self.contentHorizontalInset * 2)
+        ).isActive = true
         scrollView.documentView = contentView
         addSubview(scrollView)
 
@@ -203,7 +254,14 @@ final class HelpView: NSView {
         footerStack.addArrangedSubview(globalShortcutsButton)
         footerStack.addArrangedSubview(NSView())
         footerStack.addArrangedSubview(retryRegistrationButton)
+        footerStack.setAccessibilityIdentifier("shortcut-footer")
+        footerStack.identifier = NSUserInterfaceItemIdentifier("shortcut-footer")
         addSubview(footerStack)
+        focusOrder.append(contentsOf: [
+            resetButton,
+            globalShortcutsButton,
+            retryRegistrationButton
+        ])
 
         let topDivider = NSBox()
         topDivider.boxType = .separator
@@ -249,6 +307,7 @@ final class HelpView: NSView {
             contentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor)
         ])
 
+        configureFocusLoop()
         updateStatus()
         updateControls()
         updateGlobalControls()
@@ -282,64 +341,170 @@ final class HelpView: NSView {
     }
 
     private enum ShortcutType {
-        case `static`(String, String)
+        case `static`(identifier: String, keys: String, description: String)
         case configurable(ShortcutSettings.Action)
     }
 
-    private func makeSection(title: String, shortcuts: [ShortcutType]) -> NSView {
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 7
-
-        let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
-        titleLabel.textColor = .secondaryLabelColor
-        stack.addArrangedSubview(titleLabel)
-
-        shortcuts.forEach { stack.addArrangedSubview(makeShortcutRow($0)) }
-        return stack
+    private func configureShortcutGrid() {
+        shortcutGrid.translatesAutoresizingMaskIntoConstraints = false
+        shortcutGrid.rowSpacing = 7
+        shortcutGrid.columnSpacing = Self.gridColumnSpacing
+        shortcutGrid.setAccessibilityIdentifier("shortcut-grid")
+        shortcutGrid.identifier = NSUserInterfaceItemIdentifier("shortcut-grid")
     }
 
-    private func makeShortcutRow(_ shortcutType: ShortcutType) -> NSView {
-        switch shortcutType {
-        case .static(let keys, let description):
-            return makeStaticRow(keys: keys, description: description)
-        case .configurable(let action):
-            return makeConfigurableRow(action: action)
+    private func configureShortcutGridColumns() {
+        guard shortcutGrid.numberOfColumns == GridColumn.allCases.count else {
+            return
         }
+        shortcutGrid.column(at: GridColumn.enabled.rawValue).width =
+            Self.enabledColumnWidth
+        shortcutGrid.column(at: GridColumn.enabled.rawValue).xPlacement = .center
+        shortcutGrid.column(at: GridColumn.shortcut.rawValue).width =
+            Self.shortcutColumnWidth
+        shortcutGrid.column(at: GridColumn.shortcut.rawValue).xPlacement = .fill
+        shortcutGrid.column(at: GridColumn.action.rawValue).width =
+            Self.minimumActionColumnWidth
+        shortcutGrid.column(at: GridColumn.action.rawValue).xPlacement = .fill
+        shortcutGrid.column(at: GridColumn.multiplier.rawValue).width =
+            Self.multiplierColumnWidth
+        shortcutGrid.column(at: GridColumn.multiplier.rawValue).xPlacement = .fill
+        shortcutGrid.column(at: GridColumn.clear.rawValue).width =
+            Self.clearColumnWidth
+        shortcutGrid.column(at: GridColumn.clear.rawValue).xPlacement = .leading
     }
 
-    private func makeStaticRow(keys: String, description: String) -> NSView {
-        let stack = NSStackView()
-        stack.orientation = .horizontal
-        stack.spacing = 8
+    private func addSection(
+        title: String,
+        identifier: String,
+        shortcuts: [ShortcutType]
+    ) {
+        let heading = NSTextField(labelWithString: title)
+        heading.font = .systemFont(ofSize: 11, weight: .semibold)
+        heading.textColor = .secondaryLabelColor
+        heading.setAccessibilityIdentifier("shortcut-section-\(identifier)")
+        heading.identifier = NSUserInterfaceItemIdentifier(
+            "shortcut-section-\(identifier)"
+        )
+
+        let headingRowIndex = shortcutGrid.numberOfRows
+        shortcutGrid.addRow(with: [
+            heading,
+            makePlaceholder(),
+            makePlaceholder(),
+            makePlaceholder(),
+            makePlaceholder()
+        ])
+        shortcutGrid.mergeCells(
+            inHorizontalRange: NSRange(
+                location: 0,
+                length: GridColumn.allCases.count
+            ),
+            verticalRange: NSRange(location: headingRowIndex, length: 1)
+        )
+        let headingRow = shortcutGrid.row(at: headingRowIndex)
+        headingRow.height = 18
+        headingRow.topPadding = headingRowIndex == 0 ? 0 : 12
+        headingRow.bottomPadding = 4
+
+        shortcuts.forEach(addShortcutRow)
+    }
+
+    private func addShortcutRow(_ shortcutType: ShortcutType) {
+        let cells: [NSView]
+        switch shortcutType {
+        case .static(let identifier, let keys, let description):
+            cells = makeStaticCells(
+                identifier: identifier,
+                keys: keys,
+                description: description
+            )
+        case .configurable(let action):
+            cells = makeConfigurableCells(action: action)
+        }
+        let row = shortcutGrid.addRow(with: cells)
+        row.height = 28
+        row.cell(at: GridColumn.shortcut.rawValue).xPlacement = .fill
+        row.cell(at: GridColumn.action.rawValue).xPlacement = .fill
+        row.cell(at: GridColumn.multiplier.rawValue).xPlacement = .fill
+        row.cell(at: GridColumn.clear.rawValue).xPlacement = .fill
+    }
+
+    private func makePlaceholder() -> NSView {
+        let view = NSView()
+        view.setAccessibilityElement(false)
+        return view
+    }
+
+    private func makeStaticCells(
+        identifier: String,
+        keys: String,
+        description: String
+    ) -> [NSView] {
+        let emptyEnabled = makePlaceholder()
 
         let keysLabel = NSTextField(labelWithString: keys)
         keysLabel.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         keysLabel.alignment = .center
+        keysLabel.lineBreakMode = .byTruncatingTail
         keysLabel.wantsLayer = true
         keysLabel.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.08).cgColor
         keysLabel.layer?.cornerRadius = 4
+        keysLabel.toolTip = keys
+        keysLabel.setAccessibilityIdentifier("shortcut-key-static-\(identifier)")
+        keysLabel.identifier = NSUserInterfaceItemIdentifier(
+            "shortcut-key-static-\(identifier)"
+        )
         keysLabel.translatesAutoresizingMaskIntoConstraints = false
-        keysLabel.widthAnchor.constraint(equalToConstant: 105).isActive = true
+
+        // Inline NSButtons use a two-point horizontal alignment inset. Match
+        // it for fixed pointer gestures so every key field shares one visible
+        // leading and trailing edge.
+        let keysCell = NSView()
+        keysCell.setAccessibilityElement(false)
+        keysCell.addSubview(keysLabel)
+        NSLayoutConstraint.activate([
+            keysLabel.leadingAnchor.constraint(
+                equalTo: keysCell.leadingAnchor,
+                constant: 2
+            ),
+            keysLabel.trailingAnchor.constraint(
+                equalTo: keysCell.trailingAnchor,
+                constant: -2
+            ),
+            keysLabel.centerYAnchor.constraint(equalTo: keysCell.centerYAnchor),
+            keysLabel.heightAnchor.constraint(equalToConstant: 22)
+        ])
 
         let descriptionLabel = NSTextField(labelWithString: description)
         descriptionLabel.font = .systemFont(ofSize: 12)
         descriptionLabel.textColor = .secondaryLabelColor
+        descriptionLabel.lineBreakMode = .byTruncatingTail
+        descriptionLabel.toolTip = description
+        descriptionLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        descriptionLabel.setContentCompressionResistancePriority(
+            .defaultLow,
+            for: .horizontal
+        )
+        descriptionLabel.setAccessibilityIdentifier(
+            "shortcut-action-static-\(identifier)"
+        )
+        descriptionLabel.identifier = NSUserInterfaceItemIdentifier(
+            "shortcut-action-static-\(identifier)"
+        )
 
-        stack.addArrangedSubview(NSView(frame: NSRect(x: 0, y: 0, width: 18, height: 1)))
-        stack.addArrangedSubview(keysLabel)
-        stack.addArrangedSubview(descriptionLabel)
-        return stack
+        return [
+            emptyEnabled,
+            keysCell,
+            descriptionLabel,
+            makePlaceholder(),
+            makePlaceholder()
+        ]
     }
 
-    private func makeConfigurableRow(action: ShortcutSettings.Action) -> NSView {
-        let stack = NSStackView()
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = 7
-
+    private func makeConfigurableCells(
+        action: ShortcutSettings.Action
+    ) -> [NSView] {
         let enableButton = NSButton(
             checkboxWithTitle: "",
             target: self,
@@ -347,6 +512,10 @@ final class HelpView: NSView {
         )
         enableButton.toolTip = "Enable \(action.displayName)"
         enableButton.setAccessibilityLabel("Enable \(action.displayName)")
+        enableButton.setAccessibilityIdentifier("shortcut-enable-\(action.rawValue)")
+        enableButton.identifier = NSUserInterfaceItemIdentifier(
+            "shortcut-enable-\(action.rawValue)"
+        )
         enableButtons[action] = enableButton
 
         let shortcutButton = NSButton(
@@ -362,31 +531,33 @@ final class HelpView: NSView {
         shortcutButton.contentTintColor = .labelColor
         shortcutButton.toolTip = "Record a new shortcut for \(action.displayName)"
         shortcutButton.setAccessibilityLabel("\(action.displayName) shortcut")
-        shortcutButton.translatesAutoresizingMaskIntoConstraints = false
-        shortcutButton.widthAnchor.constraint(equalToConstant: 105).isActive = true
+        shortcutButton.setAccessibilityIdentifier("shortcut-key-\(action.rawValue)")
+        shortcutButton.identifier = NSUserInterfaceItemIdentifier(
+            "shortcut-key-\(action.rawValue)"
+        )
         shortcutButtons[action] = shortcutButton
 
-        var description = action.displayName
-        if action.isGlobal {
-            description += " (global)"
-        }
+        let description = action.displayName + (action.isGlobal ? " · Global" : "")
         let descriptionLabel = NSTextField(labelWithString: description)
         descriptionLabel.font = .systemFont(ofSize: 12)
         descriptionLabel.textColor = .secondaryLabelColor
+        descriptionLabel.lineBreakMode = .byTruncatingTail
+        descriptionLabel.toolTip = description
+        descriptionLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         descriptionLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        descriptionLabel.setAccessibilityIdentifier("shortcut-action-\(action.rawValue)")
+        descriptionLabel.identifier = NSUserInterfaceItemIdentifier(
+            "shortcut-action-\(action.rawValue)"
+        )
 
-        stack.addArrangedSubview(enableButton)
-        stack.addArrangedSubview(shortcutButton)
-        stack.addArrangedSubview(descriptionLabel)
-
+        let multiplierCell: NSView
+        var rowFocusOrder: [NSView] = [enableButton, shortcutButton]
         if action.hasMultiplierVariant {
             let popup = makeMultiplierDropdown(action: action)
-            stack.addArrangedSubview(popup)
+            multiplierCell = popup
+            rowFocusOrder.append(popup)
         } else {
-            let spacer = NSView(frame: NSRect(x: 0, y: 0, width: 112, height: 1))
-            spacer.translatesAutoresizingMaskIntoConstraints = false
-            spacer.widthAnchor.constraint(equalToConstant: 112).isActive = true
-            stack.addArrangedSubview(spacer)
+            multiplierCell = makePlaceholder()
         }
 
         let clearButton = NSButton(
@@ -398,10 +569,21 @@ final class HelpView: NSView {
         clearButton.controlSize = .small
         clearButton.toolTip = "Clear \(action.displayName)"
         clearButton.setAccessibilityLabel("Clear \(action.displayName) shortcut")
+        clearButton.setAccessibilityIdentifier("shortcut-clear-\(action.rawValue)")
+        clearButton.identifier = NSUserInterfaceItemIdentifier(
+            "shortcut-clear-\(action.rawValue)"
+        )
         clearButtons[action] = clearButton
-        stack.addArrangedSubview(clearButton)
+        rowFocusOrder.append(clearButton)
+        focusOrder.append(contentsOf: rowFocusOrder)
 
-        return stack
+        return [
+            enableButton,
+            shortcutButton,
+            descriptionLabel,
+            multiplierCell,
+            clearButton
+        ]
     }
 
     private func makeMultiplierDropdown(action: ShortcutSettings.Action) -> NSPopUpButton {
@@ -420,10 +602,20 @@ final class HelpView: NSView {
         popup.action = #selector(multiplierChanged(_:))
         popup.toolTip = "Choose the 10× multiplier modifier"
         popup.setAccessibilityLabel("\(action.displayName) multiplier")
-        popup.translatesAutoresizingMaskIntoConstraints = false
-        popup.widthAnchor.constraint(equalToConstant: 112).isActive = true
+        popup.setAccessibilityIdentifier("shortcut-multiplier-\(action.rawValue)")
+        popup.identifier = NSUserInterfaceItemIdentifier(
+            "shortcut-multiplier-\(action.rawValue)"
+        )
         multiplierButtons[action] = popup
         return popup
+    }
+
+    private func configureFocusLoop() {
+        guard focusOrder.count > 1 else { return }
+        for (current, next) in zip(focusOrder, focusOrder.dropFirst()) {
+            current.nextKeyView = next
+        }
+        focusOrder.last?.nextKeyView = focusOrder.first
     }
 
     private func updateControls() {
@@ -602,8 +794,31 @@ final class HelpView: NSView {
         }
     }
 
-    override var intrinsicContentSize: NSSize {
-        NSSize(width: 520, height: 640)
+    override func layout() {
+        let fixedColumnWidth =
+            Self.enabledColumnWidth
+            + Self.shortcutColumnWidth
+            + Self.multiplierColumnWidth
+            + Self.clearColumnWidth
+        let spacingWidth =
+            Self.gridColumnSpacing * CGFloat(GridColumn.allCases.count - 1)
+        let gridWidth = max(
+            0,
+            scrollView.contentView.bounds.width
+                - (Self.contentHorizontalInset * 2)
+        )
+        let actionWidth = max(
+            Self.minimumActionColumnWidth,
+            gridWidth - fixedColumnWidth - spacingWidth
+        )
+        if shortcutGrid.numberOfColumns == GridColumn.allCases.count,
+           abs(
+               shortcutGrid.column(at: GridColumn.action.rawValue).width
+                   - actionWidth
+           ) > 0.5 {
+            shortcutGrid.column(at: GridColumn.action.rawValue).width = actionWidth
+        }
+        super.layout()
     }
 
     override func viewDidMoveToWindow() {

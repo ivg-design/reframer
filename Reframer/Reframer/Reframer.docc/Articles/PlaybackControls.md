@@ -38,5 +38,24 @@ nearest boundary in the active exact or labeled estimated timeline. The frame
 field accepts a frame number directly.
 
 The global step chords work while another app is active only when Reframer has
-a loaded, locked video with exact or estimated sample navigation. They are not
+a loaded, locked local video with exact or estimated sample navigation. They are not
 registered or swallowed in any other state.
+
+## YouTube
+
+YouTube shares play/pause, time scrub, mute, volume, and window controls.
+Its IFrame API is time-based, so exact frame entry/stepping is unavailable.
+Quality is adaptive and cannot be forced by the supported API. Reframer keeps
+standard player controls, links, branding, ads, settings, and WebKit element
+fullscreen visible and does not autoplay. The web view fills the complete
+video canvas and remains at least 200×200 points; YouTube owns its internal
+aspect fit and letterboxing.
+Click-through Lock is unavailable. Reframer unlocks before YouTube preflight
+so required controls, captions, settings, fullscreen, and links stay
+interactive. Use Always on Top When Unlocked instead.
+
+While the timeline is dragged, YouTube preview seeks do not allow seek-ahead.
+Release and discrete seeks do. YouTube's ready snapshot does not overwrite
+saved native-media volume or mute preferences. Muting uses the official player
+mute state without setting retained volume to zero, so the embedded player's
+own Unmute restores the prior audible level.

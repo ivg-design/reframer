@@ -10,6 +10,14 @@ SCHEME="Reframer"
 : "${DEVELOPER_ID_APPLICATION:?Set DEVELOPER_ID_APPLICATION to the Developer ID Application certificate name}"
 : "${DEVELOPMENT_TEAM:?Set DEVELOPMENT_TEAM to the Apple Developer team identifier}"
 : "${NOTARY_PROFILE:?Set NOTARY_PROFILE to a notarytool keychain profile}"
+: "${REFRAMER_YOUTUBE_DATA_API_KEY:?Set REFRAMER_YOUTUBE_DATA_API_KEY to the release YouTube Data API key}"
+
+if [[ "$REFRAMER_YOUTUBE_DATA_API_KEY" == *'$('* ]] ||
+   [[ "$REFRAMER_YOUTUBE_DATA_API_KEY" == *'${'* ]] ||
+   ! [[ "$REFRAMER_YOUTUBE_DATA_API_KEY" =~ ^[A-Za-z0-9_-]{20,128}$ ]]; then
+    echo "error: REFRAMER_YOUTUBE_DATA_API_KEY is empty, unexpanded, or malformed" >&2
+    exit 65
+fi
 
 if [ -n "$(git -C "$REPO_PATH" status --porcelain --untracked-files=normal)" ]; then
     echo "error: release packaging requires a clean Git worktree" >&2
@@ -33,8 +41,10 @@ if [ "${GITHUB_ACTIONS:-false}" != "true" ]; then
     fi
 fi
 
+"$SCRIPT_DIR/validate_repository.sh"
+
 VERSION="$(
-    xcodebuild \
+    /usr/bin/env -u REFRAMER_YOUTUBE_DATA_API_KEY xcodebuild \
         -project "$PROJECT_PATH" \
         -scheme "$SCHEME" \
         -configuration Release \
@@ -54,6 +64,7 @@ fi
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/reframer-release.XXXXXX")"
 DERIVED_DATA_PATH="$WORK_DIR/DerivedData"
+YOUTUBE_XCCONFIG="$WORK_DIR/YouTubeRelease.xcconfig"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 cleanup() {
     if [ -n "${WORK_DIR:-}" ] && [ -d "$WORK_DIR" ]; then
@@ -70,6 +81,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
+umask 077
+printf 'YOUTUBE_DATA_API_KEY = %s\n' \
+    "$REFRAMER_YOUTUBE_DATA_API_KEY" >"$YOUTUBE_XCCONFIG"
+
+redact_release_secret() {
+    /usr/bin/python3 -c '
+import os
+import sys
+
+secret = os.environ["REFRAMER_YOUTUBE_DATA_API_KEY"]
+for line in sys.stdin:
+    sys.stdout.write(line.replace(secret, "[REDACTED YOUTUBE API KEY]"))
+'
+}
+
 ARCHIVE_PATH="$WORK_DIR/Reframer.xcarchive"
 APP_PATH="$ARCHIVE_PATH/Products/Applications/Reframer.app"
 SUBMISSION_ZIP="$WORK_DIR/Reframer-notarization.zip"
@@ -79,10 +105,11 @@ FINAL_ZIP="$DIST_DIR/Reframer-$VERSION-macOS.zip"
 NOTARY_RECORD="$DIST_DIR/Reframer-$VERSION-notarization.json"
 CHECKSUM_FILE="$DIST_DIR/SHA256SUMS.txt"
 
-xcodebuild archive \
+/usr/bin/env -u REFRAMER_YOUTUBE_DATA_API_KEY xcodebuild archive \
     -project "$PROJECT_PATH" \
     -scheme "$SCHEME" \
     -configuration Release \
+    -xcconfig "$YOUTUBE_XCCONFIG" \
     -destination 'generic/platform=macOS' \
     -archivePath "$ARCHIVE_PATH" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
@@ -91,15 +118,24 @@ xcodebuild archive \
     CODE_SIGN_STYLE=Manual \
     CODE_SIGN_IDENTITY="$DEVELOPER_ID_APPLICATION" \
     DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
-    OTHER_CODE_SIGN_FLAGS='--timestamp'
+    OTHER_CODE_SIGN_FLAGS='--timestamp' 2>&1 |
+    redact_release_secret
 
-REQUIRE_CLEAN_BUILD_STAMP=1 "$SCRIPT_DIR/validate_bundle.sh" "$APP_PATH"
+REQUIRE_CLEAN_BUILD_STAMP=1 \
+REQUIRE_YOUTUBE_API_KEY=1 \
+    "$SCRIPT_DIR/validate_bundle.sh" "$APP_PATH"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
 SIGNATURE_INFO="$(/usr/bin/codesign --display --verbose=4 "$APP_PATH" 2>&1)"
 echo "$SIGNATURE_INFO"
 if ! /usr/bin/grep -q 'flags=.*runtime' <<<"$SIGNATURE_INFO"; then
     echo "error: release signature does not enable Hardened Runtime" >&2
+    exit 65
+fi
+if ! /usr/bin/grep -Fq "Authority=$DEVELOPER_ID_APPLICATION" <<<"$SIGNATURE_INFO" ||
+   ! /usr/bin/grep -Fq "TeamIdentifier=$DEVELOPMENT_TEAM" <<<"$SIGNATURE_INFO" ||
+   ! /usr/bin/grep -Eq '^Timestamp=.+' <<<"$SIGNATURE_INFO"; then
+    echo "error: release app is missing the expected Developer ID authority, team, or secure timestamp" >&2
     exit 65
 fi
 
@@ -123,6 +159,7 @@ with open(path, "rb") as entitlement_file:
 expected = {
     "com.apple.security.app-sandbox": True,
     "com.apple.security.files.user-selected.read-only": True,
+    "com.apple.security.network.client": True,
 }
 if actual != expected:
     raise SystemExit(
@@ -135,6 +172,39 @@ if [[ " $ARCHITECTURES " != *" arm64 "* ]] || [[ " $ARCHITECTURES " != *" x86_64
     echo "error: release executable is not universal: $ARCHITECTURES" >&2
     exit 65
 fi
+
+HELPER_PATH="$APP_PATH/Contents/Helpers/reframer-ffmpeg"
+HELPER_ENTITLEMENT_PATH="$WORK_DIR/Reframer-helper-entitlements.plist"
+/usr/bin/codesign --verify --strict --verbose=2 "$HELPER_PATH"
+HELPER_SIGNATURE_INFO="$(
+    /usr/bin/codesign --display --verbose=4 "$HELPER_PATH" 2>&1
+)"
+if ! /usr/bin/grep -q 'flags=.*runtime' <<<"$HELPER_SIGNATURE_INFO" ||
+   ! /usr/bin/grep -Fq "Authority=$DEVELOPER_ID_APPLICATION" \
+        <<<"$HELPER_SIGNATURE_INFO" ||
+   ! /usr/bin/grep -Fq "TeamIdentifier=$DEVELOPMENT_TEAM" \
+        <<<"$HELPER_SIGNATURE_INFO" ||
+   ! /usr/bin/grep -Eq '^Timestamp=.+' <<<"$HELPER_SIGNATURE_INFO"; then
+    echo "error: WebM helper is missing Hardened Runtime, the expected Developer ID authority/team, or a secure timestamp" >&2
+    exit 65
+fi
+/usr/bin/codesign --display --entitlements :- "$HELPER_PATH" \
+    >"$HELPER_ENTITLEMENT_PATH" 2>/dev/null
+/usr/bin/python3 - "$HELPER_ENTITLEMENT_PATH" <<'PY'
+import plistlib
+import sys
+
+with open(sys.argv[1], "rb") as entitlement_file:
+    actual = plistlib.load(entitlement_file)
+expected = {
+    "com.apple.security.app-sandbox": True,
+    "com.apple.security.inherit": True,
+}
+if actual != expected:
+    raise SystemExit(
+        f"error: release helper entitlements do not equal the allowlist: {actual}"
+    )
+PY
 
 /usr/bin/ditto -c -k --keepParent "$APP_PATH" "$SUBMISSION_ZIP"
 
@@ -167,7 +237,9 @@ fi
 
 xcrun stapler staple "$APP_PATH"
 xcrun stapler validate "$APP_PATH"
-REQUIRE_CLEAN_BUILD_STAMP=1 "$SCRIPT_DIR/validate_bundle.sh" "$APP_PATH"
+REQUIRE_CLEAN_BUILD_STAMP=1 \
+REQUIRE_YOUTUBE_API_KEY=1 \
+    "$SCRIPT_DIR/validate_bundle.sh" "$APP_PATH"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 /usr/sbin/spctl --assess --type execute --verbose=2 "$APP_PATH"
 
@@ -180,7 +252,9 @@ ROUND_TRIP_DIR="$WORK_DIR/package-round-trip"
 ROUND_TRIP_APP="$ROUND_TRIP_DIR/Reframer.app"
 mkdir -p "$ROUND_TRIP_DIR"
 /usr/bin/ditto -x -k "$FINAL_ZIP" "$ROUND_TRIP_DIR"
-REQUIRE_CLEAN_BUILD_STAMP=1 "$SCRIPT_DIR/validate_bundle.sh" "$ROUND_TRIP_APP"
+REQUIRE_CLEAN_BUILD_STAMP=1 \
+REQUIRE_YOUTUBE_API_KEY=1 \
+    "$SCRIPT_DIR/validate_bundle.sh" "$ROUND_TRIP_APP"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$ROUND_TRIP_APP"
 xcrun stapler validate "$ROUND_TRIP_APP"
 /usr/sbin/spctl --assess --type execute --verbose=2 "$ROUND_TRIP_APP"

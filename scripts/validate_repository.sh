@@ -24,11 +24,16 @@ for script in scripts/*.sh; do
 done
 
 python3 scripts/validate_product_contract.py
+REQUIRE_RECORDED_SHA=1 \
+    scripts/validate_media_helper.sh \
+    Reframer/Reframer/Helpers/reframer-ffmpeg \
+    Reframer/Reframer/Resources/ThirdPartyLicenses/SOURCE.md
 
 plutil -lint \
     Reframer/Reframer.xcodeproj/project.pbxproj \
     Reframer/Reframer/Resources/Info.plist \
     Reframer/Reframer/Resources/Reframer.entitlements \
+    Reframer/Reframer/Resources/ReframerHelper.entitlements \
     Reframer/Reframer/Reframer.help/Contents/Info.plist
 
 python3 -m json.tool Reframer/Reframer.xctestplan >/dev/null
@@ -77,9 +82,43 @@ fi
 
 if /usr/bin/grep -ERnI \
     --exclude=validate_repository.sh \
+    --exclude=build_media_helper.sh \
+    --exclude=validate_bundle.sh \
     'sqlite3[^[:cntrl:]]*TCC|INSERT OR REPLACE INTO access|killall[[:space:]]+tccd|codesign[^[:cntrl:]]*--force[^[:cntrl:]]*--sign[[:space:]]+-' \
     scripts .github Reframer; then
     echo "error: unsafe privacy or signing mutation found" >&2
+    exit 65
+fi
+
+if [ "$(
+        grep -Fc \
+            '/usr/bin/codesign --force --sign - --timestamp=none --options runtime \' \
+            scripts/validate_bundle.sh
+    )" -ne 1 ] ||
+   ! grep -Fq \
+        'for normalized_helper in \' \
+        scripts/validate_bundle.sh ||
+   ! grep -Fq -- \
+        '--identifier com.reframer.app.ffmpeg \' \
+        scripts/validate_bundle.sh; then
+    echo "error: bundle validation must normalize only scoped temporary helper copies" >&2
+    exit 65
+fi
+
+if ! grep -Fq \
+    'codesign --force --sign - --timestamp=none --options runtime' \
+    scripts/build_media_helper.sh ||
+   ! grep -Fq -- \
+    '--identifier com.reframer.app.ffmpeg "$helper"' \
+    scripts/build_media_helper.sh; then
+    echo "error: media-helper build must apply only its reviewed ad hoc Hardened Runtime signature" >&2
+    exit 65
+fi
+
+if ! grep -Fq -- \
+    '--identifier com.reframer.app.ffmpeg --options runtime' \
+    Reframer/Reframer.xcodeproj/project.pbxproj; then
+    echo "error: app builds must sign the media helper with its stable identifier" >&2
     exit 65
 fi
 
@@ -214,6 +253,15 @@ for required_bundle_gate in \
     "_CodeSignature must contain only CodeResources" \
     "Contents/CodeResources is not a valid stapled ticket" \
     "Contents/MacOS must contain only the Reframer executable" \
+    "Contents/Helpers must contain only executable reframer-ffmpeg" \
+    "for helper_signing_architecture in arm64 x86_64" \
+    "expected com.reframer.app.ffmpeg" \
+    "embedded helper entitlements do not equal the privacy allowlist" \
+    "ThirdPartyLicenses files do not equal the allowlist" \
+    "WebM helper is missing" \
+    "WebM helper code does not match the recorded canonical helper after deterministic ad hoc re-signing" \
+    "source helper entitlements do not equal the privacy allowlist" \
+    "release bundle is missing a valid YouTube Data API key" \
     "project does not declare one numeric build version" \
     "release bundle source stamp is dirty" \
     "runtime resources do not equal the allowlist" \
@@ -232,6 +280,17 @@ if [ "$PACKAGE_BUNDLE_VALIDATION_COUNT" -lt 3 ] ||
    [ "$(grep -Fc 'REQUIRE_CLEAN_BUILD_STAMP=1' "$PACKAGE_SCRIPT")" -lt 3 ] ||
    ! grep -Fq -- '-derivedDataPath "$DERIVED_DATA_PATH"' "$PACKAGE_SCRIPT" ||
    ! grep -Fq -- '-exec "$LSREGISTER" -u' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'REFRAMER_YOUTUBE_DATA_API_KEY' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq '"$SCRIPT_DIR/validate_repository.sh"' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'YOUTUBE_DATA_API_KEY = %s' \
+        "$PACKAGE_SCRIPT" ||
+   ! grep -Fq -- '-xcconfig "$YOUTUBE_XCCONFIG"' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'redact_release_secret' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'REQUIRE_YOUTUBE_API_KEY=1' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'Authority=$DEVELOPER_ID_APPLICATION' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'TeamIdentifier=$DEVELOPMENT_TEAM' "$PACKAGE_SCRIPT" ||
+   ! grep -Fq "'^Timestamp=.+'" "$PACKAGE_SCRIPT" ||
+   ! grep -Fq 'HELPER_SIGNATURE_INFO' "$PACKAGE_SCRIPT" ||
    ! grep -Fq 'local release packaging requires the main branch' "$PACKAGE_SCRIPT" ||
    ! grep -Fq 'local release packaging requires HEAD to equal origin/main' \
         "$PACKAGE_SCRIPT" ||
@@ -240,6 +299,13 @@ if [ "$PACKAGE_BUNDLE_VALIDATION_COUNT" -lt 3 ] ||
    ! grep -Fq 'spctl --assess --type execute --verbose=2 "$ROUND_TRIP_APP"' \
         "$PACKAGE_SCRIPT"; then
     echo "error: release packager must validate the app before and after stapling and after ZIP extraction" >&2
+    exit 65
+fi
+
+if ! grep -Fq \
+    'REFRAMER_YOUTUBE_DATA_API_KEY: ${{ secrets.REFRAMER_YOUTUBE_DATA_API_KEY }}' \
+    .github/workflows/release.yml; then
+    echo "error: release workflow does not pass the protected YouTube Data API key" >&2
     exit 65
 fi
 

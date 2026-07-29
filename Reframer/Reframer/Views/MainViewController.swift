@@ -283,6 +283,7 @@ class MainViewController: NSViewController {
     private(set) var controlBar: ControlBar!
     private var controlBarHeightConstraint: NSLayoutConstraint!
     private var videoView: VideoView!
+    private var webMediaView: WebMediaView!
     private var dropZoneView: DropZoneView!
     private var edgeIndicatorView: EdgeIndicatorView!
     private var loadingView: NSStackView!
@@ -396,6 +397,11 @@ class MainViewController: NSViewController {
         videoView.setAccessibilityIdentifier("video-view")
         videoContainerView.addSubview(videoView)
 
+        webMediaView = WebMediaView()
+        webMediaView.translatesAutoresizingMaskIntoConstraints = false
+        webMediaView.setAccessibilityIdentifier("youtube-player-view")
+        videoContainerView.addSubview(webMediaView)
+
         dropZoneView = DropZoneView()
         dropZoneView.translatesAutoresizingMaskIntoConstraints = false
         dropZoneView.setAccessibilityIdentifier("drop-zone")
@@ -430,6 +436,7 @@ class MainViewController: NSViewController {
 
         // Configure views
         videoView.videoState = videoState
+        webMediaView.videoState = videoState
         dropZoneView.videoState = videoState
         edgeIndicatorView.videoState = videoState
         statusOverlayView.videoState = videoState
@@ -440,6 +447,11 @@ class MainViewController: NSViewController {
             videoView.leadingAnchor.constraint(equalTo: videoContainerView.leadingAnchor),
             videoView.trailingAnchor.constraint(equalTo: videoContainerView.trailingAnchor),
             videoView.bottomAnchor.constraint(equalTo: videoContainerView.bottomAnchor),
+
+            webMediaView.topAnchor.constraint(equalTo: videoContainerView.topAnchor),
+            webMediaView.leadingAnchor.constraint(equalTo: videoContainerView.leadingAnchor),
+            webMediaView.trailingAnchor.constraint(equalTo: videoContainerView.trailingAnchor),
+            webMediaView.bottomAnchor.constraint(equalTo: videoContainerView.bottomAnchor),
 
             dropZoneView.topAnchor.constraint(equalTo: videoContainerView.topAnchor),
             dropZoneView.leadingAnchor.constraint(equalTo: videoContainerView.leadingAnchor),
@@ -523,6 +535,14 @@ class MainViewController: NSViewController {
                         errorMessage: errorMessage
                     )
                 )
+            }
+            .store(in: &cancellables)
+
+        videoState.$webMediaSource
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.show(self.presentationState)
             }
             .store(in: &cancellables)
 
@@ -628,9 +648,11 @@ class MainViewController: NSViewController {
 
         dropZoneView.isHidden = state != .empty
         loadingView.isHidden = state != .loading
-        videoView.isHidden = state != .ready
-        edgeIndicatorView.isHidden = state != .ready
-        statusOverlayView.isHidden = state != .ready
+        let isYouTube = videoState.webMediaSource?.isYouTube == true
+        videoView.isHidden = state != .ready || isYouTube
+        webMediaView.isHidden = state != .ready || !isYouTube
+        edgeIndicatorView.isHidden = state != .ready || isYouTube
+        statusOverlayView.isHidden = state != .ready || isYouTube
 
         if case .failed(let message) = state {
             errorView.isHidden = false
@@ -644,7 +666,7 @@ class MainViewController: NSViewController {
         }
 
         if state == .loading {
-            if let name = videoState.videoURL?.lastPathComponent, !name.isEmpty {
+            if let name = videoState.currentSourceDisplayName, !name.isEmpty {
                 loadingLabel.stringValue = "Loading \(name)…"
                 loadingView.setAccessibilityHelp("Loading \(name)")
             } else {
@@ -663,7 +685,11 @@ class MainViewController: NSViewController {
     }
 
     @objc private func cancelLoading(_ sender: Any?) {
-        videoState.videoURL = nil
+        videoState.clearMedia()
+    }
+
+    func shutdownMediaPlayback() {
+        webMediaView.shutdown()
     }
 
     override func viewDidAppear() {

@@ -133,7 +133,21 @@ class VideoState: ObservableObject {
     }
 
     // Video loading
-    @Published var videoURL: URL?
+    @Published private(set) var videoURL: URL? {
+        didSet {
+            if videoURL != nil, webMediaSource != nil {
+                webMediaSource = nil
+            }
+            if let preparedMediaURL, videoURL != preparedMediaURL {
+                self.preparedMediaURL = nil
+                Self.removePreparedMedia(after: 2, url: preparedMediaURL)
+            }
+        }
+    }
+    @Published private(set) var webMediaSource: WebMediaSource?
+    private(set) var mediaSelectionRevision: UInt64 = 0
+    private var preparedMediaURL: URL?
+    private var pendingSourceDisplayName: String?
     @Published var isVideoLoaded: Bool = false
     @Published var isVideoLoading: Bool = false
     @Published var videoErrorMessage: String?
@@ -195,6 +209,7 @@ class VideoState: ObservableObject {
     let frameStepRequests = PassthroughSubject<FrameStepRequest, Never>()
     let scrubRequests = PassthroughSubject<ScrubRequest, Never>()
     let reloadRequests = PassthroughSubject<Void, Never>()
+    let mediaSelectionChanges = PassthroughSubject<UInt64, Never>()
 
     @Published private(set) var lastSeekRequest: SeekRequest?
     @Published private(set) var lastFrameStepRequest: FrameStepRequest?
@@ -229,10 +244,39 @@ class VideoState: ObservableObject {
         opacity * 100
     }
 
+    /// The level an external player should retain underneath mute. Reframer
+    /// represents mute as zero in its own slider, but sending that zero to an
+    /// embedded player would erase the level its native Unmute control needs.
+    var playerVolumeWhenUnmuted: Float {
+        volume > 0 ? volume : lastNonZeroVolume
+    }
+
     var canNavigateFrames: Bool {
         isVideoLoaded
             && totalFrames > 0
             && frameNavigationPrecision.supportsFrameNavigation
+    }
+
+    var supportsVideoFilters: Bool {
+        pendingSourceDisplayName == nil
+            && webMediaSource?.isYouTube != true
+    }
+
+    var supportsVideoTransforms: Bool {
+        pendingSourceDisplayName == nil
+            && webMediaSource?.isYouTube != true
+    }
+
+    var supportsClickThroughLock: Bool {
+        isVideoLoaded
+            && pendingSourceDisplayName == nil
+            && webMediaSource?.isYouTube != true
+    }
+
+    var currentSourceDisplayName: String? {
+        pendingSourceDisplayName
+            ?? webMediaSource?.displayName
+            ?? videoURL?.lastPathComponent
     }
 
     var formattedCurrentTime: String {
@@ -316,6 +360,37 @@ class VideoState: ObservableObject {
         isMuted.toggle()
     }
 
+    /// Reconciles audio changes made through an embedded player's own controls.
+    /// Reframer represents mute as zero displayed volume, while preserving the
+    /// player's underlying nonzero level for a later unmute.
+    func reconcileExternalAudio(
+        volume externalVolume: Double,
+        isMuted externalMute: Bool
+    ) {
+        precondition(Thread.isMainThread)
+        guard externalVolume.isFinite else { return }
+        let level = Self.sanitized(
+            Float(externalVolume),
+            range: 0...1,
+            fallback: volume
+        )
+        if level > 0 {
+            lastNonZeroVolume = level
+            persistFloat(level, key: DefaultsKeys.lastVolume)
+        }
+        let effectiveMute = externalMute || level <= 0
+        let displayedVolume: Float = effectiveMute ? 0 : level
+
+        isAdjustingMute = true
+        if isMuted != effectiveMute {
+            isMuted = effectiveMute
+        }
+        if volume != displayedVolume {
+            volume = displayedVolume
+        }
+        isAdjustingMute = false
+    }
+
     /// Updates playback intent synchronously on AppKit's main thread and
     /// advances the revision used to invalidate deferred seek completions.
     @discardableResult
@@ -377,8 +452,132 @@ class VideoState: ObservableObject {
     }
 
     func reloadVideo() {
-        guard videoURL != nil else { return }
+        guard videoURL != nil || webMediaSource != nil else { return }
         reloadRequests.send()
+    }
+
+    func loadLocalMedia(_ url: URL) {
+        guard VideoFormats.isSupported(url) else { return }
+        advanceMediaSelection()
+        pendingSourceDisplayName = nil
+        isVideoLoaded = false
+        if VideoFormats.requiresWebMPreparation(url) {
+            videoURL = nil
+            webMediaSource = .localWebM(url)
+        } else {
+            webMediaSource = nil
+            videoURL = url
+        }
+    }
+
+    @discardableResult
+    func loadYouTube(
+        _ authorization: YouTubePlaybackAuthorization,
+        ifCurrent revision: UInt64? = nil
+    ) -> Bool {
+        if let revision {
+            guard mediaSelectionRevision == revision else { return false }
+        } else {
+            advanceMediaSelection()
+        }
+        pendingSourceDisplayName = nil
+        isVideoLoaded = false
+        isLocked = false
+        videoURL = nil
+        webMediaSource = .youtube(authorization)
+        showFilterPanel = false
+        return true
+    }
+
+    func clearMedia() {
+        advanceMediaSelection()
+        pendingSourceDisplayName = nil
+        webMediaSource = nil
+        videoURL = nil
+        cancelScrubbing()
+        _ = setPlaybackIntent(false)
+        isVideoLoaded = false
+        isVideoLoading = false
+        isAtEnd = false
+        videoErrorMessage = nil
+        filterErrorMessage = nil
+        currentTime = 0
+        currentFrame = 0
+        duration = 0
+        totalFrames = 0
+        frameNavigationPrecision = .unavailable
+        frameNavigationMessage = nil
+        videoNaturalSize = .zero
+    }
+
+    @discardableResult
+    func beginPendingMediaSelection(
+        displayName: String? = nil
+    ) -> UInt64 {
+        let revision = advanceMediaSelection()
+        pendingSourceDisplayName = displayName
+        webMediaSource = nil
+        videoURL = nil
+        cancelScrubbing()
+        _ = setPlaybackIntent(false)
+        isVideoLoaded = false
+        isVideoLoading = true
+        isAtEnd = false
+        videoErrorMessage = nil
+        filterErrorMessage = nil
+        currentTime = 0
+        currentFrame = 0
+        duration = 0
+        totalFrames = 0
+        frameNavigationPrecision = .unavailable
+        frameNavigationMessage = nil
+        videoNaturalSize = .zero
+        showFilterPanel = false
+        isLocked = false
+        return revision
+    }
+
+    func isCurrentMediaSelection(_ revision: UInt64) -> Bool {
+        mediaSelectionRevision == revision
+    }
+
+    func cancelPendingMediaSelection(_ revision: UInt64) {
+        guard mediaSelectionRevision == revision else { return }
+        clearMedia()
+    }
+
+    @discardableResult
+    private func advanceMediaSelection() -> UInt64 {
+        mediaSelectionRevision &+= 1
+        mediaSelectionChanges.send(mediaSelectionRevision)
+        return mediaSelectionRevision
+    }
+
+    /// Hands a prepared WebM intermediate to the existing AVFoundation
+    /// transport so alpha, exact indexing, filters, and the normal controls
+    /// all share one rendering path.
+    func activatePreparedWebM(_ url: URL) {
+        guard case .localWebM = webMediaSource else { return }
+        preparedMediaURL = url
+        webMediaSource = nil
+        videoURL = url
+    }
+
+    func discardPreparedMedia() {
+        guard let preparedMediaURL else { return }
+        self.preparedMediaURL = nil
+        Self.removePreparedMedia(after: 0, url: preparedMediaURL)
+    }
+
+    private static func removePreparedMedia(
+        after delay: TimeInterval,
+        url: URL
+    ) {
+        DispatchQueue.global(qos: .utility).asyncAfter(
+            deadline: .now() + max(0, delay)
+        ) {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     // MARK: - Quick Filter Methods (dropdown - single select)

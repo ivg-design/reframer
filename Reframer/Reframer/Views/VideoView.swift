@@ -361,21 +361,7 @@ class VideoView: NSView {
                 if let url {
                     self.loadVideo(url: url)
                 } else {
-                    state.cancelScrubbing()
                     self.cleanup()
-                    state.setPlaybackIntent(false)
-                    state.isAtEnd = false
-                    state.isVideoLoaded = false
-                    state.isVideoLoading = false
-                    state.videoErrorMessage = nil
-                    state.filterErrorMessage = nil
-                    state.currentTime = 0
-                    state.currentFrame = 0
-                    state.duration = 0
-                    state.totalFrames = 0
-                    state.frameNavigationPrecision = .unavailable
-                    state.frameNavigationMessage = nil
-                    state.videoNaturalSize = .zero
                 }
             }
             .store(in: &cancellables)

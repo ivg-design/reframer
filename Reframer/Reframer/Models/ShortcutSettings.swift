@@ -70,6 +70,7 @@ enum ShortcutEventResolution: Equatable {
 
 enum ReframerCommand: Equatable {
     case openVideo
+    case openYouTube
     case togglePlayPause
     case step(VideoState.FrameStepDirection, amount: Int)
     case pan(x: Double, y: Double)
@@ -97,6 +98,9 @@ struct ReframerCommandAvailabilityContext {
     let isHelpVisible: Bool
     let isFilterPanelVisible: Bool
     let isDocumentationVisible: Bool
+    var canTransformMedia: Bool = true
+    var canUseVideoFilters: Bool = true
+    var canUseClickThroughLock: Bool = true
 }
 
 enum ReframerCommandAvailability {
@@ -112,14 +116,20 @@ enum ReframerCommandAvailability {
             return context.canNavigateFrames
                 && (origin != .globalShortcut || context.isLocked)
         case .pan, .resetZoom, .resetView:
-            return context.isVideoLoaded && !context.isLocked
-        case .toggleFilterPanel:
             return context.isVideoLoaded
+                && !context.isLocked
+                && context.canTransformMedia
+        case .toggleFilterPanel:
+            return context.isVideoLoaded && context.canUseVideoFilters
         case .closeContext:
             return context.isHelpVisible
                 || context.isFilterPanelVisible
                 || context.isDocumentationVisible
-        case .openVideo, .toggleLock, .toggleAlwaysOnTop,
+        case .toggleLock:
+            return context.isLocked
+                || (context.isVideoLoaded
+                    && context.canUseClickThroughLock)
+        case .openVideo, .openYouTube, .toggleAlwaysOnTop,
              .toggleShortcutSettings, .openDocumentation, .toggleMinimize:
             return true
         }
@@ -233,7 +243,7 @@ final class ShortcutSettings: ObservableObject {
             case .resetZoom: return "Reset zoom to 100%"
             case .resetView: return "Reset zoom and pan"
             case .toggleLock: return "Toggle lock mode"
-            case .globalToggleLock: return "Toggle lock (global)"
+            case .globalToggleLock: return "Toggle lock"
             case .showHelp: return "Shortcut settings"
             case .closeModal: return "Close current panel"
             case .toggleFilterPanel: return "Toggle filter panel"
@@ -418,6 +428,7 @@ final class ShortcutSettings: ObservableObject {
     enum RecordingDisposition: Equatable {
         case notRecording
         case consumed
+        case focusTraversal
         case saved
         case rejected(ValidationError)
     }
@@ -692,6 +703,11 @@ final class ShortcutSettings: ObservableObject {
         if stroke.keyCode == KeyCode.escape {
             cancelRecording()
             return .consumed
+        }
+
+        if stroke.keyCode == KeyCode.tab {
+            cancelRecording()
+            return .focusTraversal
         }
 
         if stroke.keyCode == KeyCode.delete || stroke.keyCode == KeyCode.forwardDelete {

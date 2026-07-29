@@ -275,6 +275,7 @@ jobs:
           DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
           NOTARY_KEYCHAIN: ${{ env.RELEASE_KEYCHAIN }}
           NOTARY_PROFILE: reframer-ci
+          REFRAMER_YOUTUBE_DATA_API_KEY: ${{ secrets.REFRAMER_YOUTUBE_DATA_API_KEY }}
           RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
         run: |
           RELEASE_VERSION="${RELEASE_VERSION#v}"

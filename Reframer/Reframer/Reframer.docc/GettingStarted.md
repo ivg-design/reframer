@@ -11,12 +11,16 @@ Reframer requires macOS 15.0 or later.
 1. Launch Reframer.
 2. Activate the empty-state Open action, drop a file on the window, or press
    Command-O.
-3. Choose an MP4, M4V, or MOV file with a usable video track macOS can decode.
+3. Choose a supported local file with a usable track. For YouTube, choose Open
+   YouTube Video, paste an HTTPS link, review the first-use notice, and load it
+   after the required Made for Kids preflight.
 4. Use Space or the play control to play and pause.
 5. Use Command-Page Down and Command-Page Up to step forward and backward.
 
 An accepted file extension is not enough by itself: Reframer verifies that the
 asset is playable and has a usable, decodable video track.
+VP8/VP9 WebM is prepared as temporary ProRes 4444/PCM; this can need
+substantial free disk space. YouTube never autoplays and uses adaptive quality.
 
 ## Position the reference
 
@@ -33,7 +37,7 @@ At the preferred 1,060-point width, the controls occupy one 48-point row.
 Below 920 points, they reflow into two rows totaling 96 points; every control
 remains visible and accessibility-reachable through the 640-point minimum.
 
-Press L to lock the overlay. The complete window then uses macOS's public
+With local media loaded, press L to lock the overlay. The complete window then uses macOS's public
 status-bar tier above all ordinary application windows, including normal,
 floating, modal, and utility windows; cannot move or resize; and passes pointer
 input through both the video and controls to the app underneath. Critical
@@ -44,6 +48,10 @@ Use the enabled global lock shortcut, Command-Shift-L by default, to restore
 interaction from the app underneath. Reframer refuses to lock unless that
 exact configured chord is registered. If registration later becomes
 unavailable, Reframer automatically unlocks and reports recovery.
+
+YouTube stays unlocked so its required controls, captions, settings,
+fullscreen, and links remain interactive. Use Always on Top When Unlocked for
+that source.
 
 ## Learn more
 

@@ -1,7 +1,7 @@
 # Lock Mode
 
-Keep the complete reference above ordinary app windows while working through
-it.
+Keep a complete local-media reference above ordinary app windows while working
+through it.
 
 Press L or activate the lock control while Reframer is active. Press
 Command-Shift-L to toggle lock from another app when global shortcuts are
@@ -33,6 +33,11 @@ chord is registered. If that registration later disappears or conflicts, is
 suspended while recording a shortcut, or global shortcuts are disabled,
 Reframer automatically unlocks and reports the configured chord plus recovery
 guidance. Unlocking itself is always permitted.
+
+Lock mode applies to native or prepared local media. Reframer automatically
+unlocks before YouTube preflight and keeps Lock disabled through YouTube
+playback because required player controls, captions, settings, fullscreen, and
+links must remain interactive. Use Always on Top When Unlocked for YouTube.
 
 The enabled global lock chord stays registered during normal operation. Frame
 chords are registered only while the video is loaded, navigation is available,
