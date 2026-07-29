@@ -886,7 +886,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case .openVideo:
             openVideoFile()
         case .togglePlayPause:
-            videoState.isPlaying.toggle()
+            videoState.togglePlaybackIntent()
         case .step(let direction, let amount):
             videoState.requestFrameStep(direction: direction, amount: amount)
         case .pan(let x, let y):

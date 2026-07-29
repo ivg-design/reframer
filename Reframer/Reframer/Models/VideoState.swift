@@ -140,7 +140,8 @@ class VideoState: ObservableObject {
     @Published var filterErrorMessage: String?
 
     // Playback
-    @Published var isPlaying: Bool = false
+    @Published private(set) var isPlaying: Bool = false
+    private(set) var playbackIntentRevision: UInt64 = 0
     @Published var isAtEnd: Bool = false
     @Published private(set) var isScrubbing: Bool = false
     @Published var currentTime: Double = 0
@@ -313,6 +314,21 @@ class VideoState: ObservableObject {
 
     func toggleMute() {
         isMuted.toggle()
+    }
+
+    /// Updates playback intent synchronously on AppKit's main thread and
+    /// advances the revision used to invalidate deferred seek completions.
+    @discardableResult
+    func setPlaybackIntent(_ shouldPlay: Bool) -> UInt64 {
+        precondition(Thread.isMainThread)
+        playbackIntentRevision &+= 1
+        isPlaying = shouldPlay
+        return playbackIntentRevision
+    }
+
+    @discardableResult
+    func togglePlaybackIntent() -> UInt64 {
+        setPlaybackIntent(!isPlaying)
     }
 
     func requestSeek(time: Double, accurate: Bool) {

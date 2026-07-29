@@ -17,10 +17,10 @@ while you work in the app underneath.
 - Presents the video and control bar as one canonical overlay window, so
   macOS and window managers such as Mosaic move and resize the complete
   unlocked overlay
-- Opens at the preferred 1,060-point width with one 48-point control row;
-  below 920 points the same controls reflow into two rows totaling 96 points,
-  with every control still visible and accessibility-reachable down to the
-  640-point minimum width
+- Uses the preferred 1,060-point width with one 48-point control row for its
+  initial layout and restores saved geometry thereafter; below 920 points the
+  same controls reflow into two rows totaling 96 points, with every control
+  still visible and accessibility-reachable down to the 640-point minimum width
 - Locks the complete overlay at macOS's public status-bar window tier, above
   all ordinary application windows—including normal, floating, modal, and
   utility windows; makes both the video and control bar pointer-transparent;
@@ -66,7 +66,7 @@ dimensions and frame navigation.
 | Zoom / fine zoom | Shift / Command-Shift + Scroll |
 | Reset zoom / view | 0 / R |
 | Toggle lock locally / globally | L / Command-Shift-L |
-| Filters | F |
+| Advanced filters | F |
 | Shortcut settings | H |
 | Documentation | Command-? |
 
@@ -104,13 +104,19 @@ xcodebuild build \
   -destination 'platform=macOS' \
   CODE_SIGNING_ALLOWED=NO
 
-scripts/runner_test.sh
+TEST_SCOPE=unit scripts/runner_test.sh
 ```
 
 The normal CI suite builds Debug and universal Release, runs static analysis,
 validates the product and bundle contracts, builds DocC, and runs unit tests.
-The UI suite runs separately in an unlocked, logged-in macOS session whose
-operator has explicitly acknowledged Xcode UI automation.
+The test runner retains its text log but unregisters temporary Reframer apps
+and removes its sentinel-owned DerivedData on every exit, so a background run
+does not add old app builds to LaunchServices or Spotlight.
+The UI suite runs separately and only with fresh operator authorization.
+XCUITest launches and foregrounds Reframer, takes keyboard focus, and is not a
+background test merely because it was started from Terminal. Run it only in an
+unlocked, logged-in macOS session whose operator has explicitly approved that
+specific run.
 
 ## Release
 
@@ -127,10 +133,12 @@ the locally fetched `origin/main`.
 
 The audit records the historical build-1 and build-2 review runs, the packaging
 gap build 1 exposed, and the live product defects found after build 2 passed
-Apple's distribution checks. Build 3 must repeat the complete pipeline; only
-its emitted test, live-interaction, Apple, and checksum evidence proves that
-particular artifact. A local review run does not create a version tag, GitHub
-release, or published distribution.
+Apple's distribution checks. The build-3 source candidate has completed its
+background unit and repository validation; foreground/manual interaction and
+Apple distribution gates remain separately recorded until they are performed.
+Only evidence emitted for a particular artifact proves that artifact. A local
+review run does not create a version tag, GitHub release, or published
+distribution.
 
 See [Release Process](docs/RELEASE.md) for the local process and the GitHub
 runner, environment, variable, secret, and source-protection prerequisites.

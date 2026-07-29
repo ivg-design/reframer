@@ -45,6 +45,16 @@ if ! grep -Fq '"key" : "REFRAMER_UI_RUNNER_AUTHORIZED"' \
     exit 65
 fi
 
+if ! grep -Fq \
+        'RUNNER_SENTINEL="$DERIVED_DATA_PATH/.reframer-test-runner-owned"' \
+        scripts/runner_test.sh ||
+   ! grep -Fq '"$LSREGISTER" -u "$test_app"' scripts/runner_test.sh ||
+   ! grep -Fq 'trap cleanup_runner_builds EXIT' scripts/runner_test.sh ||
+   ! grep -Fq 'rm -rf "$DERIVED_DATA_PATH"' scripts/runner_test.sh; then
+    echo "error: test runner must unregister apps and remove owned DerivedData" >&2
+    exit 65
+fi
+
 xmllint --noout \
     Reframer/Reframer.xcodeproj/xcshareddata/xcschemes/Reframer.xcscheme
 
@@ -272,7 +282,6 @@ if ! /usr/bin/compression_tool \
 fi
 
 python3 - "$TRACKED_HELP_PLIST" "$FRESH_HELP_PLIST" <<'PY'
-import hashlib
 import plistlib
 import re
 import sys
@@ -280,21 +289,32 @@ import sys
 uuid_pattern = re.compile(
     rb"[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}"
 )
+ascii_string_pattern = re.compile(rb"[\t\n\r -~]{4,}")
+utf16_string_pattern = re.compile(rb"(?:[\t\n\r -~]\x00){4,}")
 
 
-def searchable_item_hashes(path: str) -> list[str]:
+def searchable_item_semantics(path: str) -> list[tuple[str, ...]]:
     with open(path, "rb") as index_file:
         archive = plistlib.load(index_file)
-    chunks = [
-        uuid_pattern.sub(b"<UUID>", value)
-        for value in archive.get("$objects", [])
-        if isinstance(value, bytes)
-    ]
-    return sorted(hashlib.sha256(chunk).hexdigest() for chunk in chunks)
+    items = []
+    for value in archive.get("$objects", []):
+        if not isinstance(value, bytes) or b"CSSearchableItemAttributeSet" not in value:
+            continue
+        canonical = uuid_pattern.sub(b"<UUID>", value)
+        strings = [
+            match.decode("utf-8", errors="strict")
+            for match in ascii_string_pattern.findall(canonical)
+        ]
+        strings.extend(
+            match.decode("utf-16-le", errors="strict")
+            for match in utf16_string_pattern.findall(canonical)
+        )
+        items.append(tuple(sorted(strings)))
+    return sorted(items)
 
 
-tracked = searchable_item_hashes(sys.argv[1])
-fresh = searchable_item_hashes(sys.argv[2])
+tracked = searchable_item_semantics(sys.argv[1])
+fresh = searchable_item_semantics(sys.argv[2])
 if not tracked or tracked != fresh:
     raise SystemExit(
         "error: Apple Help search index is stale; regenerate it with hiutil"

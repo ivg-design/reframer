@@ -113,8 +113,20 @@ development snapshots, not production releases.
   reachable; and the empty-state Open action reports enabled
 - Minimum-width toolbar layout and long frame-count status remain visible
 - Stale load, seek, scrub, and filter completions cannot overwrite newer state
-- A delayed AVPlayer playing callback cannot resurrect playback after a rapid
-  play-then-pause command
+- Playback intent is now main-thread-owned and revisioned. A delayed AVPlayer
+  playing callback cannot resurrect playback after a rapid play-then-pause
+  command
+- A generation-scoped two-second startup gate protects Play from transient
+  paused callbacks, settles when AVPlayer reaches playing, and returns the model
+  to Paused when AVPlayer has settled paused after the bounded grace period and
+  no authorized seek or scrub handoff is pending
+- EOF-replay and scrub seek completions resume only when their captured
+  playback-intent revision is still current; a newer Pause always wins, while a
+  newer Play reauthorizes the existing seek instead of starting a competing
+  transport operation
+- AVPlayer transport is forced paused during scrubbing and playback-seek
+  handoffs, including when a delayed playing callback arrives; scrub end hands
+  off synchronously without an unprotected pause window
 - Ended playback can replay from the beginning
 - UI tests run serially and no longer mutate macOS privacy or signing state
 - Unit tests use minimum-Xcode-compatible weak-reference syntax
@@ -130,6 +142,9 @@ development snapshots, not production releases.
   from reappearing in LaunchServices or Spotlight; bundle validation also
   rejects stale build numbers and dirty-stamped release artifacts, while local
   packaging requires clean `main` source matching `origin/main`
+- The background test runner now unregisters every temporary Reframer app and
+  removes its sentinel-owned DerivedData on success, failure, or interruption,
+  so validation cannot repopulate Spotlight with retained test builds
 
 ### Security
 

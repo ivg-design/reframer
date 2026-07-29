@@ -117,6 +117,18 @@ are surfaced in Shortcut Settings with a retry action.
 - A new load cancels or invalidates all callbacks from the previous generation.
 - Model playback intent is authoritative: a delayed AVPlayer playing callback
   after a rapid pause is stopped rather than allowed to revive playback.
+- Playback commands are main-thread-owned and revisioned. A generation-scoped,
+  two-second startup gate preserves Play through transient AVPlayer paused
+  reports, settles once playback starts, and returns the model to Paused if
+  AVPlayer has settled paused when the bounded grace period expires and no
+  authorized seek or scrub handoff is pending.
+- EOF-replay and scrub seek completions may resume only while authorized by the
+  current Play revision. A newer Pause always wins; a newer Play reauthorizes
+  the existing seek instead of starting competing transport.
+- Physical AVPlayer transport remains paused while scrubbing or while a
+  playback seek owns the handoff, even if a delayed playing transition arrives.
+  Scrub end performs the handoff synchronously so there is no unprotected pause
+  window.
 - Selecting a replacement stops the prior playback intent; loading and the
   newly ready replacement remain paused.
 - The desired sample index is the authority during burst input.

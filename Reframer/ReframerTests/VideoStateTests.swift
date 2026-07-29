@@ -633,9 +633,22 @@ final class VideoStateTests: XCTestCase {
     }
 
     func testIsPlayingToggle() {
-        videoState.isPlaying = true
+        videoState.setPlaybackIntent(true)
         XCTAssertTrue(videoState.isPlaying)
-        videoState.isPlaying = false
+        videoState.setPlaybackIntent(false)
+        XCTAssertFalse(videoState.isPlaying)
+    }
+
+    func testPlaybackIntentRevisionAdvancesForEveryCommand() {
+        let initialRevision = videoState.playbackIntentRevision
+
+        let playRevision = videoState.setPlaybackIntent(true)
+        let repeatedPlayRevision = videoState.setPlaybackIntent(true)
+        let pauseRevision = videoState.togglePlaybackIntent()
+
+        XCTAssertEqual(playRevision, initialRevision &+ 1)
+        XCTAssertEqual(repeatedPlayRevision, playRevision &+ 1)
+        XCTAssertEqual(pauseRevision, repeatedPlayRevision &+ 1)
         XCTAssertFalse(videoState.isPlaying)
     }
 

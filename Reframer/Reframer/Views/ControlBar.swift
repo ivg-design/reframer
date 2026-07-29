@@ -870,7 +870,7 @@ class ControlBar: NSView {
     }
 
     @objc private func playClicked(_ sender: Any?) {
-        videoState?.isPlaying.toggle()
+        videoState?.togglePlaybackIntent()
     }
 
     @objc private func stepForwardClicked(_ sender: Any?) {

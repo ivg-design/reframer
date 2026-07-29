@@ -19,17 +19,21 @@ Local packaging requires:
 - the Apple Developer team identifier;
 - a `notarytool` keychain profile.
 
-Configure them outside the repository:
+On the maintainer machine documented for this project, use the existing
+non-secret identity, team, and keychain-profile names:
 
 ```bash
-export DEVELOPER_ID_APPLICATION='Developer ID Application: …'
-export DEVELOPMENT_TEAM='…'
-export NOTARY_PROFILE='reframer-release'
+export DEVELOPER_ID_APPLICATION='Developer ID Application: Ilya Gusinski (7S422NVLUK)'
+export DEVELOPMENT_TEAM='7S422NVLUK'
+export NOTARY_PROFILE='notary'
 ```
 
-Then run from a clean worktree:
+Confirm the stored credentials are available without creating or replacing
+them, then run Reframer's authoritative packager from a clean worktree:
 
 ```bash
+xcrun notarytool history --keychain-profile notary
+security find-identity -v -p codesigning
 scripts/validate_repository.sh
 scripts/package_release.sh
 ```
@@ -60,7 +64,9 @@ Before creating a tag:
 
 1. keep `MARKETING_VERSION`, the Help version, and
    `docs/product-contract.json` aligned;
-2. use one numeric `CURRENT_PROJECT_VERSION`;
+2. use one numeric `CURRENT_PROJECT_VERSION`, increment it for every newly
+   notarized candidate, and never reuse the same marketing-version/build pair
+   for different content;
 3. replace `Unreleased` in the matching changelog heading with the release
    date;
 4. confirm the candidate commit is on protected `main`;
@@ -132,6 +138,12 @@ quality job, self-hosted UI job, protected-environment approval, and Apple
 verification succeed.
 
 ## Final smoke check
+
+This is a foreground, manual gate. XCUITest also launches and foregrounds
+Reframer and takes focus; neither becomes a background test because it starts
+from Terminal. Do not run UI automation without fresh operator authorization
+for that specific run. The background-safe automated command is
+`TEST_SCOPE=unit scripts/runner_test.sh`.
 
 On macOS 15.0 or later with no Reframer preferences:
 

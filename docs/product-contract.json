@@ -33,6 +33,15 @@
     "decoder": "AVFoundation",
     "trackSelection": "First enabled usable video track, otherwise first usable video track; playback, Core Image filtering, metadata, and navigation use the same track",
     "replacementStartsPaused": true,
+    "playbackIntent": {
+      "authority": "Main-thread-owned revisioned user intent",
+      "startupGraceSeconds": 2,
+      "startupGate": "Generation- and intent-revision-scoped; transient paused reports are protected until playing settles the gate or the bounded grace period expires",
+      "expiredStartup": "A transport still paused at expiry returns the model to Paused unless a playback seek or scrub owns the handoff",
+      "deferredResume": "EOF-replay and scrub seek completions resume only when authorized by the current intent revision; a newer Pause cancels and a newer Play reauthorizes the existing handoff without a competing transport start",
+      "transportGuard": "Physical AVPlayer playing is permitted only for current Play intent outside scrubbing and with no playback seek handoff pending",
+      "scrubHandoff": "Synchronous on the main thread"
+    },
     "frameNavigation": {
       "exactSource": "Presentation timestamps from the selected video track",
       "estimatedFallback": "Clearly labeled constant-rate estimate while indexing, when exact sample cursors are unavailable, or when the exact-sample limit is exceeded",

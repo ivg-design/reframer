@@ -7,6 +7,11 @@ Play, scrub, and navigate decoded video samples precisely.
 Press Space or activate the play/pause control. Invoking Play after end of file
 returns to the first sample and starts playback.
 
+The latest command remains authoritative while startup, replay, or scrub seeks
+finish. A later Pause cannot be undone by a delayed player or seek completion.
+A later Play attaches to the pending seek; physical playback remains paused
+until the seek or scrub handoff completes.
+
 ## Step
 
 | Action | Default |

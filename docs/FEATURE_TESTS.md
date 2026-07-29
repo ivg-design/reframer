@@ -18,7 +18,9 @@ finds an element is not proof of the action behind it.
 
 `build-for-testing` is a compile gate for both test targets. It is not recorded
 as a UI-test pass unless `xcodebuild test` executes the tests and produces a
-successful result bundle.
+successful result bundle. On every exit, the runner unregisters temporary
+Reframer apps and deletes only its sentinel-owned DerivedData; text logs and UI
+result bundles remain as diagnostics without retained `.app` products.
 
 ## Deterministic unit evidence
 
@@ -43,9 +45,16 @@ The unit target currently proves:
 - First/last clamping, repeated generations, 1/10-frame direction, rapid burst
   accumulation, preview cancellation, structured indexing cancellation, load
   replacement-pauses-playback, and unload-during-load are deterministic checks.
-- Playback-intent reconciliation proves that a delayed AVPlayer playing status
-  cannot revive a rapid pause, an involuntary pause clears play intent, and a
-  scrub-owned pause preserves it.
+- Playback intent is main-thread-owned and revisioned. Reconciliation proves a
+  delayed AVPlayer playing status cannot revive a rapid pause. A
+  generation-scoped two-second startup gate protects only transient paused
+  reports, settles on playing, and clears intent if AVPlayer has settled paused
+  after expiry with no authorized seek or scrub handoff pending. Real AVPlayer
+  lifecycle tests prove startup advances, EOF replay and scrub resume accept
+  only the current intent revision, a newer Pause rejects those deferred
+  completions, a newer Play reauthorizes the existing seek, and physical
+  transport remains paused throughout scrub/seek handoff. Scrub end performs a
+  synchronous handoff without an unprotected pause window.
 - Delayed exact-index installation remaps the latest estimated presentation
   time onto the exact VFR table, preserves replay intent, assigns a new
   generation, rejects the stale completion, and keeps a deferred filter refresh
@@ -117,8 +126,8 @@ test contract:
   no separately targetable controls window is exposed;
 - the Launch Services fixture reaches a ready, enabled timeline and exposes
   frame, zoom, and lock status elements;
-- Space and the Play button advance frames and return to an observable paused
-  state;
+- Space and the Play button each reach `Playing`, advance frames, remain stably
+  `Playing`, and then return to an observable `Paused` state;
 - step buttons, frame entry, and timeline adjustment update the frame field;
 - while Reframer is active, Command-Page Down, Command-Shift-Page Down,
   Command-Page Up, and Command-Shift-Page Up exercise both directions and the
@@ -154,8 +163,17 @@ events; that remains an explicit live gate below.
 `UITEST_SCREENSHOTS=1` only adds retained PNG evidence; omitting that variable
 does not skip the behavioral assertions.
 
-Run the target only in an unlocked, logged-in session whose operator has
-acknowledged Xcode UI automation:
+Warning: XCUITest launches and foregrounds Reframer and takes keyboard focus.
+It is not a background test merely because `xcodebuild` starts from Terminal.
+Every run requires fresh operator authorization. Without that authorization,
+use only the background-safe unit command:
+
+```bash
+TEST_SCOPE=unit scripts/runner_test.sh
+```
+
+With fresh authorization, run the UI target only in an unlocked, logged-in
+session:
 
 ```bash
 REFRAMER_UI_RUNNER_AUTHORIZED=1 \

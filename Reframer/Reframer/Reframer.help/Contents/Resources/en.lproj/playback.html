@@ -29,6 +29,11 @@
   boundary in the active exact or estimated timeline. Playing ended media
   starts again at the first frame.</p>
 
+  <p>The latest command remains authoritative while startup, replay, or scrub
+  seeks finish. A later Pause cannot be undone by a delayed player or seek
+  completion. A later Play attaches to the pending seek; physical playback
+  remains paused until the seek or scrub handoff completes.</p>
+
   <p>The frame-step chords work from another app only while a video is loaded,
   Reframer is locked, and exact or estimated sample navigation is available.
   They are not registered or swallowed in any other state.</p>

@@ -283,8 +283,16 @@ final class ReframerIntegrationTests: XCTestCase {
 
         app.typeKey(" ", modifierFlags: [])
         XCTAssertTrue(
+            waitForValue("Playing", in: app.buttons["button-play"]),
+            "Space should publish playing state while playback starts"
+        )
+        XCTAssertTrue(
             waitForNumericChange(from: Double(initialFrame), in: frameField),
             "Space should start playback and advance the frame"
+        )
+        XCTAssertTrue(
+            valueRemains("Playing", in: app.buttons["button-play"]),
+            "The startup pause callback must not clear active playback intent"
         )
         app.typeKey(" ", modifierFlags: [])
         XCTAssertTrue(waitForValue("Paused", in: app.buttons["button-play"]))
@@ -303,8 +311,16 @@ final class ReframerIntegrationTests: XCTestCase {
 
         playButton.click()
         XCTAssertTrue(
+            waitForValue("Playing", in: playButton),
+            "Clicking Play should publish playing state while playback starts"
+        )
+        XCTAssertTrue(
             waitForNumericChange(from: Double(initialFrame), in: frameField),
             "Clicking Play should advance the frame"
+        )
+        XCTAssertTrue(
+            valueRemains("Playing", in: playButton),
+            "The startup pause callback must not clear active playback intent"
         )
         playButton.click()
         XCTAssertTrue(waitForValue("Paused", in: playButton))

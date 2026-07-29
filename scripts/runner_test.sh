@@ -1,8 +1,10 @@
 #!/bin/bash
 
 # Runs Reframer tests without modifying signing state, quarantine metadata, or
-# macOS privacy databases. UI tests must run from an already-authorized,
-# interactive self-hosted runner.
+# macOS privacy databases. Built app products are ephemeral: the runner
+# unregisters them from LaunchServices and removes its owned DerivedData on
+# every exit. UI tests must run from an already-authorized, interactive
+# self-hosted runner.
 
 set -euo pipefail
 
@@ -18,6 +20,8 @@ ARTIFACT_DIR="$ARTIFACTS_BASE/$RUN_ID"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ARTIFACT_DIR/DerivedData}"
 XCRESULT_PATH="$ARTIFACT_DIR/ReframerTests.xcresult"
 LOG_PATH="$ARTIFACT_DIR/xcodebuild.log"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+RUNNER_SENTINEL="$DERIVED_DATA_PATH/.reframer-test-runner-owned"
 
 case "$TEST_SCOPE" in
     unit)
@@ -47,7 +51,48 @@ if [ ! -f "$PROJECT_PATH/project.pbxproj" ]; then
     exit 66
 fi
 
-mkdir -p "$ARTIFACT_DIR"
+case "$DERIVED_DATA_PATH" in
+    ""|"/"|"$REPO_PATH"|"$ARTIFACTS_BASE")
+        echo "error: unsafe DerivedData cleanup path: $DERIVED_DATA_PATH" >&2
+        exit 64
+        ;;
+esac
+
+if [ -e "$DERIVED_DATA_PATH" ] || [ -L "$DERIVED_DATA_PATH" ]; then
+    echo "error: runner DerivedData path already exists: $DERIVED_DATA_PATH" >&2
+    echo "Use a fresh RUN_ID or DERIVED_DATA_PATH." >&2
+    exit 73
+fi
+
+mkdir -p "$ARTIFACT_DIR" "$DERIVED_DATA_PATH"
+touch "$RUNNER_SENTINEL"
+
+cleanup_runner_builds() {
+    cleanup_status=$?
+    set +e
+    trap - EXIT INT TERM
+
+    if [ -d "$DERIVED_DATA_PATH" ] && [ -x "$LSREGISTER" ]; then
+        while IFS= read -r -d '' test_app; do
+            "$LSREGISTER" -u "$test_app" >/dev/null 2>&1
+        done < <(
+            find "$DERIVED_DATA_PATH" \
+                -type d \
+                -name Reframer.app \
+                -prune \
+                -print0
+        )
+    fi
+
+    if [ -f "$RUNNER_SENTINEL" ] && [ -d "$DERIVED_DATA_PATH" ]; then
+        rm -rf "$DERIVED_DATA_PATH"
+    fi
+
+    exit "$cleanup_status"
+}
+trap cleanup_runner_builds EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 {
     echo "Reframer test run"
@@ -80,7 +125,7 @@ if [ "$TEST_SCOPE" = "unit" ]; then
     TEST_BUNDLE="$APP_PATH/Contents/PlugIns/ReframerTests.xctest"
     DEBUG_DYLIB="$APP_PATH/Contents/MacOS/Reframer.debug.dylib"
     TEST_FRAMEWORKS="$TEST_BUNDLE/Contents/Frameworks"
-    PROFILE_DIR="$ARTIFACT_DIR/coverage"
+    PROFILE_DIR="$DERIVED_DATA_PATH/coverage"
 
     if [ ! -x "$TEST_BUNDLE/Contents/MacOS/ReframerTests" ]; then
         echo "error: built unit-test bundle is missing at $TEST_BUNDLE" >&2

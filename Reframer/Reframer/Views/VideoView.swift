@@ -111,12 +111,95 @@ enum PlaybackStatusReconciliation {
         currentIntent: Bool,
         status: AVPlayer.TimeControlStatus,
         rate: Float,
-        isScrubbing: Bool
+        isScrubbing: Bool,
+        protectsPausedIntent: Bool
     ) -> Bool {
-        if status == .paused, currentIntent, rate == 0, !isScrubbing {
+        if status == .paused,
+           currentIntent,
+           rate == 0,
+           !isScrubbing,
+           !protectsPausedIntent {
             return false
         }
         return currentIntent
+    }
+}
+
+enum PlaybackResumeAuthorization {
+    static func permits(
+        capturedRevision: UInt64?,
+        currentRevision: UInt64,
+        isPlaying: Bool
+    ) -> Bool {
+        guard let capturedRevision else { return false }
+        return isPlaying && capturedRevision == currentRevision
+    }
+}
+
+enum PlaybackTransportAuthorization {
+    static func permitsPlaying(
+        currentIntent: Bool,
+        isScrubbing: Bool,
+        hasPendingPlaybackSeek: Bool
+    ) -> Bool {
+        currentIntent && !isScrubbing && !hasPendingPlaybackSeek
+    }
+}
+
+/// A revision- and generation-scoped grace period for AVPlayer's transient
+/// `.paused` callback immediately after `play()`. Generations prevent an old
+/// timeout from cancelling a newer start that happens to share the same
+/// playback-intent revision (for example, scrub pause/resume).
+struct PlaybackStartGate {
+    struct Token: Equatable {
+        let intentRevision: UInt64
+        let generation: UInt64
+    }
+
+    private(set) var token: Token?
+    private var nextGeneration: UInt64 = 0
+
+    mutating func begin(intentRevision: UInt64) -> Token {
+        nextGeneration &+= 1
+        let token = Token(
+            intentRevision: intentRevision,
+            generation: nextGeneration
+        )
+        self.token = token
+        return token
+    }
+
+    func protectsPausedIntent(intentRevision: UInt64) -> Bool {
+        token?.intentRevision == intentRevision
+    }
+
+    @discardableResult
+    mutating func settle(_ expectedToken: Token) -> Bool {
+        guard token == expectedToken else { return false }
+        token = nil
+        return true
+    }
+
+    @discardableResult
+    mutating func expire(_ expectedToken: Token) -> Bool {
+        settle(expectedToken)
+    }
+
+    mutating func cancel() {
+        token = nil
+        nextGeneration &+= 1
+    }
+
+    static func shouldClearIntentOnExpiry(
+        status: AVPlayer.TimeControlStatus,
+        rate: Float,
+        isScrubbing: Bool,
+        hasPendingPlaybackSeek: Bool
+    ) -> Bool {
+        status == .paused
+            && rate == 0
+            && !isScrubbing
+            && !hasPendingPlaybackSeek
     }
 }
 
@@ -125,10 +208,13 @@ class VideoView: NSView {
 
     // MARK: - Properties
 
+    private static let playbackStartGraceInterval: TimeInterval = 2
     private let playerLayer = AVPlayerLayer()
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
     private var currentAsset: AVAsset?
+    private var playbackStartGate = PlaybackStartGate()
+    private var playbackStartTimeoutWorkItem: DispatchWorkItem?
     private var timeObserver: Any?
     private var playerTimeControlObservation: NSKeyValueObservation?
     private var loadTask: Task<Void, Never>?
@@ -146,6 +232,7 @@ class VideoView: NSView {
     private var previewSeekCoordinator = PreviewSeekCoordinator()
     private var timeSeekToken = UUID()
     private var timeSeekInFlightToken: UUID?
+    private var timeSeekResumeIntentRevision: UInt64?
     private var playerIsReady = false
     private var metadataIsReady = false
     private let filterPipelineState = FilterPipelineState()
@@ -153,7 +240,6 @@ class VideoView: NSView {
     private var filterBuildInProgress = false
     private var filterRefreshWorkItem: DispatchWorkItem?
     private var filterRefreshCoordinator = DeferredRefreshCoordinator()
-    private var scrubWasPlaying = false
 
     /// Internal dependency seam used by deterministic lifecycle tests.
     var loadEnvironment: VideoLoadEnvironment = .live
@@ -163,6 +249,20 @@ class VideoView: NSView {
             || playerItem != nil
             || currentAsset != nil
             || playerLayer.player != nil
+    }
+
+    /// Internal observability for deterministic tests of asynchronous resume
+    /// authorization. This reports logical completion, not merely a fixed
+    /// elapsed delay.
+    var hasPendingPlaybackSeek: Bool {
+        frameSeekCoordinator.hasPendingSeek
+            || timeSeekInFlightToken != nil
+    }
+
+    /// Internal lifecycle-test visibility for the physical AVPlayer transport.
+    var isPlaybackTransportActive: Bool {
+        guard let player else { return false }
+        return player.rate != 0 || player.timeControlStatus == .playing
     }
 
     // Core Image context for filter processing (reused for performance)
@@ -239,8 +339,8 @@ class VideoView: NSView {
 
         // Observe playback state
         state.$isPlaying
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] isPlaying in
+                precondition(Thread.isMainThread)
                 self?.applyPlaybackState(isPlaying: isPlaying)
             }
             .store(in: &cancellables)
@@ -263,7 +363,7 @@ class VideoView: NSView {
                 } else {
                     state.cancelScrubbing()
                     self.cleanup()
-                    state.isPlaying = false
+                    state.setPlaybackIntent(false)
                     state.isAtEnd = false
                     state.isVideoLoaded = false
                     state.isVideoLoading = false
@@ -301,8 +401,8 @@ class VideoView: NSView {
             .store(in: &cancellables)
 
         state.scrubRequests
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] request in
+                precondition(Thread.isMainThread)
                 switch request {
                 case .began:
                     self?.beginScrubbing()
@@ -411,7 +511,7 @@ class VideoView: NSView {
             access: environment.securityScopedAccess
         )
         state.cancelScrubbing()
-        state.isPlaying = false
+        state.setPlaybackIntent(false)
         cleanup()
         activeResourceLease = lease
 
@@ -518,19 +618,29 @@ class VideoView: NSView {
                     currentIntent: state.isPlaying,
                     status: status,
                     rate: player.rate,
-                    isScrubbing: state.isScrubbing
+                    isScrubbing: state.isScrubbing,
+                    protectsPausedIntent: self.protectsPausedIntent(for: state)
                 )
                 switch status {
                 case .playing:
+                    let permitsTransport =
+                        PlaybackTransportAuthorization.permitsPlaying(
+                            currentIntent: reconciledIntent,
+                            isScrubbing: state.isScrubbing,
+                            hasPendingPlaybackSeek:
+                                self.hasPendingPlaybackSeek
+                        )
+                    self.cancelPlaybackStart()
                     // VideoState is the playback intent authority. AVPlayer
                     // can deliver a stale `.playing` transition after a rapid
-                    // play-then-pause command; never let that resurrect play.
-                    if !reconciledIntent {
+                    // play-then-pause command or while a scrub/seek owns the
+                    // transport; never let that restart physical playback.
+                    if !permitsTransport {
                         player.pause()
                     }
                 case .paused:
                     if reconciledIntent != state.isPlaying {
-                        state.isPlaying = reconciledIntent
+                        state.setPlaybackIntent(reconciledIntent)
                     }
                 case .waitingToPlayAtSpecifiedRate:
                     break
@@ -596,7 +706,7 @@ class VideoView: NSView {
                       self.loadToken == token,
                       let state = self.videoState else { return }
                 state.isAtEnd = true
-                state.isPlaying = false
+                state.setPlaybackIntent(false)
                 if let timeline = self.frameTimeline, !timeline.isEmpty {
                     state.currentFrame = timeline.count - 1
                 }
@@ -742,35 +852,50 @@ class VideoView: NSView {
               time.isFinite else { return }
         let clampedTime = max(0, min(state.duration, time))
         let requestedTime = CMTime(seconds: clampedTime, preferredTimescale: 60_000)
+        let resumeIntentRevision = state.isPlaying
+            ? state.playbackIntentRevision
+            : nil
 
         if accurate, let timeline = frameTimeline, !timeline.isEmpty {
             let frame = timeline.nearestFrameIndex(to: requestedTime)
-            let target = frameSeekCoordinator.begin(frame: frame, timeline: timeline)
+            let target = frameSeekCoordinator.begin(
+                frame: frame,
+                timeline: timeline,
+                resumeIntentRevision: resumeIntentRevision
+            )
             performExactSeek(to: target, timeline: timeline)
         } else {
             performTimeSeek(
                 to: clampedTime,
                 accurate: accurate,
-                resumePlayback: false
+                resumeIntentRevision: resumeIntentRevision
             )
         }
     }
 
     func seekToFrame(_ frame: Int) {
-        guard let timeline = frameTimeline, !timeline.isEmpty else { return }
-        let target = frameSeekCoordinator.begin(frame: frame, timeline: timeline)
+        guard let state = videoState,
+              let timeline = frameTimeline,
+              !timeline.isEmpty else { return }
+        let target = frameSeekCoordinator.begin(
+            frame: frame,
+            timeline: timeline,
+            resumeIntentRevision: state.isPlaying
+                ? state.playbackIntentRevision
+                : nil
+        )
         performExactSeek(to: target, timeline: timeline)
     }
 
     private func beginScrubbing() {
         guard let state = videoState, state.isVideoLoaded else { return }
-        scrubWasPlaying = state.isPlaying || player?.timeControlStatus == .playing
+        cancelPlaybackStart()
         player?.pause()
-        state.isPlaying = false
         frameSeekCoordinator.reset()
         previewSeekCoordinator.cancel()
         timeSeekToken = UUID()
         timeSeekInFlightToken = nil
+        timeSeekResumeIntentRevision = nil
     }
 
     private func previewScrub(to time: Double) {
@@ -796,14 +921,14 @@ class VideoView: NSView {
         guard let state = videoState,
               state.isVideoLoaded,
               time.isFinite else {
-            scrubWasPlaying = false
             retryPausedFilterRefreshIfNeeded()
             return
         }
 
         let clampedTime = max(0, min(state.duration, time))
-        let shouldResume = scrubWasPlaying
-        scrubWasPlaying = false
+        let resumeIntentRevision = state.isPlaying
+            ? state.playbackIntentRevision
+            : nil
         if let timeline = frameTimeline, !timeline.isEmpty {
             let frame = timeline.nearestFrameIndex(
                 to: CMTime(seconds: clampedTime, preferredTimescale: 60_000)
@@ -811,20 +936,24 @@ class VideoView: NSView {
             let target = frameSeekCoordinator.begin(
                 frame: frame,
                 timeline: timeline,
-                resumePlayback: shouldResume
+                resumeIntentRevision: resumeIntentRevision
             )
             performExactSeek(to: target, timeline: timeline)
         } else {
-            performTimeSeek(to: clampedTime, accurate: true, resumePlayback: shouldResume)
+            performTimeSeek(
+                to: clampedTime,
+                accurate: true,
+                resumeIntentRevision: resumeIntentRevision
+            )
         }
     }
 
     private func cancelScrubSession() {
-        scrubWasPlaying = false
         previewSeekCoordinator.cancel()
         frameSeekCoordinator.reset()
         timeSeekToken = UUID()
         timeSeekInFlightToken = nil
+        timeSeekResumeIntentRevision = nil
         retryPausedFilterRefreshIfNeeded()
     }
 
@@ -882,7 +1011,7 @@ class VideoView: NSView {
               state.isVideoLoaded,
               !timeline.isEmpty else { return }
         player?.pause()
-        state.isPlaying = false
+        state.setPlaybackIntent(false)
         state.isAtEnd = false
 
         let magnitude = max(1, amount)
@@ -902,9 +1031,17 @@ class VideoView: NSView {
               let item = playerItem,
               let player,
               let resourceLease = activeResourceLease else { return }
+        if PlaybackResumeAuthorization.permits(
+            capturedRevision: seekTarget.resumeIntentRevision,
+            currentRevision: state.playbackIntentRevision,
+            isPlaying: state.isPlaying
+        ) {
+            cancelPlaybackStart()
+        }
         previewSeekCoordinator.cancel()
         timeSeekToken = UUID()
         timeSeekInFlightToken = nil
+        timeSeekResumeIntentRevision = nil
         state.isAtEnd = false
         let target = timeline.clampedIndex(seekTarget.frame)
         let time = seekTarget.requestedTime
@@ -918,23 +1055,41 @@ class VideoView: NSView {
                       let state,
                       let item,
                       item === self.playerItem,
-                      self.frameSeekCoordinator.desiredTarget == seekTarget else { return }
-                self.frameSeekCoordinator.complete(seekTarget)
+                      let completedTarget =
+                          self.frameSeekCoordinator.complete(seekTarget) else {
+                    return
+                }
+                var didResumePlayback = false
                 if finished {
                     state.currentFrame = target
                     state.currentTime = max(0, CMTimeGetSeconds(time))
                     state.isAtEnd = false
-                    if seekTarget.resumePlayback {
-                        state.isPlaying = true
-                        player.play()
+                    if PlaybackResumeAuthorization.permits(
+                        capturedRevision:
+                            completedTarget.resumeIntentRevision,
+                        currentRevision: state.playbackIntentRevision,
+                        isPlaying: state.isPlaying
+                    ), let resumeIntentRevision =
+                        completedTarget.resumeIntentRevision {
+                        didResumePlayback = self.startPlayerPlayback(
+                            intentRevision: resumeIntentRevision
+                        )
                     }
                 } else {
                     let actualTime = self.player?.currentTime() ?? .zero
                     let actualSeconds = CMTimeGetSeconds(actualTime)
                     state.currentFrame = timeline.frameIndex(containing: actualTime)
                     state.currentTime = actualSeconds.isFinite ? max(0, actualSeconds) : 0
+                    if PlaybackResumeAuthorization.permits(
+                        capturedRevision:
+                            completedTarget.resumeIntentRevision,
+                        currentRevision: state.playbackIntentRevision,
+                        isPlaying: state.isPlaying
+                    ) {
+                        state.setPlaybackIntent(false)
+                    }
                 }
-                if !finished || !seekTarget.resumePlayback {
+                if !didResumePlayback {
                     self.retryPausedFilterRefreshIfNeeded()
                 }
             }
@@ -946,7 +1101,7 @@ class VideoView: NSView {
     private func performTimeSeek(
         to seconds: Double,
         accurate: Bool,
-        resumePlayback: Bool
+        resumeIntentRevision: UInt64?
     ) {
         guard let state = videoState,
               state.isVideoLoaded,
@@ -954,12 +1109,20 @@ class VideoView: NSView {
               let item = playerItem,
               let resourceLease = activeResourceLease else { return }
 
+        if PlaybackResumeAuthorization.permits(
+            capturedRevision: resumeIntentRevision,
+            currentRevision: state.playbackIntentRevision,
+            isPlaying: state.isPlaying
+        ) {
+            cancelPlaybackStart()
+        }
         previewSeekCoordinator.cancel()
         frameSeekCoordinator.reset()
         state.isAtEnd = false
         let token = UUID()
         timeSeekToken = token
         timeSeekInFlightToken = token
+        timeSeekResumeIntentRevision = resumeIntentRevision
         let generation = loadToken
         let clampedTime = max(0, min(state.duration, seconds))
         let requestedTime = CMTime(seconds: clampedTime, preferredTimescale: 60_000)
@@ -980,7 +1143,10 @@ class VideoView: NSView {
                       let state,
                       let item,
                       item === self.playerItem else { return }
+                let completedResumeIntentRevision =
+                    self.timeSeekResumeIntentRevision
                 self.timeSeekInFlightToken = nil
+                self.timeSeekResumeIntentRevision = nil
                 let actualTime = self.player?.currentTime() ?? requestedTime
                 let actualSeconds = CMTimeGetSeconds(actualTime)
                 state.currentTime = actualSeconds.isFinite ? max(0, actualSeconds) : clampedTime
@@ -988,11 +1154,31 @@ class VideoView: NSView {
                     state.currentFrame = timeline.frameIndex(containing: actualTime)
                 }
                 state.isAtEnd = false
-                if finished, resumePlayback {
-                    state.isPlaying = true
-                    self.player?.play()
+                var didResumePlayback = false
+                if finished,
+                   PlaybackResumeAuthorization.permits(
+                       capturedRevision:
+                           completedResumeIntentRevision,
+                       currentRevision: state.playbackIntentRevision,
+                       isPlaying: state.isPlaying
+                   ),
+                   let resumeIntentRevision =
+                       completedResumeIntentRevision {
+                    didResumePlayback = self.startPlayerPlayback(
+                        intentRevision: resumeIntentRevision
+                    )
+                } else if !finished,
+                          PlaybackResumeAuthorization.permits(
+                              capturedRevision:
+                                  completedResumeIntentRevision,
+                              currentRevision: state.playbackIntentRevision,
+                              isPlaying: state.isPlaying
+                          ) {
+                    state.setPlaybackIntent(false)
                 }
-                self.retryPausedFilterRefreshIfNeeded()
+                if !didResumePlayback {
+                    self.retryPausedFilterRefreshIfNeeded()
+                }
             }
         }
 
@@ -1002,30 +1188,152 @@ class VideoView: NSView {
         }
     }
 
+    private func protectsPausedIntent(for state: VideoState) -> Bool {
+        if playbackStartGate.protectsPausedIntent(
+            intentRevision: state.playbackIntentRevision
+        ) {
+            return true
+        }
+        if PlaybackResumeAuthorization.permits(
+            capturedRevision:
+                frameSeekCoordinator.desiredTarget?.resumeIntentRevision,
+            currentRevision: state.playbackIntentRevision,
+            isPlaying: state.isPlaying
+        ) {
+            return true
+        }
+        return timeSeekInFlightToken != nil
+            && PlaybackResumeAuthorization.permits(
+                capturedRevision: timeSeekResumeIntentRevision,
+                currentRevision: state.playbackIntentRevision,
+                isPlaying: state.isPlaying
+            )
+    }
+
+    @discardableResult
+    private func startPlayerPlayback(
+        intentRevision: UInt64,
+        publishedIntent: Bool? = nil
+    ) -> Bool {
+        guard let state = videoState,
+              let player,
+              state.isVideoLoaded,
+              !state.isScrubbing,
+              PlaybackResumeAuthorization.permits(
+                  capturedRevision: intentRevision,
+                  currentRevision: state.playbackIntentRevision,
+                  // `@Published` emits from willSet, so the synchronous sink
+                  // supplies its new value until the stored property catches
+                  // up at the end of the setter.
+                  isPlaying: publishedIntent ?? state.isPlaying
+              ) else {
+            return false
+        }
+
+        playbackStartTimeoutWorkItem?.cancel()
+        let startToken = playbackStartGate.begin(
+            intentRevision: intentRevision
+        )
+        let loadGeneration = loadToken
+        let workItem = DispatchWorkItem {
+            [weak self, weak state, weak player] in
+            guard let self,
+                  let state,
+                  let player,
+                  self.loadToken == loadGeneration,
+                  player === self.player,
+                  PlaybackResumeAuthorization.permits(
+                      capturedRevision: startToken.intentRevision,
+                      currentRevision: state.playbackIntentRevision,
+                      isPlaying: state.isPlaying
+                  ),
+                  self.playbackStartGate.expire(startToken) else {
+                return
+            }
+            self.playbackStartTimeoutWorkItem = nil
+            if PlaybackStartGate.shouldClearIntentOnExpiry(
+                status: player.timeControlStatus,
+                rate: player.rate,
+                isScrubbing: state.isScrubbing,
+                hasPendingPlaybackSeek: self.hasPendingPlaybackSeek
+            ) {
+                state.setPlaybackIntent(false)
+            }
+        }
+        playbackStartTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.playbackStartGraceInterval,
+            execute: workItem
+        )
+        player.play()
+        return true
+    }
+
+    private func cancelPlaybackStart() {
+        playbackStartTimeoutWorkItem?.cancel()
+        playbackStartTimeoutWorkItem = nil
+        playbackStartGate.cancel()
+    }
+
     private func applyPlaybackState(isPlaying: Bool) {
         guard let state = videoState else { return }
         guard isPlaying else {
+            cancelPlaybackStart()
             player?.pause()
             retryPausedFilterRefreshIfNeeded()
             return
         }
-        guard state.isVideoLoaded else {
+        guard state.isVideoLoaded, player != nil else {
+            cancelPlaybackStart()
+            player?.pause()
+            let rejectedRevision = state.playbackIntentRevision
+            DispatchQueue.main.async { [weak state] in
+                guard let state,
+                      state.playbackIntentRevision == rejectedRevision,
+                      state.isPlaying else { return }
+                state.setPlaybackIntent(false)
+            }
+            return
+        }
+        guard !state.isScrubbing else {
+            cancelPlaybackStart()
+            return
+        }
+        let intentRevision = state.playbackIntentRevision
+        if frameSeekCoordinator.authorizePendingResume(
+            intentRevision: intentRevision
+        ) {
+            cancelPlaybackStart()
+            player?.pause()
+            return
+        }
+        if timeSeekInFlightToken != nil {
+            cancelPlaybackStart()
+            timeSeekResumeIntentRevision = intentRevision
             player?.pause()
             return
         }
         if state.isAtEnd {
+            cancelPlaybackStart()
             if let timeline = frameTimeline, !timeline.isEmpty {
                 let target = frameSeekCoordinator.begin(
                     frame: 0,
                     timeline: timeline,
-                    resumePlayback: true
+                    resumeIntentRevision: intentRevision
                 )
                 performExactSeek(to: target, timeline: timeline)
             } else {
-                performTimeSeek(to: 0, accurate: true, resumePlayback: true)
+                performTimeSeek(
+                    to: 0,
+                    accurate: true,
+                    resumeIntentRevision: intentRevision
+                )
             }
         } else {
-            player?.play()
+            startPlayerPlayback(
+                intentRevision: intentRevision,
+                publishedIntent: true
+            )
         }
     }
 
@@ -1039,7 +1347,9 @@ class VideoView: NSView {
         state.isVideoLoaded = true
         state.videoErrorMessage = nil
         if state.isPlaying {
-            player?.play()
+            startPlayerPlayback(
+                intentRevision: state.playbackIntentRevision
+            )
         }
     }
 
@@ -1050,7 +1360,7 @@ class VideoView: NSView {
         let message = error.localizedDescription
         state?.cancelScrubbing()
         cleanup()
-        state?.isPlaying = false
+        state?.setPlaybackIntent(false)
         state?.isVideoLoading = false
         state?.isVideoLoaded = false
         state?.isAtEnd = false
@@ -1073,11 +1383,12 @@ class VideoView: NSView {
         previewSeekCoordinator.cancel()
         timeSeekToken = UUID()
         timeSeekInFlightToken = nil
+        timeSeekResumeIntentRevision = nil
         frameTimeline = nil
         selectedVideoTrackID = nil
         playerIsReady = false
         metadataIsReady = false
-        scrubWasPlaying = false
+        cancelPlaybackStart()
         filterRefreshWorkItem?.cancel()
         filterRefreshWorkItem = nil
         filterRefreshCoordinator.cancel()

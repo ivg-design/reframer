@@ -14,6 +14,12 @@ Planned work and historical investigations are not product claims.
   multi-track files, with audio limited and aligned to that video timeline.
 - Play, pause, replay from end of file, scrub with a coalesced preview, and
   finish a scrub on an exact decoded sample when exact indexing is available.
+- Treat the latest Play or Pause command as authoritative: delayed AVPlayer
+  startup, replay, and scrub completions cannot undo a newer Pause, while a
+  newer Play reauthorizes an in-flight seek without starting competing
+  transport.
+- Keep physical playback paused while scrubbing or while a playback seek owns
+  the handoff, even if AVPlayer reports a delayed playing transition.
 - Step by decoded presentation timing after exact indexing rather than deriving
   every position from a rounded nominal frame rate.
 - Keep navigation available through a visibly labeled constant-rate estimate

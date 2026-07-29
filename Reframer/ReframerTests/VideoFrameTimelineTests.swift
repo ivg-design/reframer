@@ -9,7 +9,8 @@ final class PlaybackStatusReconciliationTests: XCTestCase {
                 currentIntent: false,
                 status: .playing,
                 rate: 1,
-                isScrubbing: false
+                isScrubbing: false,
+                protectsPausedIntent: false
             )
         )
     }
@@ -20,7 +21,8 @@ final class PlaybackStatusReconciliationTests: XCTestCase {
                 currentIntent: true,
                 status: .paused,
                 rate: 0,
-                isScrubbing: false
+                isScrubbing: false,
+                protectsPausedIntent: false
             )
         )
     }
@@ -31,7 +33,194 @@ final class PlaybackStatusReconciliationTests: XCTestCase {
                 currentIntent: true,
                 status: .paused,
                 rate: 0,
-                isScrubbing: true
+                isScrubbing: true,
+                protectsPausedIntent: false
+            )
+        )
+    }
+
+    func testStartupPausePreservesPlayingIntent() {
+        XCTAssertTrue(
+            PlaybackStatusReconciliation.intent(
+                currentIntent: true,
+                status: .paused,
+                rate: 0,
+                isScrubbing: false,
+                protectsPausedIntent: true
+            )
+        )
+    }
+}
+
+final class PlaybackResumeAuthorizationTests: XCTestCase {
+    func testMatchingPlayingRevisionPermitsResume() {
+        XCTAssertTrue(
+            PlaybackResumeAuthorization.permits(
+                capturedRevision: 7,
+                currentRevision: 7,
+                isPlaying: true
+            )
+        )
+    }
+
+    func testMissingMismatchedOrPausedIntentRejectsResume() {
+        XCTAssertFalse(
+            PlaybackResumeAuthorization.permits(
+                capturedRevision: nil,
+                currentRevision: 7,
+                isPlaying: true
+            )
+        )
+        XCTAssertFalse(
+            PlaybackResumeAuthorization.permits(
+                capturedRevision: 6,
+                currentRevision: 7,
+                isPlaying: true
+            )
+        )
+        XCTAssertFalse(
+            PlaybackResumeAuthorization.permits(
+                capturedRevision: 7,
+                currentRevision: 7,
+                isPlaying: false
+            )
+        )
+    }
+
+    func testPauseThenPlayABARejectsOriginalResumeRevision() {
+        let originalPlayRevision: UInt64 = 11
+        let revisionAfterPauseThenPlay: UInt64 = 13
+
+        XCTAssertFalse(
+            PlaybackResumeAuthorization.permits(
+                capturedRevision: originalPlayRevision,
+                currentRevision: revisionAfterPauseThenPlay,
+                isPlaying: true
+            )
+        )
+    }
+}
+
+final class PlaybackTransportAuthorizationTests: XCTestCase {
+    func testPlayingRequiresIntentOutsideScrubAndSeekHandoffs() {
+        XCTAssertTrue(
+            PlaybackTransportAuthorization.permitsPlaying(
+                currentIntent: true,
+                isScrubbing: false,
+                hasPendingPlaybackSeek: false
+            )
+        )
+        XCTAssertFalse(
+            PlaybackTransportAuthorization.permitsPlaying(
+                currentIntent: false,
+                isScrubbing: false,
+                hasPendingPlaybackSeek: false
+            )
+        )
+    }
+
+    func testScrubOrPendingSeekRejectsPhysicalPlayingTransition() {
+        XCTAssertFalse(
+            PlaybackTransportAuthorization.permitsPlaying(
+                currentIntent: true,
+                isScrubbing: true,
+                hasPendingPlaybackSeek: false
+            )
+        )
+        XCTAssertFalse(
+            PlaybackTransportAuthorization.permitsPlaying(
+                currentIntent: true,
+                isScrubbing: false,
+                hasPendingPlaybackSeek: true
+            )
+        )
+    }
+}
+
+final class PlaybackStartGateTests: XCTestCase {
+    func testStartupGateProtectsPauseUntilMatchingExpiry() {
+        var gate = PlaybackStartGate()
+        let token = gate.begin(intentRevision: 4)
+
+        XCTAssertTrue(gate.protectsPausedIntent(intentRevision: 4))
+        XCTAssertTrue(gate.expire(token))
+        XCTAssertFalse(gate.protectsPausedIntent(intentRevision: 4))
+        XCTAssertFalse(
+            PlaybackStatusReconciliation.intent(
+                currentIntent: true,
+                status: .paused,
+                rate: 0,
+                isScrubbing: false,
+                protectsPausedIntent: gate.protectsPausedIntent(
+                    intentRevision: 4
+                )
+            )
+        )
+    }
+
+    func testStaleTimeoutCannotExpireReplacementGate() {
+        var gate = PlaybackStartGate()
+        let stale = gate.begin(intentRevision: 9)
+        let replacement = gate.begin(intentRevision: 9)
+
+        XCTAssertNotEqual(stale, replacement)
+        XCTAssertFalse(gate.expire(stale))
+        XCTAssertTrue(gate.protectsPausedIntent(intentRevision: 9))
+        XCTAssertTrue(gate.expire(replacement))
+        XCTAssertFalse(gate.protectsPausedIntent(intentRevision: 9))
+    }
+
+    func testPlayingSettlementAndExplicitCancelRemoveProtection() {
+        var gate = PlaybackStartGate()
+        let playingToken = gate.begin(intentRevision: 20)
+
+        XCTAssertTrue(gate.settle(playingToken))
+        XCTAssertFalse(gate.protectsPausedIntent(intentRevision: 20))
+
+        _ = gate.begin(intentRevision: 21)
+        gate.cancel()
+        XCTAssertFalse(gate.protectsPausedIntent(intentRevision: 21))
+    }
+
+    func testExpiryOnlyClearsSettledPausedTransport() {
+        XCTAssertTrue(
+            PlaybackStartGate.shouldClearIntentOnExpiry(
+                status: .paused,
+                rate: 0,
+                isScrubbing: false,
+                hasPendingPlaybackSeek: false
+            )
+        )
+        XCTAssertFalse(
+            PlaybackStartGate.shouldClearIntentOnExpiry(
+                status: .waitingToPlayAtSpecifiedRate,
+                rate: 0,
+                isScrubbing: false,
+                hasPendingPlaybackSeek: false
+            )
+        )
+        XCTAssertFalse(
+            PlaybackStartGate.shouldClearIntentOnExpiry(
+                status: .playing,
+                rate: 1,
+                isScrubbing: false,
+                hasPendingPlaybackSeek: false
+            )
+        )
+        XCTAssertFalse(
+            PlaybackStartGate.shouldClearIntentOnExpiry(
+                status: .paused,
+                rate: 0,
+                isScrubbing: true,
+                hasPendingPlaybackSeek: false
+            )
+        )
+        XCTAssertFalse(
+            PlaybackStartGate.shouldClearIntentOnExpiry(
+                status: .paused,
+                rate: 0,
+                isScrubbing: false,
+                hasPendingPlaybackSeek: true
             )
         )
     }
@@ -98,7 +287,7 @@ final class VideoFrameTimelineTests: XCTestCase {
         XCTAssertNil(coordinator.desiredTarget)
     }
 
-    func testExactTimelinePromotionPreservesTimeResumeAndGeneration() throws {
+    func testExactTimelinePromotionPreservesTimeResumeRevisionAndGeneration() throws {
         let estimated = try XCTUnwrap(
             VideoFrameTimeline.estimated(
                 duration: CMTime(seconds: 1, preferredTimescale: 600),
@@ -115,7 +304,7 @@ final class VideoFrameTimelineTests: XCTestCase {
         let estimatedTarget = coordinator.begin(
             frame: 3,
             timeline: estimated,
-            resumePlayback: true
+            resumeIntentRevision: 42
         )
 
         let promoted = try XCTUnwrap(coordinator.promote(to: exact))
@@ -126,7 +315,7 @@ final class VideoFrameTimelineTests: XCTestCase {
             0.31,
             accuracy: 0.000_001
         )
-        XCTAssertTrue(promoted.resumePlayback)
+        XCTAssertEqual(promoted.resumeIntentRevision, 42)
         XCTAssertNotEqual(promoted.generation, estimatedTarget.generation)
 
         coordinator.complete(estimatedTarget)
@@ -136,6 +325,27 @@ final class VideoFrameTimelineTests: XCTestCase {
             "The superseded estimated completion must not clear exact intent"
         )
         coordinator.complete(promoted)
+        XCTAssertFalse(coordinator.hasPendingSeek)
+    }
+
+    func testNewPlayRevisionReauthorizesPendingSeekWithoutChangingIdentity() throws {
+        let timeline = makeTimeline(count: 4)
+        var coordinator = FrameSeekCoordinator()
+        let original = coordinator.begin(
+            frame: 2,
+            timeline: timeline,
+            resumeIntentRevision: 1
+        )
+
+        XCTAssertTrue(coordinator.authorizePendingResume(intentRevision: 3))
+        let reauthorized = try XCTUnwrap(coordinator.desiredTarget)
+        XCTAssertEqual(reauthorized.generation, original.generation)
+        XCTAssertEqual(reauthorized.frame, original.frame)
+        XCTAssertEqual(reauthorized.requestedTime, original.requestedTime)
+        XCTAssertEqual(reauthorized.resumeIntentRevision, 3)
+
+        let completed = try XCTUnwrap(coordinator.complete(original))
+        XCTAssertEqual(completed, reauthorized)
         XCTAssertFalse(coordinator.hasPendingSeek)
     }
 
@@ -734,7 +944,7 @@ final class VideoViewLifecycleTests: XCTestCase {
             state.videoErrorMessage ?? "First video did not finish loading"
         )
 
-        state.isPlaying = true
+        state.setPlaybackIntent(true)
         XCTAssertTrue(state.isPlaying)
 
         let replacementGate = AsyncTestGate()
@@ -772,6 +982,260 @@ final class VideoViewLifecycleTests: XCTestCase {
             state.isPlaying,
             "A newly selected replacement must land paused"
         )
+        state.videoURL = nil
+    }
+
+    func testPlaybackStartupKeepsIntentAndAdvancesFrames() async throws {
+        let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let url = try XCTUnwrap(
+            Bundle(for: Self.self).url(
+                forResource: "test_30fps_2s",
+                withExtension: "mp4"
+            )
+        )
+        let state = VideoState(defaults: defaults)
+        let videoView = VideoView(
+            frame: NSRect(x: 0, y: 0, width: 640, height: 480)
+        )
+        videoView.videoState = state
+        state.videoURL = url
+
+        let loaded = await waitUntil(timeout: 5) {
+            state.isVideoLoaded
+                && state.frameNavigationPrecision == .exact
+        }
+        XCTAssertTrue(
+            loaded,
+            state.videoErrorMessage ?? "Playback fixture did not load"
+        )
+
+        state.setPlaybackIntent(true)
+        let advanced = await waitUntil(timeout: 2) {
+            state.isPlaying && state.currentFrame > 0
+        }
+        XCTAssertTrue(
+            advanced,
+            "Playback intent must survive AVPlayer startup and advance frames"
+        )
+        try await Task.sleep(nanoseconds: 250_000_000)
+        XCTAssertTrue(
+            state.isPlaying,
+            "A transient startup pause must not clear active playback intent"
+        )
+
+        state.setPlaybackIntent(false)
+        XCTAssertFalse(state.isPlaying)
+        state.videoURL = nil
+    }
+
+    func testPauseInvalidatesPendingEndReplaySeek() async throws {
+        let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let url = try XCTUnwrap(
+            Bundle(for: Self.self).url(
+                forResource: "test_30fps_2s",
+                withExtension: "mp4"
+            )
+        )
+        let state = VideoState(defaults: defaults)
+        let videoView = VideoView(
+            frame: NSRect(x: 0, y: 0, width: 640, height: 480)
+        )
+        videoView.videoState = state
+        state.videoURL = url
+
+        let loaded = await waitUntil(timeout: 5) {
+            state.isVideoLoaded
+                && state.frameNavigationPrecision == .exact
+        }
+        XCTAssertTrue(loaded)
+
+        state.isAtEnd = true
+        let replayRevision = state.setPlaybackIntent(true)
+        XCTAssertTrue(videoView.hasPendingPlaybackSeek)
+        let pauseRevision = state.setPlaybackIntent(false)
+        XCTAssertGreaterThan(pauseRevision, replayRevision)
+
+        let seekCompleted = await waitUntil {
+            !videoView.hasPendingPlaybackSeek
+        }
+        XCTAssertTrue(
+            seekCompleted,
+            "The replay seek must complete before stale-resume rejection is asserted"
+        )
+        XCTAssertFalse(
+            state.isPlaying,
+            "A completed end-replay seek must not resurrect paused intent"
+        )
+        state.videoURL = nil
+    }
+
+    func testPauseThenPlayReauthorizesPendingEndReplaySeekAndAdvances() async throws {
+        let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let url = try XCTUnwrap(
+            Bundle(for: Self.self).url(
+                forResource: "test_30fps_2s",
+                withExtension: "mp4"
+            )
+        )
+        let state = VideoState(defaults: defaults)
+        let videoView = VideoView(
+            frame: NSRect(x: 0, y: 0, width: 640, height: 480)
+        )
+        videoView.videoState = state
+        state.videoURL = url
+
+        let loaded = await waitUntil(timeout: 5) {
+            state.isVideoLoaded
+                && state.frameNavigationPrecision == .exact
+        }
+        XCTAssertTrue(loaded)
+
+        state.isAtEnd = true
+        let originalPlayRevision = state.setPlaybackIntent(true)
+        XCTAssertTrue(videoView.hasPendingPlaybackSeek)
+        let pauseRevision = state.setPlaybackIntent(false)
+        let latestPlayRevision = state.setPlaybackIntent(true)
+        XCTAssertGreaterThan(pauseRevision, originalPlayRevision)
+        XCTAssertGreaterThan(latestPlayRevision, pauseRevision)
+        XCTAssertTrue(
+            videoView.hasPendingPlaybackSeek,
+            "A newer Play must attach to the existing replay seek"
+        )
+
+        let resumedAndAdvanced = await waitUntil(timeout: 2) {
+            !videoView.hasPendingPlaybackSeek
+                && state.isPlaying
+                && state.currentFrame > 0
+        }
+        XCTAssertTrue(
+            resumedAndAdvanced,
+            "The pending replay seek must honor the latest Play revision"
+        )
+
+        state.setPlaybackIntent(false)
+        state.videoURL = nil
+    }
+
+    func testPauseDuringScrubPreventsDeferredResume() async throws {
+        let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let url = try XCTUnwrap(
+            Bundle(for: Self.self).url(
+                forResource: "test_30fps_2s",
+                withExtension: "mp4"
+            )
+        )
+        let state = VideoState(defaults: defaults)
+        let videoView = VideoView(
+            frame: NSRect(x: 0, y: 0, width: 640, height: 480)
+        )
+        videoView.videoState = state
+        state.videoURL = url
+
+        let loaded = await waitUntil(timeout: 5) {
+            state.isVideoLoaded
+                && state.frameNavigationPrecision == .exact
+        }
+        XCTAssertTrue(loaded)
+
+        state.setPlaybackIntent(true)
+        let playbackStarted = await waitUntil(timeout: 2) {
+            state.isPlaying && state.currentFrame > 0
+        }
+        XCTAssertTrue(playbackStarted)
+
+        let playingRevision = state.playbackIntentRevision
+        state.beginScrubbing()
+        XCTAssertTrue(state.isPlaying)
+        XCTAssertEqual(state.playbackIntentRevision, playingRevision)
+
+        let pauseRevision = state.setPlaybackIntent(false)
+        state.endScrubbing(time: 0.75)
+        XCTAssertGreaterThan(pauseRevision, playingRevision)
+        XCTAssertTrue(videoView.hasPendingPlaybackSeek)
+
+        let seekCompleted = await waitUntil {
+            !videoView.hasPendingPlaybackSeek
+        }
+        XCTAssertTrue(
+            seekCompleted,
+            "The scrub seek must complete before stale-resume rejection is asserted"
+        )
+        XCTAssertFalse(
+            state.isPlaying,
+            "A scrub seek completion must respect a newer Pause command"
+        )
+        state.videoURL = nil
+    }
+
+    func testPlayingScrubResumesWithoutAnUnprotectedPauseWindow() async throws {
+        let suiteName = "Reframer.VideoViewLifecycleTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let url = try XCTUnwrap(
+            Bundle(for: Self.self).url(
+                forResource: "test_30fps_2s",
+                withExtension: "mp4"
+            )
+        )
+        let state = VideoState(defaults: defaults)
+        let videoView = VideoView(
+            frame: NSRect(x: 0, y: 0, width: 640, height: 480)
+        )
+        videoView.videoState = state
+        state.videoURL = url
+
+        let loaded = await waitUntil(timeout: 5) {
+            state.isVideoLoaded
+                && state.frameNavigationPrecision == .exact
+        }
+        XCTAssertTrue(loaded)
+
+        state.setPlaybackIntent(true)
+        let playbackStarted = await waitUntil(timeout: 2) {
+            state.isPlaying && state.currentFrame > 0
+        }
+        XCTAssertTrue(playbackStarted)
+
+        let playingRevision = state.playbackIntentRevision
+        state.beginScrubbing()
+        state.previewScrub(time: 0.6)
+        let transportPaused = await waitUntil {
+            !videoView.isPlaybackTransportActive
+        }
+        XCTAssertTrue(
+            transportPaused,
+            "Scrubbing must keep the physical AVPlayer transport paused"
+        )
+        state.endScrubbing(time: 0.6)
+        XCTAssertTrue(state.isPlaying)
+        XCTAssertEqual(state.playbackIntentRevision, playingRevision)
+
+        let resumed = await waitUntil(timeout: 2) {
+            state.isPlaying && state.currentTime > 0.75
+        }
+        XCTAssertTrue(
+            resumed,
+            "A playing scrub must install its resume seek before paused status can clear intent"
+        )
+        state.setPlaybackIntent(false)
         state.videoURL = nil
     }
 

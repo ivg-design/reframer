@@ -434,7 +434,10 @@ struct FrameSeekTarget: Equatable {
     let frame: Int
     let generation: UInt64
     let requestedTime: CMTime
-    let resumePlayback: Bool
+    /// The exact user-intent revision that authorized playback to resume
+    /// after this asynchronous seek. A nil value means the seek must remain
+    /// paused.
+    let resumeIntentRevision: UInt64?
 }
 
 /// Maintains the requested sample as the authority while AVPlayer completes
@@ -463,19 +466,19 @@ struct FrameSeekCoordinator {
         return makeTarget(
             frame: timeline.clampedIndex(requested),
             timeline: timeline,
-            resumePlayback: false
+            resumeIntentRevision: nil
         )
     }
 
     mutating func begin(
         frame: Int,
         timeline: VideoFrameTimeline,
-        resumePlayback: Bool = false
+        resumeIntentRevision: UInt64? = nil
     ) -> FrameSeekTarget {
         makeTarget(
             frame: timeline.clampedIndex(frame),
             timeline: timeline,
-            resumePlayback: resumePlayback
+            resumeIntentRevision: resumeIntentRevision
         )
     }
 
@@ -487,27 +490,46 @@ struct FrameSeekCoordinator {
         return makeTarget(
             frame: timeline.nearestFrameIndex(to: desiredTarget.requestedTime),
             timeline: timeline,
-            resumePlayback: desiredTarget.resumePlayback
+            resumeIntentRevision: desiredTarget.resumeIntentRevision
         )
     }
 
-    mutating func complete(_ target: FrameSeekTarget) {
-        if desiredTarget == target {
-            desiredTarget = nil
+    /// Attaches the latest Play command to the in-flight logical seek without
+    /// issuing a competing `AVPlayer.play()` while that seek is unresolved.
+    mutating func authorizePendingResume(intentRevision: UInt64) -> Bool {
+        guard let desiredTarget else { return false }
+        self.desiredTarget = FrameSeekTarget(
+            frame: desiredTarget.frame,
+            generation: desiredTarget.generation,
+            requestedTime: desiredTarget.requestedTime,
+            resumeIntentRevision: intentRevision
+        )
+        return true
+    }
+
+    /// Completes by generation so a newer Play revision may update the
+    /// in-flight target without making its seek completion appear stale.
+    @discardableResult
+    mutating func complete(_ target: FrameSeekTarget) -> FrameSeekTarget? {
+        guard let desiredTarget,
+              desiredTarget.generation == target.generation else {
+            return nil
         }
+        self.desiredTarget = nil
+        return desiredTarget
     }
 
     private mutating func makeTarget(
         frame: Int,
         timeline: VideoFrameTimeline,
-        resumePlayback: Bool
+        resumeIntentRevision: UInt64?
     ) -> FrameSeekTarget {
         nextGeneration &+= 1
         let target = FrameSeekTarget(
             frame: frame,
             generation: nextGeneration,
             requestedTime: timeline.time(forFrame: frame),
-            resumePlayback: resumePlayback
+            resumeIntentRevision: resumeIntentRevision
         )
         desiredTarget = target
         return target

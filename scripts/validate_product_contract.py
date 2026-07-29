@@ -864,11 +864,37 @@ def validate_shortcut_implementation(contract: dict[str, object]) -> None:
 def validate_playback_implementation(contract: dict[str, object]) -> None:
     playback = contract["playback"]
     frame_navigation = playback.get("frameNavigation", {})
+    playback_intent = playback.get("playbackIntent", {})
     expected_sample_limit = 2_000_000
+    expected_playback_intent = {
+        "authority": "Main-thread-owned revisioned user intent",
+        "startupGraceSeconds": 2,
+        "startupGate": (
+            "Generation- and intent-revision-scoped; transient paused reports are "
+            "protected until playing settles the gate or the bounded grace period "
+            "expires"
+        ),
+        "expiredStartup": (
+            "A transport still paused at expiry returns the model to Paused unless "
+            "a playback seek or scrub owns the handoff"
+        ),
+        "deferredResume": (
+            "EOF-replay and scrub seek completions resume only when authorized by "
+            "the current intent revision; a newer Pause cancels and a newer Play "
+            "reauthorizes the existing handoff without a competing transport start"
+        ),
+        "transportGuard": (
+            "Physical AVPlayer playing is permitted only for current Play intent "
+            "outside scrubbing and with no playback seek handoff pending"
+        ),
+        "scrubHandoff": "Synchronous on the main thread",
+    }
     if frame_navigation.get("maximumExactSamples") != expected_sample_limit:
         fail("exact-sample ceiling is not canonical")
     if playback.get("replacementStartsPaused") is not True:
         fail("replacement playback contract must start paused")
+    if playback_intent != expected_playback_intent:
+        fail("playback-intent contract is not canonical")
     if "same track" not in playback.get("trackSelection", ""):
         fail("multi-track contract must keep rendering and navigation coherent")
 
@@ -881,13 +907,49 @@ def validate_playback_implementation(contract: dict[str, object]) -> None:
     ).read_text(encoding="utf-8")
     if "maximumExactSampleCount = 2_000_000" not in timeline_source:
         fail("Swift exact-sample ceiling does not match the product contract")
+    if "let resumeIntentRevision: UInt64?" not in timeline_source:
+        fail("deferred frame resume is not playback-intent revision scoped")
+    if "func authorizePendingResume(intentRevision: UInt64) -> Bool" not in timeline_source:
+        fail("a newer Play cannot reauthorize the pending frame seek")
 
     video_view_source = (
         ROOT / "Reframer" / "Reframer" / "Views" / "VideoView.swift"
     ).read_text(encoding="utf-8")
+    video_state_source = (
+        ROOT / "Reframer" / "Reframer" / "Models" / "VideoState.swift"
+    ).read_text(encoding="utf-8")
+    required_intent_markers = (
+        "private(set) var playbackIntentRevision: UInt64 = 0",
+        "func setPlaybackIntent(_ shouldPlay: Bool) -> UInt64",
+        "precondition(Thread.isMainThread)",
+        "playbackIntentRevision &+= 1",
+    )
+    for marker in required_intent_markers:
+        if marker not in video_state_source:
+            fail(f"revisioned playback-intent source marker is missing: {marker}")
+    required_playback_view_markers = (
+        "enum PlaybackResumeAuthorization",
+        "enum PlaybackTransportAuthorization",
+        "struct PlaybackStartGate",
+        "private static let playbackStartGraceInterval: TimeInterval = 2",
+        "hasPendingPlaybackSeek: self.hasPendingPlaybackSeek",
+        "let completedResumeIntentRevision =",
+        "frameSeekCoordinator.authorizePendingResume(",
+    )
+    for marker in required_playback_view_markers:
+        if marker not in video_view_source:
+            fail(f"playback startup/resume source marker is missing: {marker}")
+    scrub_subscription = re.search(
+        r"state\.scrubRequests\s*\.sink\s*\{.*?"
+        r"precondition\(Thread\.isMainThread\).*?\.store\(in: &cancellables\)",
+        video_view_source,
+        flags=re.DOTALL,
+    )
+    if scrub_subscription is None:
+        fail("scrub resume handoff is not synchronous on the main thread")
     load_sequence = re.search(
         r"func loadVideo\(url: URL\).*?state\.cancelScrubbing\(\)"
-        r".*?state\.isPlaying = false.*?cleanup\(\)",
+        r".*?state\.setPlaybackIntent\(false\).*?cleanup\(\)",
         video_view_source,
         flags=re.DOTALL,
     )
