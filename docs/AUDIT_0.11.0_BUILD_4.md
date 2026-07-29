@@ -1,8 +1,10 @@
 # Reframer 0.11.0 build 4 audit and release readiness
 
-Date: 2026-07-28
-Status: source implementation validated and pushed; no build-4 notarization
-or manual acceptance is claimed by this record yet
+Source audit date: 2026-07-28
+Distribution completion date: 2026-07-29
+Status: build 4 is signed, notarized, stapled, Gatekeeper-accepted, installed,
+and ready for operator review; no manual acceptance is claimed by this record
+yet
 
 Historical build-1 through build-3 evidence remains in
 [`AUDIT_2026-07-28.md`](AUDIT_2026-07-28.md). It must not be reused as proof
@@ -107,11 +109,11 @@ Update these rows only with build-4 output:
 | Product/repository/Help-index validation | Passed | Regenerated the CoreSpotlight Help index, then `scripts/validate_repository.sh` passed against the final source and searchable Help semantics |
 | Shell syntax and JSON/plist lint | Passed | Repository validator plus focused `bash -n`, `json.tool`, and `plutil` checks |
 | Debug build | Passed | The background unit runner completed `build-for-testing` for the app and unit target with no foreground launch |
-| Universal Release build | Passed for dirty source candidate | Background `xcodebuild build`, arm64/x86_64, macOS 15.0; both app and helper contain both architectures. A clean source stamp remains a packaging gate |
+| Universal Release build | Passed | `mac-notarize --dmg` built clean source commit `1cd5092` with a mode-0600 YouTube xcconfig; both app and helper contain arm64 and x86_64 and target macOS 15.0 |
 | Unit/AppKit tests | Passed | Final background run executed 302 tests with 0 failures; no UI test target or foreground app automation ran |
 | Static analysis | Passed | `xcodebuild analyze`, Debug, generic macOS destination |
 | DocC build | Passed | `xcodebuild docbuild`, Debug, generic macOS destination; all DocC topic references resolved |
-| Exact candidate bundle contract | Passed | `scripts/validate_bundle.sh` accepted ad-hoc-signed Reframer 0.11.0 (4), app/helper architectures and deployment targets, exact resource/Help/license allowlists, per-architecture helper identity and embedded entitlements, canonical helper provenance, and deterministic code comparison |
+| Exact candidate bundle contract | Passed | `scripts/validate_bundle.sh` accepted the Developer ID signed, stapled Reframer 0.11.0 (4) app before installation, from the mounted DMG, and after installation, including the configured YouTube key, clean source stamp, app/helper architectures and deployment targets, exact resource/Help/license allowlists, per-architecture helper identity and embedded entitlements, canonical helper provenance, and deterministic code comparison |
 | VP8-alpha and VP9-alpha helper round trip | Passed | Checked-in helper SHA `bb1f4d0148461b835a659a01b3898e97d375b6de57632182192bbbfe73c0154c`; VP8+Vorbis, VP9+Opus, and VP9 no-audio fixtures preserved expected alpha pixels and audio mapping |
 
 The WebM fixtures were generated with the exact Homebrew FFmpeg 7.1.1_3
@@ -128,15 +130,15 @@ All three decode to the same normalized raw-alpha SHA-256,
 
 | Gate | Build-4 result | Evidence |
 |---|---|---|
-| Clean `main` equals `origin/main` | Passed | The implementation and final audit commits were pushed; final post-push verification confirmed a clean `main` at `origin/main` |
+| Clean `main` equals `origin/main` | Passed | Release source commit `1cd5092` was clean, on `main`, and exactly equal to `origin/main` before the build |
 | Configured YouTube Data API key | Passed | Enabled YouTube Data API v3 and API Keys API on `forge-ivg`; created the API-restricted `reframer-youtube-data-v2` key, stored it in the login Keychain and as the encrypted repository `REFRAMER_YOUTUBE_DATA_API_KEY` secret, and received HTTP 200 with a definite Made for Kids value from a live `videos.list` preflight |
-| Developer ID app/helper signatures and exact entitlements | Pending | — |
-| Apple notarization accepted | Blocked | `xcrun notarytool history --keychain-profile notary` reports no matching Keychain password item; no build-4 submission is possible with the current profile |
-| Ticket stapled and validated | Pending | — |
-| Gatekeeper accepted | Pending | — |
-| Final ZIP extracted and revalidated | Pending | — |
-| Installed `/Applications/Reframer.app` replaced and verified | Pending | The installed app remains the notarized Reframer 0.10.0 (3); it has not been replaced by build 4 |
-| Old indexed app/build artifacts removed | Passed | Unregistered six generated app bundles; removed the repository `.artifacts` tree, Reframer Xcode DerivedData, profiling/Python caches, and 28 Reframer-only temporary paths; pruned 11 stale temporary-worktree registrations; Spotlight now returns only `/Applications/Reframer.app` |
+| Developer ID app/helper signatures and exact entitlements | Passed | App and universal helper are signed by `Developer ID Application: Ilya Gusinski (7S422NVLUK)` with Hardened Runtime, secure timestamps, exact entitlement allowlists, and no prohibited debugging/library-validation entitlement |
+| Apple notarization accepted | Passed | App submission `e603ea49-9fe4-46f7-a578-9ac9f300b5ea` and DMG submission `00c2e894-ecdf-44bb-98d4-360766a70462` were accepted |
+| Ticket stapled and validated | Passed | `stapler validate` passed for the built app, separately notarized DMG, mounted-DMG app, and installed app |
+| Gatekeeper accepted | Passed | `spctl` reports `source=Notarized Developer ID` for the app before installation, the DMG, mounted-DMG app, and installed app |
+| Final distribution artifact mounted and revalidated | Passed | The read-only mounted DMG passed the full bundle contract, deep strict signature verification, ticket validation, and Gatekeeper assessment; DMG SHA-256 is `d80a9886585ae5b633ef8e6201015e2d0e6ee5e0fa5ae4db323d8c1b7f3d89c5` |
+| Installed `/Applications/Reframer.app` replaced and verified | Passed | Replaced 0.10.0 (3) only after a rollback copy existed; installed 0.11.0 (4) passed the full bundle contract, configured-key check, universal architecture checks, deep strict signature verification, ticket validation, and Gatekeeper assessment |
+| Old indexed app/build artifacts removed | Passed | Removed the generated Reframer DerivedData app after unregistering it; retained only the current notarized DMG and checksum under ignored, non-indexed `dist/`; Spotlight returns only `/Applications/Reframer.app` |
 
 ## Manual acceptance required
 

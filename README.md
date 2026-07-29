@@ -186,16 +186,20 @@ The audit records the historical build-1 and build-2 review runs, the packaging
 gap build 1 exposed, and the live product defects found after build 2 passed
 Apple's distribution checks. Build 3 from source commit `3010955` passed its
 background validation and Apple distribution gates, and the notarized
-`0.10.0 (3)` app was installed in `/Applications` for operator review.
+`0.10.0 (3)` app was installed for its historical operator review. Build 4
+from source commit `1cd5092` passed its background and Apple distribution
+gates; the separately notarized DMG was round-trip validated and the notarized
+`0.11.0 (4)` app is now installed in `/Applications` for operator review.
 Foreground/manual interaction remains an explicit candidate gate. Only
 evidence emitted for a particular artifact proves that artifact. This local
 review build does not create a version tag, GitHub release, or published
 distribution.
 
-Version 0.11.0 build 4 is the current source candidate. It adds aligned,
-resizable Shortcut Settings, expanded local containers, transparent WebM
-preparation, and consent-gated YouTube playback. Its candidate-specific
-validation belongs in
+Version 0.11.0 build 4 is the current installed review candidate. It adds
+aligned, resizable Shortcut Settings, expanded local containers, transparent
+WebM preparation, and consent-gated YouTube playback with its API-restricted
+Data API key configured at build time. Its candidate-specific validation
+belongs in
 [Build 4 Readiness](docs/AUDIT_0.11.0_BUILD_4.md); historical build-3 evidence
 remains in the earlier audit.
 
