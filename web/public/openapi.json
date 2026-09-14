@@ -1,0 +1,45 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Reframer Public Documentation API",
+    "version": "1.0.0",
+    "description": "Machine-readable index for Reframer public docs and changelog surfaces."
+  },
+  "servers": [
+    {
+      "url": "https://forge.mograph.life/apps/reframer"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Landing page",
+        "responses": {
+          "200": {
+            "description": "Public landing page"
+          }
+        }
+      }
+    },
+    "/docs": {
+      "get": {
+        "summary": "Documentation index",
+        "responses": {
+          "200": {
+            "description": "Public docs page"
+          }
+        }
+      }
+    },
+    "/changelog": {
+      "get": {
+        "summary": "Release notes",
+        "responses": {
+          "200": {
+            "description": "Public changelog"
+          }
+        }
+      }
+    }
+  }
+}

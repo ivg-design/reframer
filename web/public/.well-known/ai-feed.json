@@ -1,0 +1,53 @@
+{
+  "version": "1.1",
+  "generatedAt": "2026-03-08",
+  "project": "Reframer",
+  "canonical": "https://forge.mograph.life/apps/reframer/",
+  "entities": [
+    {
+      "name": "Reframer",
+      "type": "SoftwareApplication",
+      "description": "Transparent video overlay app for macOS motion workflows.",
+      "url": "https://forge.mograph.life/apps/reframer/"
+    },
+    {
+      "name": "IVG Design",
+      "type": "Organization",
+      "url": "https://forge.mograph.life"
+    }
+  ],
+  "resources": [
+    {
+      "kind": "landing",
+      "url": "https://forge.mograph.life/apps/reframer/"
+    },
+    {
+      "kind": "docs",
+      "url": "https://forge.mograph.life/apps/reframer/docs"
+    },
+    {
+      "kind": "changelog",
+      "url": "https://forge.mograph.life/apps/reframer/changelog"
+    },
+    {
+      "kind": "llms",
+      "url": "https://forge.mograph.life/apps/reframer/llms.txt"
+    },
+    {
+      "kind": "llms-full",
+      "url": "https://forge.mograph.life/apps/reframer/llms-full.txt"
+    }
+  ],
+  "faq": [
+    {
+      "question": "What is Reframer?",
+      "answer": "Reframer is a macOS app that keeps a transparent video overlay visible while you work in other applications.",
+      "url": "https://forge.mograph.life/apps/reframer/"
+    },
+    {
+      "question": "Where can users find feature-specific instructions?",
+      "answer": "Use the documentation pages for playback, opacity, zoom, filters, lock mode, and keyboard shortcuts.",
+      "url": "https://forge.mograph.life/apps/reframer/docs"
+    }
+  ]
+}

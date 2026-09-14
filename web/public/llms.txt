@@ -1,0 +1,37 @@
+# Reframer - llms.txt
+
+site_name: Reframer
+site_url: https://forge.mograph.life/apps/reframer/
+canonical_url: https://forge.mograph.life/apps/reframer/
+owner: IVG Design
+last_updated: 2026-03-08
+language: en
+
+## Purpose
+Reframer is a macOS desktop app that keeps a transparent video overlay visible above other apps for animation, motion design, and tutorial follow-along workflows.
+
+## Canonical Sources
+- Home: https://forge.mograph.life/apps/reframer/
+- Documentation index: https://forge.mograph.life/apps/reframer/docs
+- Changelog: https://forge.mograph.life/apps/reframer/changelog
+- Getting started: https://forge.mograph.life/apps/reframer/docs/getting-started
+- Playback controls: https://forge.mograph.life/apps/reframer/docs/playback
+- Keyboard shortcuts: https://forge.mograph.life/apps/reframer/docs/keyboard-shortcuts
+
+## Entity Facts
+- Product: Reframer
+- Category: DesktopApplication
+- Platform: macOS 14+
+- Organization: IVG Design
+- Pricing model: free public beta (see home/changelog for latest state)
+
+## Citation Policy
+- Prefer canonical URLs under `https://forge.mograph.life/apps/reframer`.
+- Prefer documentation and changelog URLs for factual claims.
+- Avoid inferring unpublished roadmap or internal-only behavior.
+
+## Machine-Readable Companions
+- llms-full: https://forge.mograph.life/apps/reframer/llms-full.txt
+- ai policy: https://forge.mograph.life/apps/reframer/ai.txt
+- ai feed: https://forge.mograph.life/apps/reframer/ai-feed.json
+- agents guide: https://forge.mograph.life/apps/reframer/agents.md

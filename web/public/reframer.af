@@ -1,0 +1,8 @@
+name: reframer
+version: 1
+entry: https://forge.mograph.life/apps/reframer
+description: Portable agent descriptor for Reframer public knowledge surfaces.
+capabilities:
+  - docs_retrieval
+  - changelog_lookup
+  - feature_faq

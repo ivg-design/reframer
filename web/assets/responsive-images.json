@@ -1,0 +1,107 @@
+[
+  {
+    "source": "assets/media-source/demo-poster.png",
+    "sha256": "5d26905ebac10f6f687e272d9d0a4f822bfb00278a4b1455691aac1eb25e3346",
+    "width": 1440,
+    "height": 928,
+    "bytes": 513744,
+    "outputs": [
+      {
+        "file": "public/media/reframer/demo-poster-1200.webp",
+        "width": 1200,
+        "height": 773,
+        "bytes": 24998
+      }
+    ]
+  },
+  {
+    "source": "assets/media-source/main-screen.png",
+    "sha256": "6580c034ad5ef42d9458c24df4df6494df2c78314f20d27dc461679a3ee64982",
+    "width": 3648,
+    "height": 2350,
+    "bytes": 4007085,
+    "outputs": [
+      {
+        "file": "public/media/reframer/main-screen-480.webp",
+        "width": 480,
+        "height": 309,
+        "bytes": 9604
+      },
+      {
+        "file": "public/media/reframer/main-screen-768.webp",
+        "width": 768,
+        "height": 495,
+        "bytes": 15776
+      },
+      {
+        "file": "public/media/reframer/main-screen-1200.webp",
+        "width": 1200,
+        "height": 773,
+        "bytes": 27578
+      }
+    ]
+  },
+  {
+    "source": "assets/media-source/shortcuts.png",
+    "sha256": "a5d15e03495f5a661ee3782b816ee54e02590d46946d603c3b1034fd00234344",
+    "width": 973,
+    "height": 1908,
+    "bytes": 753002,
+    "outputs": [
+      {
+        "file": "public/media/reframer/shortcuts-256.webp",
+        "width": 256,
+        "height": 502,
+        "bytes": 9206
+      },
+      {
+        "file": "public/media/reframer/shortcuts-512.webp",
+        "width": 512,
+        "height": 1004,
+        "bytes": 29298
+      }
+    ]
+  },
+  {
+    "source": "assets/media-source/filters.png",
+    "sha256": "ff717db870a34a1fdb93f8ae2e0eb0a0f2089b658f1feaa82daa4c703849a87f",
+    "width": 1052,
+    "height": 1340,
+    "bytes": 1177385,
+    "outputs": [
+      {
+        "file": "public/media/reframer/filters-384.webp",
+        "width": 384,
+        "height": 489,
+        "bytes": 7678
+      },
+      {
+        "file": "public/media/reframer/filters-768.webp",
+        "width": 768,
+        "height": 978,
+        "bytes": 19858
+      }
+    ]
+  },
+  {
+    "source": "public/icon.png",
+    "sha256": "473eafedcbefa46d264e7154d6175199987276b59db82f8148e479705f396c35",
+    "width": 1024,
+    "height": 1024,
+    "bytes": 1000249,
+    "outputs": [
+      {
+        "file": "public/media/reframer/icon-64.webp",
+        "width": 64,
+        "height": 64,
+        "bytes": 2932
+      },
+      {
+        "file": "public/media/reframer/icon-128.webp",
+        "width": 128,
+        "height": 128,
+        "bytes": 6762
+      }
+    ]
+  }
+]
