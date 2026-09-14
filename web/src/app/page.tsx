@@ -626,7 +626,7 @@ function Footer() {
             title="Product"
             links={[
               { label: "Features", href: "#features" },
-              { label: "Download", href: "#" },
+              { label: "Download", href: "https://contra.com/products/UBCf87LD-reframer", action: "product_listing" },
               { label: "Changelog", href: asset("/changelog") },
             ]}
           />
@@ -636,14 +636,13 @@ function Footer() {
               { label: "Documentation", href: asset("/docs") },
               { label: "Keyboard Shortcuts", href: asset("/docs/keyboard-shortcuts") },
               { label: "GitHub", href: "https://github.com/ivg-design/reframer", action: "repository" },
-              { label: "Creative services", href: "/services/" },
             ]}
           />
           <FooterColumn
-            title="Legal"
+            title="Explore"
             links={[
-              { label: "Privacy Policy", href: "#" },
-              { label: "Free during Beta", href: "#" },
+              { label: "All creative tools", href: "/" },
+              { label: "Work with me", href: "/services/" },
             ]}
           />
         </div>
@@ -670,7 +669,7 @@ function FooterColumn({
   links,
 }: {
   title: string;
-  links: { label: string; href: string; action?: "repository" | "service_outbound" }[];
+  links: { label: string; href: string; action?: "repository" | "service_outbound" | "product_listing" }[];
 }) {
   return (
     <div className="flex flex-col gap-4">
