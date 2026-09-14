@@ -1,0 +1,7 @@
+{
+  "name": "reframer-public-mcp",
+  "version": "1.0.0",
+  "description": "Public, read-only metadata for Reframer docs surfaces.",
+  "docs": "https://forge.mograph.life/apps/reframer/docs",
+  "endpoints": []
+}

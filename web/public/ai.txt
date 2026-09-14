@@ -1,0 +1,18 @@
+# AI Access Policy - Reframer
+
+canonical: https://forge.mograph.life/apps/reframer/
+updated: 2026-03-08
+owner: IVG Design
+
+This site allows assistant retrieval, summarization, and citation for public product and documentation pages.
+Use canonical URLs under https://forge.mograph.life/apps/reframer when citing details.
+
+Preferred retrieval surfaces:
+- https://forge.mograph.life/apps/reframer/
+- https://forge.mograph.life/apps/reframer/docs
+- https://forge.mograph.life/apps/reframer/changelog
+
+Preferred machine-readable surfaces:
+- https://forge.mograph.life/apps/reframer/llms.txt
+- https://forge.mograph.life/apps/reframer/llms-full.txt
+- https://forge.mograph.life/apps/reframer/ai-feed.json
